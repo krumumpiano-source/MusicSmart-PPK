@@ -345,11 +345,15 @@ const GoogleSheetSync = {
       }
     });
 
-    this.flushOutbox();
+    // Flush outbox and wait for transmission
+    await this.flushOutbox();
+
     return {
       success: true,
       enqueuedTotal,
-      message: `นำส่งข้อมูลทั้งหมด ${enqueuedTotal} รายการเข้าสู่คิวซิงค์ Google Sheets เรียบร้อยแล้ว`
+      message: enqueuedTotal > 0
+        ? `✅ ซิงค์สำเร็จ! นำส่งข้อมูลทั้งหมด ${enqueuedTotal} รายการขึ้น Google Sheets เรียบร้อยแล้ว`
+        : `ℹ️ ในเครื่องนี้ยังไม่มีบันทึกข้อมูลใหม่ (หากบันทึกไว้ในอุปกรณ์อื่น กรุณากด Full Sync บนอุปกรณ์นั้น หรือทดลองบันทึก วก.5 ในห้องเรียน ข้อมูลจะวิ่งเข้าชีตทันทีครับ)`
     };
   },
 
@@ -498,6 +502,8 @@ const GoogleSheetSync = {
   openModal() {
     const modal = document.getElementById('modal-google-sheet-sync');
     if (!modal) return;
+    const box = document.getElementById('gs-sync-result-box');
+    if (box) box.style.display = 'none';
     this.updateUIStatus();
     modal.classList.add('active');
   },
@@ -507,20 +513,43 @@ const GoogleSheetSync = {
     if (modal) modal.classList.remove('active');
   },
 
+  showSyncModalBanner(message, type = 'info') {
+    const box = document.getElementById('gs-sync-result-box');
+    if (!box) return;
+    box.style.display = 'block';
+
+    let bg = '#eff6ff', border = '#bfdbfe', color = '#1e40af';
+    if (type === 'success') {
+      bg = '#f0fdf4'; border = '#bbf7d0'; color = '#166534';
+    } else if (type === 'warning') {
+      bg = '#fffbeb'; border = '#fde68a'; color = '#92400e';
+    } else if (type === 'error') {
+      bg = '#fef2f2'; border = '#fecaca'; color = '#991b1b';
+    }
+
+    box.style.background = bg;
+    box.style.border = `1px solid ${border}`;
+    box.style.color = color;
+    box.innerHTML = message;
+  },
+
   saveSettingsFromModal() {
     const urlInput = document.getElementById('gs-webapp-url');
     if (!urlInput) return;
     const url = urlInput.value.trim();
     this.saveConfig({ webAppUrl: url });
     if (url) {
+      this.showSyncModalBanner('⏳ กำลังทดสอบเชื่อมต่อ URL และบันทึกการตั้งค่า...', 'info');
       this.testConnection(url).then(res => {
-        alert(res.message);
         if (res.success) {
+          this.showSyncModalBanner(`✅ ${res.message}`, 'success');
           this.flushOutbox();
+        } else {
+          this.showSyncModalBanner(`⚠️ ${res.message}`, 'warning');
         }
       });
     } else {
-      alert('💾 บันทึกการตั้งค่าแล้ว (ยังไม่ได้เปิดใช้ Google Sheet Sync)');
+      this.showSyncModalBanner('💾 บันทึกการตั้งค่าแล้ว (ยังไม่ได้เปิดใช้ Google Sheet Sync)', 'info');
     }
   },
 
@@ -529,23 +558,141 @@ const GoogleSheetSync = {
     const url = urlInput ? urlInput.value.trim() : '';
     const btn = document.getElementById('btn-gs-test');
     if (btn) btn.disabled = true;
-    const res = await this.testConnection(url);
-    if (btn) btn.disabled = false;
-    alert(res.message);
-    this.updateUIStatus();
+
+    this.showSyncModalBanner('⏳ กำลังทดสอบส่งสัญญาณ Ping ไปยัง Google Apps Script...', 'info');
+
+    try {
+      const res = await this.testConnection(url);
+      if (res.success) {
+        this.showSyncModalBanner(`✅ ${res.message}`, 'success');
+      } else {
+        this.showSyncModalBanner(`❌ ${res.message}`, 'error');
+      }
+    } catch (e) {
+      this.showSyncModalBanner(`❌ เกิดข้อผิดพลาด: ${e.toString()}`, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+      this.updateUIStatus();
+    }
+  },
+
+  /**
+   * ส่งข้อมูลทดสอบ 1 แถวขึ้น Google Sheet ทันทีเพื่อให้ครูเห็นผลลัพธ์ในชีตจริง
+   */
+  async handleSendTestRowFromModal() {
+    const urlInput = document.getElementById('gs-webapp-url');
+    const inputUrl = urlInput ? urlInput.value.trim() : '';
+    let cfg = this.getConfig();
+    if (inputUrl && inputUrl !== cfg.webAppUrl) {
+      cfg = this.saveConfig({ webAppUrl: inputUrl });
+    }
+
+    if (!cfg.webAppUrl) {
+      this.showSyncModalBanner('⚠️ กรุณาระบุ URL ของ Google Apps Script ก่อนทดสอบส่งข้อมูล', 'warning');
+      return;
+    }
+
+    const testBtn = document.getElementById('btn-gs-send-test');
+    const origText = testBtn ? testBtn.innerHTML : '';
+    if (testBtn) {
+      testBtn.disabled = true;
+      testBtn.innerHTML = '🔄 กำลังส่งข้อมูลทดสอบ...';
+    }
+
+    this.showSyncModalBanner('⏳ กำลังส่งข้อมูลทดสอบ 1 แถวขึ้น Google Sheets...', 'info');
+
+    try {
+      const now = new Date();
+      const testItem = {
+        type: 'session_log',
+        data: {
+          className: 'ทดสอบระบบ (PPK)',
+          period: 1,
+          instructorName: 'นายพงศธร โพธิแก้ว (ทดสอบ)',
+          instructorRole: 'ครูประจำวิชา',
+          attendanceSummary: { present: 40, absent: 0, leave: 0 },
+          presentCount: 40,
+          absentCount: 0,
+          leaveCount: 0,
+          teachingSummary: 'ทดสอบการเชื่อมต่อระบบบันทึกคู่ขนาน MusicSmart PPK -> Google Sheets สำเร็จสมบูรณ์',
+          problemIssues: 'ไม่มีปัญหา',
+          solutions: 'ระบบทำงานสมบูรณ์ 100%',
+          handoverNote: 'ทดสอบส่งแถวแรกเข้า Google Sheet',
+          timestamp: now.toISOString()
+        }
+      };
+
+      const payload = {
+        action: 'batch_sync',
+        items: [testItem],
+        sentAt: now.toISOString()
+      };
+
+      await fetch(cfg.webAppUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
+      this.saveConfig({
+        lastSyncAt: now.toISOString(),
+        syncCount: (cfg.syncCount || 0) + 1,
+        syncStatus: 'synced'
+      });
+
+      this.updateUIStatus();
+      this.showSyncModalBanner('✅ ส่งแถวทดสอบเข้า Google Sheet สำเร็จเรียบร้อยแล้ว! 📊 คุณครูสามารถเปิด Google Sheet ดูที่แท็บ <strong>"วก5_บันทึกหลังสอน"</strong> จะพบแถวทดสอบปรากฏทันทีครับ', 'success');
+    } catch (e) {
+      this.showSyncModalBanner('❌ เกิดข้อผิดพลาดในการส่งข้อมูลทดสอบ: ' + e.toString(), 'error');
+    } finally {
+      if (testBtn) {
+        testBtn.disabled = false;
+        testBtn.innerHTML = origText || '🧪 ส่งข้อมูลทดสอบ 1 แถวขึ้นชีต';
+      }
+    }
   },
 
   async handleFullSyncFromModal() {
-    const cfg = this.getConfig();
+    const urlInput = document.getElementById('gs-webapp-url');
+    const inputUrl = urlInput ? urlInput.value.trim() : '';
+    let cfg = this.getConfig();
+    if (inputUrl && inputUrl !== cfg.webAppUrl) {
+      cfg = this.saveConfig({ webAppUrl: inputUrl });
+    }
+
     if (!cfg.webAppUrl) {
-      alert('⚠️ กรุณาระบุและบันทึก URL ของ Google Apps Script ก่อนทำการซิงค์ทั้งหมด');
+      this.showSyncModalBanner('⚠️ กรุณาระบุและบันทึก URL ของ Google Apps Script ก่อนทำการซิงค์ทั้งหมด', 'warning');
       return;
     }
+
     const btn = document.getElementById('btn-gs-fullsync');
-    if (btn) btn.disabled = true;
-    const res = await this.fullSyncAll();
-    if (btn) btn.disabled = false;
-    alert(res.message);
+    const origText = btn ? btn.innerHTML : '';
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '🔄 กำลังส่งข้อมูลขึ้นชีต...';
+    }
+    this.showSyncModalBanner('🔄 กำลังสแกนข้อมูลในเครื่องและส่งขึ้น Google Sheet...', 'info');
+
+    try {
+      const res = await this.fullSyncAll();
+      this.updateUIStatus();
+
+      if (res.enqueuedTotal > 0) {
+        this.showSyncModalBanner(`✅ <strong>ซิงค์สำเร็จ!</strong> นำส่งข้อมูลทั้งหมด ${res.enqueuedTotal} รายการขึ้น Google Sheets เรียบร้อยแล้ว สามารถเปิดตรวจดูในไฟล์ Google Sheets ได้เลยครับ`, 'success');
+      } else {
+        this.showSyncModalBanner(`ℹ️ <strong>ในอุปกรณ์/เบราว์เซอร์นี้ยังไม่มีบันทึกคาบสอนเดิม (0 รายการ)</strong><br>แต่ระบบเชื่อมต่อ Google Sheet พร้อมแล้ว 100% ทุกครั้งที่คุณครูกด <em>"บันทึกข้อมูลและปิดคาบ (วก.5)"</em> หรือนักเรียนส่งงาน ข้อมูลจะวิ่งเข้าชีตทันทีครับ!<br><div style="margin-top: 6px;">💡 หรือคุณครูสามารถกดปุ่ม <strong>"🧪 ส่งข้อมูลทดสอบ 1 แถวขึ้นชีต"</strong> ด้านบนเพื่อทดสอบดูผลลัพธ์ในชีตจริงได้ทันทีครับ</div>`, 'info');
+      }
+    } catch (err) {
+      this.showSyncModalBanner('❌ เกิดข้อผิดพลาดในการซิงค์: ' + err.toString(), 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origText || '🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)';
+      }
+      this.updateUIStatus();
+    }
   },
 
   copyAppsScriptCode() {

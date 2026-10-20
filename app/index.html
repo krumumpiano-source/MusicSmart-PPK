@@ -3206,13 +3206,22 @@
             <button id="btn-gs-test" class="btn-nav-action" style="background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 600;" onclick="GoogleSheetSync.handleTestFromModal()">
               🔍 ทดสอบเชื่อมต่อ
             </button>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.5rem;">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+              <button type="button" id="btn-gs-fullsync" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 6px 14px; cursor: pointer;" onclick="GoogleSheetSync.handleFullSyncFromModal()">
+                🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)
+              </button>
+              <button type="button" id="btn-gs-send-test" class="btn-preset-chip" style="background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; font-weight: 700; padding: 6px 14px; cursor: pointer;" onclick="GoogleSheetSync.handleSendTestRowFromModal()">
+                🧪 ส่งข้อมูลทดสอบ 1 แถวขึ้นชีต
+              </button>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">
+              * ข้อมูลจะถูกบันทึกทั้งในเครื่องและ Google Sheets อัตโนมัติ
+            </div>
           </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
-            <div>* เมื่อเชื่อมต่อแล้ว ทุกครั้งที่กดบันทึก วก.5, ส่งงาน, ตรวจรูบริก, หรือสอบ Quiz ข้อมูลจะวิ่งเข้า Google Sheet ทันที</div>
-            <button id="btn-gs-fullsync" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 4px 10px;" onclick="GoogleSheetSync.handleFullSyncFromModal()">
-              🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)
-            </button>
-          </div>
+
+          <!-- Prominent Live Result / Feedback Banner -->
+          <div id="gs-sync-result-box" style="display: none; margin-top: 0.85rem; border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; line-height: 1.5; transition: all 0.2s ease;"></div>
         </div>
 
         <!-- 3-Step Setup Instructions with 1-Click Code Copy -->
@@ -3265,21 +3274,21 @@
   </div>
 
   <!-- Scripts -->
-  <script src="data/students.js"></script>
-  <script src="data/lessons.js"></script>
-  <script src="data/academic_docs.js"></script>
-  <script src="data/quizzes.js"></script>
-  <script src="js/google-sheet-sync.js"></script>
-  <script src="data/store.js"></script>
-  <script src="js/tuner.js"></script>
-  <script src="js/audio-tools.js"></script>
-  <script src="js/quiz-engine.js"></script>
-  <script src="js/rubric-matrix.js"></script>
-  <script src="js/feldman-criticism.js"></script>
-  <script src="js/car-analytics.js"></script>
-  <script src="js/official-forms.js"></script>
-  <script src="js/virtual-kalimba.js"></script>
-  <script src="js/app.js"></script>
+  <script src="data/students.js?v=20261020_02"></script>
+  <script src="data/lessons.js?v=20261020_02"></script>
+  <script src="data/academic_docs.js?v=20261020_02"></script>
+  <script src="data/quizzes.js?v=20261020_02"></script>
+  <script src="js/google-sheet-sync.js?v=20261020_02"></script>
+  <script src="data/store.js?v=20261020_02"></script>
+  <script src="js/tuner.js?v=20261020_02"></script>
+  <script src="js/audio-tools.js?v=20261020_02"></script>
+  <script src="js/quiz-engine.js?v=20261020_02"></script>
+  <script src="js/rubric-matrix.js?v=20261020_02"></script>
+  <script src="js/feldman-criticism.js?v=20261020_02"></script>
+  <script src="js/car-analytics.js?v=20261020_02"></script>
+  <script src="js/official-forms.js?v=20261020_02"></script>
+  <script src="js/virtual-kalimba.js?v=20261020_02"></script>
+  <script src="js/app.js?v=20261020_02"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>
