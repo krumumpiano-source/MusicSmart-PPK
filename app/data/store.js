@@ -1241,6 +1241,20 @@ const Store = {
           note: 'ครูผู้สอนหลัก / ผู้ดูแลระบบ'
         },
         {
+          id: 'teacher_kouocking',
+          name: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)',
+          email: 'kouocking@gmail.com',
+          role: 'ครูนักศึกษาฝึกประสบการณ์วิชาชีพ',
+          roleCategory: 'trainee',
+          isAdmin: false,
+          secret: '',
+          secretHash: '',
+          needsFirstTimeSetup: true,
+          institution: 'เอกดนตรี มหาวิทยาลัยพะเยา',
+          activeTeaching: false,
+          note: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู เอกดนตรี มหาวิทยาลัยพะเยา'
+        },
+        {
           id: 'trainee_default',
           name: 'คุณครูฝึกสอน',
           email: 'trainee@ppk.ac.th',
@@ -1273,6 +1287,26 @@ const Store = {
           changed = true;
         }
         if (changed) this.saveTeachersList(list);
+      }
+
+      // Ensure kouocking@gmail.com exists in existing storage
+      const kouockingExists = list.some(t => (t.email && t.email.toLowerCase() === 'kouocking@gmail.com') || t.id === 'teacher_kouocking');
+      if (!kouockingExists) {
+        list.push({
+          id: 'teacher_kouocking',
+          name: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)',
+          email: 'kouocking@gmail.com',
+          role: 'ครูนักศึกษาฝึกประสบการณ์วิชาชีพ',
+          roleCategory: 'trainee',
+          isAdmin: false,
+          secret: '',
+          secretHash: '',
+          needsFirstTimeSetup: true,
+          institution: 'เอกดนตรี มหาวิทยาลัยพะเยา',
+          activeTeaching: false,
+          note: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู เอกดนตรี มหาวิทยาลัยพะเยา'
+        });
+        this.saveTeachersList(list);
       }
     }
     return list;
@@ -1393,6 +1427,47 @@ const Store = {
     return { success: true, teacher: target };
   },
 
+  getTeacherByEmail(email) {
+    if (!email) return null;
+    const key = String(email).trim().toLowerCase();
+    const teachers = this.getTeachersList();
+    return teachers.find(t => (t.email && t.email.toLowerCase() === key) || (t.id && t.id.toLowerCase() === key)) || null;
+  },
+
+  completeTeacherFirstTimeSetup(teacherId, data) {
+    const list = this.getTeachersList();
+    const idx = list.findIndex(t => t.id === teacherId);
+    if (idx === -1) return { success: false, message: 'ไม่พบบัญชีผู้สอน' };
+
+    const teacher = list[idx];
+    const newName = (data.name || '').trim() || teacher.name;
+    const newSecret = (data.secret || '').trim();
+    if (!newSecret) return { success: false, message: 'กรุณาระบุรหัสผ่านใหม่' };
+
+    teacher.name = newName;
+    teacher.secret = newSecret;
+    teacher.secretHash = this.hashSecret(newSecret, 'teacher');
+    teacher.needsFirstTimeSetup = false;
+    teacher.institution = (data.institution || teacher.institution || 'เอกดนตรี มหาวิทยาลัยพะเยา').trim();
+    teacher.updatedAt = new Date().toISOString();
+
+    list[idx] = teacher;
+    this.saveTeachersList(list);
+    this.setActiveTeacher(teacher.id);
+
+    const user = {
+      role: 'teacher',
+      email: teacher.email,
+      name: teacher.name,
+      teacherId: teacher.id,
+      teacherRole: teacher.role,
+      isAdmin: !!teacher.isAdmin,
+      loggedInAt: new Date().toISOString()
+    };
+    this.setCurrentUser(user);
+    return { success: true, user, teacher };
+  },
+
   verifyTeacherLogin(email, secret) {
     const rate = this.checkRateLimit('teacher_login');
     if (!rate.allowed) {
@@ -1411,11 +1486,25 @@ const Store = {
       const isIdentifierMatch = (inputKey === targetEmail || inputKey === targetName || inputKey === targetId);
       if (!isIdentifierMatch) return false;
 
+      // If user needs first time setup, bypass password verification!
+      if (t.needsFirstTimeSetup) {
+        return true;
+      }
+
       const targetHash = t.secretHash || this.hashSecret(String(t.secret || '').trim(), 'teacher');
       return (inputHash === targetHash || inputSecret === String(t.secret).trim());
     });
 
     if (match) {
+      if (match.needsFirstTimeSetup) {
+        return {
+          success: true,
+          needsSetup: true,
+          teacher: match,
+          message: 'เข้าสู่ระบบครั้งแรกสำเร็จ กรุณาตั้งรหัสผ่านประจำตัว'
+        };
+      }
+
       this.recordLoginAttempt('teacher_login', true);
       this.setActiveTeacher(match.id);
       const user = {

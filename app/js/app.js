@@ -27,6 +27,11 @@ const App = {
   },
 
   init() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredPwaPrompt = e;
+      console.log('MusicSmart: PWA install prompt captured and ready.');
+    });
     this.state.role = Store.getActiveRole();
     this.applyAppSettings();
     this.renderCourseTabs();
@@ -191,6 +196,7 @@ const App = {
       }
       if (paneStudent) paneStudent.style.display = 'none';
       if (paneTeacher) paneTeacher.style.display = 'block';
+      this.onTeacherEmailInput(document.getElementById('auth-teacher-email')?.value);
       setTimeout(() => document.getElementById('auth-teacher-secret')?.focus(), 150);
     }
   },
@@ -284,25 +290,155 @@ const App = {
     }
   },
 
+  onTeacherEmailInput(val) {
+    const email = (val || '').trim();
+    const teacher = Store.getTeacherByEmail ? Store.getTeacherByEmail(email) : null;
+    const hintEl = document.getElementById('auth-teacher-first-time-hint');
+    const defaultHintEl = document.getElementById('auth-teacher-default-hint');
+    const secretInput = document.getElementById('auth-teacher-secret');
+
+    if (teacher && teacher.needsFirstTimeSetup) {
+      if (hintEl) hintEl.style.display = 'block';
+      if (defaultHintEl) defaultHintEl.style.display = 'none';
+      if (secretInput) {
+        secretInput.placeholder = '✨ นักศึกษาฝึกสอนเข้าสู่ระบบครั้งแรกไม่ต้องใส่รหัส (กดปุ่มเข้าสู่ระบบได้เลย)';
+        secretInput.value = '';
+        secretInput.disabled = true;
+      }
+    } else {
+      if (hintEl) hintEl.style.display = 'none';
+      if (defaultHintEl) defaultHintEl.style.display = 'block';
+      if (secretInput) {
+        secretInput.disabled = false;
+        secretInput.placeholder = 'กรอกรหัสผ่านหรือ PIN';
+        if (!secretInput.value && email === 'krumum.piano@gmail.com') {
+          secretInput.value = 'ppk1234';
+        }
+      }
+    }
+  },
+
   handleTeacherLogin() {
     const email = (document.getElementById('auth-teacher-email')?.value || '').trim();
-    const secret = (document.getElementById('auth-teacher-secret')?.value || '').trim();
+    const secretInput = document.getElementById('auth-teacher-secret');
+    const secret = (secretInput?.value || '').trim();
 
     if (!email) {
       alert('กรุณากรอกอีเมลครูผู้สอน');
       return;
     }
-    if (!secret) {
+
+    const teacher = Store.getTeacherByEmail ? Store.getTeacherByEmail(email) : null;
+    if ((!teacher || !teacher.needsFirstTimeSetup) && !secret) {
       alert('กรุณากรอกรหัสผ่านหรือรหัส PIN');
       return;
     }
 
     const res = Store.verifyTeacherLogin(email, secret);
     if (res.success) {
+      if (res.needsSetup) {
+        this.openFirstTimeSetupModal(res.teacher);
+        return;
+      }
       this.checkAuth();
       alert(`👨‍🏫 ยินดีต้อนรับ ${res.user.name} เข้าสู่ห้องปฏิบัติการครู`);
     } else {
       alert(res.message);
+    }
+  },
+
+  openFirstTimeSetupModal(teacher) {
+    this.currentFirstTimeTeacher = teacher;
+    const modal = document.getElementById('modal-first-time-setup');
+    if (!modal) return;
+
+    const nameInput = document.getElementById('setup-teacher-name');
+    const emailInput = document.getElementById('setup-teacher-email');
+    const instInput = document.getElementById('setup-teacher-inst');
+    const secretInput = document.getElementById('setup-teacher-secret');
+    const confirmInput = document.getElementById('setup-teacher-confirm-secret');
+
+    if (nameInput) nameInput.value = teacher.name || 'นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)';
+    if (emailInput) emailInput.value = teacher.email || 'kouocking@gmail.com';
+    if (instInput) instInput.value = teacher.institution || 'เอกดนตรี มหาวิทยาลัยพะเยา';
+    if (secretInput) secretInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+
+    modal.classList.add('active');
+    setTimeout(() => {
+      if (secretInput) secretInput.focus();
+    }, 200);
+  },
+
+  handleSaveFirstTimeSetup() {
+    const teacher = this.currentFirstTimeTeacher || Store.getTeacherByEmail('kouocking@gmail.com');
+    if (!teacher) {
+      alert('ไม่พบข้อมูลบัญชีผู้สอน กรุณาลองใหม่อีกครั้ง');
+      return;
+    }
+
+    const name = (document.getElementById('setup-teacher-name')?.value || '').trim();
+    const secret = (document.getElementById('setup-teacher-secret')?.value || '').trim();
+    const confirmSecret = (document.getElementById('setup-teacher-confirm-secret')?.value || '').trim();
+    const inst = (document.getElementById('setup-teacher-inst')?.value || '').trim();
+
+    if (!name) {
+      alert('กรุณาระบุชื่อ-นามสกุลของท่าน');
+      return;
+    }
+    if (!secret || secret.length < 4) {
+      alert('กรุณาตั้งรหัสผ่านหรือ PIN อย่างน้อย 4 ตัวอักษร/ตัวเลข');
+      return;
+    }
+    if (secret !== confirmSecret) {
+      alert('รหัสผ่านทั้งสองช่องไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
+      return;
+    }
+
+    const res = Store.completeTeacherFirstTimeSetup(teacher.id, {
+      name: name,
+      secret: secret,
+      institution: inst
+    });
+
+    if (res.success) {
+      const modal = document.getElementById('modal-first-time-setup');
+      if (modal) modal.classList.remove('active');
+      this.checkAuth();
+      this.updateInstructorBadge();
+      alert(`🎉 ยินดีต้อนรับคุณครู ${res.teacher.name}!\nบันทึกรหัสผ่านประจำตัวและเริ่มใช้งานระบบเรียบร้อยแล้วครับ`);
+    } else {
+      alert(res.message || 'เกิดข้อผิดพลาดในการบันทึกรหัสผ่าน');
+    }
+  },
+
+  triggerPwaInstall() {
+    if (this.deferredPwaPrompt) {
+      this.deferredPwaPrompt.prompt();
+      this.deferredPwaPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the PWA install prompt');
+          alert('🎉 กำลังติดตั้งแอป MusicSmart ลงบนอุปกรณ์ของคุณเรียบร้อยแล้วครับ!');
+        } else {
+          console.log('User dismissed the PWA install prompt');
+        }
+        this.deferredPwaPrompt = null;
+      });
+    } else {
+      // Check if already in standalone mode
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (isStandalone) {
+        alert('📱 คุณได้ติดตั้งและเปิดใช้งาน MusicSmart ผ่านแอปพลิเคชันเรียบร้อยแล้วครับ!');
+        return;
+      }
+
+      // Browser fallback message (iOS Safari or Chrome desktop/already installed)
+      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIos) {
+        alert('📲 วิธีติดตั้งบน iPhone / iPad:\n1. แตะที่ปุ่ม "แชร์" (Share 📤) ด้านล่างของ Safari\n2. เลื่อนลงแล้วเลือก "เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen ➕)\n3. แตะ "เพิ่ม" (Add) เพื่อเปิดใช้งานแบบเต็มจอได้ทันที');
+      } else {
+        alert('📲 สำหรับเบราว์เซอร์ Chrome/Edge:\nแตะที่เมนู 3 จุด (⋮ หรือ ⋯) มุมขวาบน แล้วเลือก "ติดตั้งแอป MusicSmart" (Install App) หรือ "เพิ่มลงในหน้าจอหลัก" ครับ');
+      }
     }
   },
 
@@ -1303,7 +1439,7 @@ const App = {
               <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px; display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 <span>🏫 สังกัด: <strong>${t.institution || 'โรงเรียนพะเยาพิทยาคม'}</strong></span>
                 <span>📧 บัญชี: <strong>${t.email}</strong></span>
-                <span>🔑 รหัสผ่าน/PIN: <code>${t.secret || '****'}</code></span>
+                <span>🔑 รหัสผ่าน: ${t.needsFirstTimeSetup ? '<span style="color:#d97706; font-weight:700;">(รอตั้งรหัสครั้งแรก)</span>' : `<code>${t.secret || '****'}</code>`}</span>
               </div>
             </div>
           </div>

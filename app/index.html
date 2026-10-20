@@ -920,19 +920,23 @@
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
               อีเมลครูผู้สอน (Teacher Email):
             </label>
-            <input type="email" id="auth-teacher-email" class="form-input" placeholder="krumum.piano@gmail.com" value="krumum.piano@gmail.com" style="font-size: 1rem; padding: 0.65rem 0.85rem;">
-            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * ใช้อีเมลประจำตัวคุณครูผู้สอน
+            <input type="email" id="auth-teacher-email" class="form-input" placeholder="krumum.piano@gmail.com หรือ kouocking@gmail.com" value="krumum.piano@gmail.com" style="font-size: 1rem; padding: 0.65rem 0.85rem;" oninput="App.onTeacherEmailInput(this.value)">
+            <div id="auth-teacher-first-time-hint" style="display: none; margin-top: 6px; padding: 0.5rem 0.75rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 0.82rem; color: #065f46; font-weight: 600;">
+              ✨ ยินดีต้อนรับนักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)<br>
+              <span style="font-size: 0.76rem; font-weight: 400; color: #047857;">• เข้าสู่ระบบครั้งแรก<strong>ไม่ต้องใส่รหัสผ่าน</strong> สามารถกดปุ่มเข้าสู่ระบบด้านล่างได้ทันที</span>
+            </div>
+            <div id="auth-teacher-default-hint" style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
+              * ใช้อีเมลประจำตัวคุณครูผู้สอน หรือนักศึกษาฝึกสอน
             </div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 1.25rem;">
+          <div id="auth-teacher-secret-group" class="form-group" style="margin-bottom: 1.25rem;">
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
               รหัสผ่าน (Password) หรือ รหัส PIN ครู:
             </label>
             <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN" value="ppk1234" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * รหัสเริ่มต้นของระบบคือ <code>ppk1234</code> (สามารถเปลี่ยนได้ที่เมนูตั้งค่านวัตกรรม)
+              * รหัสเริ่มต้นแอดมินคือ <code>ppk1234</code> (ครูฝึกสอนครั้งแรกไม่ต้องใส่รหัส)
             </div>
           </div>
 
@@ -946,6 +950,91 @@
       <!-- Auth Footer -->
       <div style="background: #f8fafc; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.76rem; color: #64748b;">
         ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE • โรงเรียนพะเยาพิทยาคม
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: First-Time Setup & App Installation for Trainee Teacher -->
+  <div id="modal-first-time-setup" class="modal-overlay" style="backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.85); z-index: 100001;">
+    <div class="modal-card" style="max-width: 580px; width: 94vw; border: 2px solid #38bdf8; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0369a1 0%, #1e3a8a 100%); color: #ffffff; padding: 1.25rem 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+            🎓
+          </div>
+          <div>
+            <h3 class="modal-title" style="margin: 0; color: #ffffff; font-size: 1.15rem; font-weight: 800;">
+              ยินดีต้อนรับนักศึกษาฝึกประสบการณ์วิชาชีพครู
+            </h3>
+            <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 2px;">
+              เอกดนตรี มหาวิทยาลัยพะเยา • กำหนดรหัสผ่านส่วนตัวและติดตั้งแอปพลิเคชัน
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-body" style="padding: 1.5rem;">
+        <!-- Banner Info -->
+        <div style="background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.84rem; color: #0369a1; line-height: 1.5;">
+          👋 <strong>สวัสดีครับคุณครูฝึกสอน!</strong> การเข้าสู่ระบบในครั้งแรกนี้ ระบบกำหนดให้ท่าน<strong>ตั้งรหัสผ่านประจำตัว</strong>เพื่อใช้ในการเข้าปฏิบัติการสอนในครั้งถัดไป และแนะนำให้กด<strong>ติดตั้งแอปพลิเคชัน</strong>ลงบนอุปกรณ์เพื่อความสะดวกสูงสุดครับ
+        </div>
+
+        <!-- Form Fields -->
+        <div style="margin-bottom: 1rem;">
+          <label class="form-label" style="font-weight: 700; color: #1e293b;">ชื่อ-นามสกุลของคุณครูฝึกสอน:</label>
+          <input type="text" id="setup-teacher-name" class="form-input" placeholder="เช่น นายวรวุฒิ ดนตรีไพเราะ" value="คุณครูฝึกสอน (เอกดนตรี มพ.)" style="font-size: 0.95rem;">
+          <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">* สามารถแก้ไขเป็นชื่อ-นามสกุลจริงของท่านได้เลยครับ (จะปรากฏในบันทึกหลังสอน วก.5)</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label" style="font-weight: 700; color: #1e293b;">อีเมลล็อกอิน:</label>
+            <input type="email" id="setup-teacher-email" class="form-input" value="kouocking@gmail.com" readonly style="background: #f8fafc; color: #475569; font-weight: 600;">
+          </div>
+          <div>
+            <label class="form-label" style="font-weight: 700; color: #1e293b;">สังกัดสถาบัน:</label>
+            <input type="text" id="setup-teacher-inst" class="form-input" value="เอกดนตรี มหาวิทยาลัยพะเยา" readonly style="background: #f8fafc; color: #475569; font-weight: 600;">
+          </div>
+        </div>
+
+        <!-- Password Setup -->
+        <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; font-size: 0.9rem; color: #1e3a8a; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.35rem;">
+            <span>🔐</span> กำหนดรหัสผ่านใหม่ (Password หรือ PIN ของท่าน)
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+              <label class="form-label" style="font-size: 0.8rem;">รหัสผ่านใหม่:</label>
+              <input type="password" id="setup-teacher-secret" class="form-input" placeholder="ตั้งรหัสผ่าน (อย่างน้อย 4 ตัว)...">
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.8rem;">ยืนยันรหัสผ่านอีกครั้ง:</label>
+              <input type="password" id="setup-teacher-confirm-secret" class="form-input" placeholder="พิมพ์ซ้ำเพื่อยืนยัน...">
+            </div>
+          </div>
+        </div>
+
+        <!-- PWA Install Action Card -->
+        <div style="background: linear-gradient(135deg, #fdf4ff 0%, #f0fdf4 100%); border: 1.5px solid #f0abfc; border-radius: 10px; padding: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 220px;">
+            <div style="font-weight: 800; font-size: 0.92rem; color: #86198f; display: flex; align-items: center; gap: 0.35rem;">
+              <span>📲</span> ติดตั้งแอป MusicSmart ลงบนอุปกรณ์
+            </div>
+            <div style="font-size: 0.76rem; color: #701a75; margin-top: 2px;">
+              กดติดตั้งเพื่อเปิดเป็นแอปบนมือถือ/แท็บเล็ตได้ทันที จูนเสียงและตัดเกรดได้แม้ออฟไลน์
+            </div>
+          </div>
+          <button type="button" class="btn-nav-action primary" style="background: #a21caf; border-color: #a21caf; font-weight: 700; padding: 0.5rem 1rem;" onclick="App.triggerPwaInstall()">
+            📲 ติดตั้งแอปลงเครื่อง
+          </button>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="background: #f8fafc; justify-content: space-between;">
+        <button class="btn-nav-action" onclick="document.getElementById('modal-first-time-setup').classList.remove('active')">ยกเลิก</button>
+        <button class="btn-nav-action primary" style="background: #0284c7; border-color: #0284c7; padding: 0.65rem 1.5rem; font-weight: 800; font-size: 0.95rem;" onclick="App.handleSaveFirstTimeSetup()">
+          💾 บันทึกรหัสผ่านและเริ่มใช้งานทันที
+        </button>
       </div>
     </div>
   </div>
