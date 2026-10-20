@@ -117,6 +117,13 @@
                       <div class="tool-desc">ห้องซ้อมดนตรี 17 เสียง & Backing Track</div>
                     </div>
                   </button>
+                  <button class="tools-item-btn" onclick="App.openMusicAidsModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #fef08a; color: #854d0e;">🎼</span>
+                    <div class="tool-text">
+                      <div class="tool-name">สื่อการสอนโน้ตสากล & ผังคาลิมบ้า</div>
+                      <div class="tool-desc">บรรทัด 5 เส้น, กุญแจซอล, เพลง Round</div>
+                    </div>
+                  </button>
                 </div>
 
                 <!-- Group 2: Academic Docs -->
@@ -452,6 +459,21 @@
             </div>
           </div>
 
+          <!-- Visual Music Notation & Staff Visualizer Action Card -->
+          <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-radius: var(--radius-sm); border: 1.5px solid #bfdbfe; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+              <div style="font-weight: 800; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+                <span>🎼</span> สื่อการสอนโน้ตสากลบนบรรทัด 5 เส้น และผังลิ้นเสียงคาลิมบ้า 17 คีย์
+              </div>
+              <div style="font-size: 0.78rem; color: #475569; margin-top: 2px;">
+                แผนภาพโน้ตสากล กุญแจซอล เทียบโน้ตไทย Solfege ตารางค่าตัวโน้ต และโน้ตเพลงฝึกหัด (หนูมาลี, Twinkle, เพลงวน Round)
+              </div>
+            </div>
+            <button class="btn-nav-action primary" style="background: #2563eb; border-color: #2563eb; font-weight: 700; padding: 0.45rem 1rem; font-size: 0.85rem;" onclick="App.openMusicAidsModal()">
+              🔍 เปิดสื่อภาพโน้ตสากลแบบเต็มจอ
+            </button>
+          </div>
+
           <!-- Interactive Ear Training Solfege Drone -->
           <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
@@ -712,6 +734,9 @@
                 <button class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมและเครื่องจำลองคาลิมบ้า 17 คีย์">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
                   🎵 ซ้อมคาลิมบ้า (Virtual Kalimba)
+                </button>
+                <button class="btn-nav-action" style="background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()" title="เปิดแผนภาพโน้ตสากลและผังลิ้นเสียงคาลิมบ้า">
+                  🎼 สื่อโน้ตสากล & ผังคาลิมบ้า
                 </button>
                 <div id="student-submission-status-chip">
                   <!-- status chip -->
@@ -1034,6 +1059,479 @@
         <button class="btn-nav-action" onclick="document.getElementById('modal-first-time-setup').classList.remove('active')">ยกเลิก</button>
         <button class="btn-nav-action primary" style="background: #0284c7; border-color: #0284c7; padding: 0.65rem 1.5rem; font-weight: 800; font-size: 0.95rem;" onclick="App.handleSaveFirstTimeSetup()">
           💾 บันทึกรหัสผ่านและเริ่มใช้งานทันที
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Standard Music Notation & 17-Tine Kalimba Visual Aids -->
+  <div id="modal-music-visual-aids" class="modal-overlay" style="z-index: 100002; backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.85);">
+    <div class="modal-card" style="max-width: 980px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); overflow: hidden;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%); color: #ffffff; padding: 1rem 1.5rem; border-bottom: 2px solid #38bdf8;">
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 0.85rem;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
+              🎼
+            </div>
+            <div>
+              <h3 class="modal-title" style="margin: 0; color: #ffffff; font-size: 1.18rem; font-weight: 800; letter-spacing: -0.3px;">
+                คลังสื่อการสอนดนตรีมาตรฐาน (Standard Music Notation & Kalimba Visualizer)
+              </h3>
+              <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 2px;">
+                กลุ่มสาระการเรียนรู้ศิลปะ (สาระดนตรี) โรงเรียนพะเยาพิทยาคม • สำหรับชั้น ม.1 และ ม.2
+              </div>
+            </div>
+          </div>
+          <button class="modal-close-btn" style="color: #ffffff; font-size: 1.5rem; background: rgba(255,255,255,0.15); border: none; border-radius: 8px; width: 36px; height: 36px; cursor: pointer;" onclick="App.closeMusicAidsModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs inside Modal -->
+      <div style="display: flex; background: #f8fafc; border-bottom: 1.5px solid #e2e8f0; padding: 0.5rem 1.25rem 0 1.25rem; gap: 0.5rem; overflow-x: auto;">
+        <button id="tab-btn-aids-staff" class="btn-nav-action active" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700; background: #ffffff; color: #1e3a8a; padding: 0.55rem 1rem;" onclick="App.switchMusicAidsTab('staff')">
+          🎼 บรรทัด 5 เส้น & กุญแจซอล
+        </button>
+        <button id="tab-btn-aids-kalimba" class="btn-nav-action" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: transparent; color: #64748b; padding: 0.55rem 1rem;" onclick="App.switchMusicAidsTab('kalimba')">
+          🎹 ผังลิ้นเสียงคาลิมบ้า 17 คีย์
+        </button>
+        <button id="tab-btn-aids-songs" class="btn-nav-action" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: transparent; color: #64748b; padding: 0.55rem 1rem;" onclick="App.switchMusicAidsTab('songs')">
+          📖 โน้ตเพลงฝึกปฏิบัติ & เพลงวน Round
+        </button>
+        <button id="tab-btn-aids-rhythm" class="btn-nav-action" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 600; background: transparent; color: #64748b; padding: 0.55rem 1rem;" onclick="App.switchMusicAidsTab('rhythm')">
+          ⏱️ ตารางค่าตัวโน้ต & จังหวะ
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1; background: #ffffff;">
+        <!-- TAB 1: Staff Notation -->
+        <div id="pane-aids-staff">
+          <div style="background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #0369a1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              💡 <strong>คำแนะนำการอ่านโน้ต:</strong> คลิกที่ตัวโน้ตบนบรรทัด 5 เส้น หรือการ์ดโน้ตด้านล่าง เพื่อฟังระดับเสียงจริง (Acoustic Pitch) และดูตำแหน่งลิ่มคาลิมบ้า
+            </div>
+            <span style="font-size: 0.75rem; background: #0284c7; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-weight: 700;">กุญแจซอล G-Clef</span>
+          </div>
+
+          <!-- SVG Interactive Music Staff -->
+          <div style="background: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow-x: auto; margin-bottom: 1.25rem;">
+            <svg id="svg-music-staff" viewBox="0 0 920 220" style="width: 100%; min-width: 780px; height: auto; display: block; font-family: sans-serif;">
+              <!-- 5 Horizontal Staff Lines (y = 60, 80, 100, 120, 140) -->
+              <!-- Line 5 (F5) -->
+              <line x1="40" y1="60" x2="890" y2="60" stroke="#475569" stroke-width="2" />
+              <!-- Line 4 (D5) -->
+              <line x1="40" y1="80" x2="890" y2="80" stroke="#475569" stroke-width="2" />
+              <!-- Line 3 (B4) -->
+              <line x1="40" y1="100" x2="890" y2="100" stroke="#475569" stroke-width="2" />
+              <!-- Line 2 (G4) -->
+              <line x1="40" y1="120" x2="890" y2="120" stroke="#475569" stroke-width="2" />
+              <!-- Line 1 (E4) -->
+              <line x1="40" y1="140" x2="890" y2="140" stroke="#475569" stroke-width="2" />
+
+              <!-- Staff Start / End Bar Lines -->
+              <line x1="40" y1="60" x2="40" y2="140" stroke="#0f172a" stroke-width="3" />
+              <line x1="886" y1="60" x2="886" y2="140" stroke="#0f172a" stroke-width="2" />
+              <line x1="890" y1="60" x2="890" y2="140" stroke="#0f172a" stroke-width="4" />
+
+              <!-- Treble Clef Symbol Text (Classical Font fallback) -->
+              <text x="50" y="132" font-size="88" fill="#1e293b" font-weight="normal" style="user-select: none;">𝄞</text>
+
+              <!-- Line Number Labels on Left -->
+              <text x="25" y="64" font-size="11" fill="#94a3b8" font-weight="700">5</text>
+              <text x="25" y="84" font-size="11" fill="#94a3b8" font-weight="700">4</text>
+              <text x="25" y="104" font-size="11" fill="#94a3b8" font-weight="700">3</text>
+              <text x="25" y="124" font-size="11" fill="#94a3b8" font-weight="700">2</text>
+              <text x="25" y="144" font-size="11" fill="#94a3b8" font-weight="700">1</text>
+
+              <!-- Space Labels on Left -->
+              <text x="896" y="73" font-size="10" fill="#cbd5e1">ช่อง 4</text>
+              <text x="896" y="93" font-size="10" fill="#cbd5e1">ช่อง 3</text>
+              <text x="896" y="113" font-size="10" fill="#cbd5e1">ช่อง 2</text>
+              <text x="896" y="133" font-size="10" fill="#cbd5e1">ช่อง 1</text>
+
+              <!-- NOTE 1: C4 (Middle C) - x=140, y=160 (Ledger Line y=160) -->
+              <g class="interactive-note" onclick="App.playAidsNote('C4')" style="cursor: pointer;">
+                <!-- Ledger line -->
+                <line x1="124" y1="160" x2="162" y2="160" stroke="#0284c7" stroke-width="2.5" />
+                <!-- Note head -->
+                <ellipse cx="143" cy="160" rx="10" ry="7" transform="rotate(-25 143 160)" fill="#0284c7" />
+                <!-- Stem -->
+                <line x1="151" y1="157" x2="151" y2="105" stroke="#0284c7" stroke-width="2.2" />
+                <text x="143" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">C4 (โด)</text>
+                <text x="143" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 1</text>
+              </g>
+
+              <!-- NOTE 2: D4 - x=210, y=150 (Under Line 1) -->
+              <g class="interactive-note" onclick="App.playAidsNote('D4')" style="cursor: pointer;">
+                <ellipse cx="210" cy="150" rx="10" ry="7" transform="rotate(-25 210 150)" fill="#0284c7" />
+                <line x1="218" y1="147" x2="218" y2="95" stroke="#0284c7" stroke-width="2.2" />
+                <text x="210" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">D4 (เร)</text>
+                <text x="210" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 2</text>
+              </g>
+
+              <!-- NOTE 3: E4 - x=280, y=140 (On Line 1) -->
+              <g class="interactive-note" onclick="App.playAidsNote('E4')" style="cursor: pointer;">
+                <ellipse cx="280" cy="140" rx="10" ry="7" transform="rotate(-25 280 140)" fill="#0284c7" />
+                <line x1="288" y1="137" x2="288" y2="85" stroke="#0284c7" stroke-width="2.2" />
+                <text x="280" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">E4 (มี)</text>
+                <text x="280" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 3</text>
+              </g>
+
+              <!-- NOTE 4: F4 - x=350, y=130 (In Space 1) -->
+              <g class="interactive-note" onclick="App.playAidsNote('F4')" style="cursor: pointer;">
+                <ellipse cx="350" cy="130" rx="10" ry="7" transform="rotate(-25 350 130)" fill="#0284c7" />
+                <line x1="358" y1="127" x2="358" y2="75" stroke="#0284c7" stroke-width="2.2" />
+                <text x="350" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">F4 (ฟา)</text>
+                <text x="350" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 4</text>
+              </g>
+
+              <!-- NOTE 5: G4 - x=420, y=120 (On Line 2) -->
+              <g class="interactive-note" onclick="App.playAidsNote('G4')" style="cursor: pointer;">
+                <ellipse cx="420" cy="120" rx="10" ry="7" transform="rotate(-25 420 120)" fill="#0284c7" />
+                <line x1="428" y1="117" x2="428" y2="65" stroke="#0284c7" stroke-width="2.2" />
+                <text x="420" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">G4 (ซอล)</text>
+                <text x="420" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 5</text>
+              </g>
+
+              <!-- NOTE 6: A4 - x=490, y=110 (In Space 2) -->
+              <g class="interactive-note" onclick="App.playAidsNote('A4')" style="cursor: pointer;">
+                <ellipse cx="490" cy="110" rx="10" ry="7" transform="rotate(-25 490 110)" fill="#0284c7" />
+                <line x1="498" y1="107" x2="498" y2="55" stroke="#0284c7" stroke-width="2.2" />
+                <text x="490" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">A4 (ลา)</text>
+                <text x="490" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 6</text>
+              </g>
+
+              <!-- NOTE 7: B4 - x=560, y=100 (On Line 3) -->
+              <g class="interactive-note" onclick="App.playAidsNote('B4')" style="cursor: pointer;">
+                <ellipse cx="560" cy="100" rx="10" ry="7" transform="rotate(-25 560 100)" fill="#0284c7" />
+                <line x1="552" y1="103" x2="552" y2="155" stroke="#0284c7" stroke-width="2.2" />
+                <text x="560" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">B4 (ที)</text>
+                <text x="560" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 7</text>
+              </g>
+
+              <!-- NOTE 8: C5 - x=630, y=90 (In Space 3) -->
+              <g class="interactive-note" onclick="App.playAidsNote('C5')" style="cursor: pointer;">
+                <ellipse cx="630" cy="90" rx="10" ry="7" transform="rotate(-25 630 90)" fill="#0284c7" />
+                <line x1="622" y1="93" x2="622" y2="145" stroke="#0284c7" stroke-width="2.2" />
+                <text x="630" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">C5 (โดสูง)</text>
+                <text x="630" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 1̇</text>
+              </g>
+
+              <!-- NOTE 9: D5 - x=700, y=80 (On Line 4) -->
+              <g class="interactive-note" onclick="App.playAidsNote('D5')" style="cursor: pointer;">
+                <ellipse cx="700" cy="80" rx="10" ry="7" transform="rotate(-25 700 80)" fill="#0284c7" />
+                <line x1="692" y1="83" x2="692" y2="135" stroke="#0284c7" stroke-width="2.2" />
+                <text x="700" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">D5 (เรสูง)</text>
+                <text x="700" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 2̇</text>
+              </g>
+
+              <!-- NOTE 10: E5 - x=770, y=70 (In Space 4) -->
+              <g class="interactive-note" onclick="App.playAidsNote('E5')" style="cursor: pointer;">
+                <ellipse cx="770" cy="70" rx="10" ry="7" transform="rotate(-25 770 70)" fill="#0284c7" />
+                <line x1="762" y1="73" x2="762" y2="125" stroke="#0284c7" stroke-width="2.2" />
+                <text x="770" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">E5 (มีสูง)</text>
+                <text x="770" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 3̇</text>
+              </g>
+
+              <!-- NOTE 11: F5 - x=840, y=60 (On Line 5) -->
+              <g class="interactive-note" onclick="App.playAidsNote('F5')" style="cursor: pointer;">
+                <ellipse cx="840" cy="60" rx="10" ry="7" transform="rotate(-25 840 60)" fill="#0284c7" />
+                <line x1="832" y1="63" x2="832" y2="115" stroke="#0284c7" stroke-width="2.2" />
+                <text x="840" y="185" font-size="13" font-weight="800" fill="#0369a1" text-anchor="middle">F5 (ฟาสูง)</text>
+                <text x="840" y="202" font-size="11" font-weight="700" fill="#d97706" text-anchor="middle">ลิ่ม 4̇</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- Quick Reference Note Cards -->
+          <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 0.65rem;">
+            📋 ตารางถอดรหัสตำแหน่งโน้ตสากล กุญแจซอล และลิ่มคาลิมบ้า:
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.6rem;">
+            <div id="aids-note-card-C4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('C4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">C4 (โด)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 1 (กลาง)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">เส้นน้อยใต้บรรทัด</div>
+            </div>
+            <div id="aids-note-card-D4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('D4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">D4 (เร)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 2 (ซ้าย)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">อยู่ใต้เส้นที่ 1</div>
+            </div>
+            <div id="aids-note-card-E4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('E4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">E4 (มี)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 3 (ขวา)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">คาบเส้นที่ 1</div>
+            </div>
+            <div id="aids-note-card-F4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('F4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">F4 (ฟา)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 4 (ซ้าย)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">อยู่ในช่องที่ 1</div>
+            </div>
+            <div id="aids-note-card-G4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('G4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">G4 (ซอล)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 5 (ขวา)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">คาบเส้นที่ 2</div>
+            </div>
+            <div id="aids-note-card-A4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('A4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">A4 (ลา)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 6 (ซ้าย)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">อยู่ในช่องที่ 2</div>
+            </div>
+            <div id="aids-note-card-B4" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('B4')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">B4 (ที)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 7 (ขวา)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">คาบเส้นที่ 3</div>
+            </div>
+            <div id="aids-note-card-C5" class="student-card" style="padding: 0.65rem; text-align: center; border: 1.5px solid #cbd5e1; cursor: pointer; transition: all 0.15s ease;" onclick="App.playAidsNote('C5')">
+              <div style="font-size: 1.15rem; font-weight: 800; color: #0284c7;">C5 (โดสูง)</div>
+              <div style="font-size: 0.85rem; font-weight: 700; color: #d97706;">ลิ่ม 1̇ (ซ้าย)</div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">อยู่ในช่องที่ 3</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: Kalimba Tines Layout -->
+        <div id="pane-aids-kalimba" style="display: none;">
+          <div style="background: #fdf4ff; border: 1.5px solid #f0abfc; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #86198f;">
+            🎹 <strong>ผังลิ้นเสียงคาลิมบ้า 17 คีย์ (C Major):</strong> ลิ้นตรงกลางยาวที่สุดคือ <strong>C4 (เลข 1)</strong> โน้ตจะเรียงสลับซ้าย-ขวาออกไป ลิ้นสีแดงและน้ำเงินคือตำแหน่งสติ๊กเกอร์มาร์กเกอร์ช่วยเล็ง
+          </div>
+
+          <!-- 17-Tine Visual Kalimba Board -->
+          <div style="background: #fdf8f0; border: 3px solid #b45309; border-radius: 20px; padding: 1.5rem 1rem 1rem 1rem; box-shadow: 0 10px 25px -5px rgba(180, 83, 9, 0.2); max-width: 820px; margin: 0 auto 1.5rem auto;">
+            <!-- Soundhole representation -->
+            <div style="width: 70px; height: 70px; border-radius: 50%; background: #451a03; margin: 0 auto 1.25rem auto; box-shadow: inset 0 4px 8px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; color: #d97706; font-size: 0.7rem; font-weight: 700;">
+              รูเสียง
+            </div>
+
+            <!-- Tines Flex Container -->
+            <div style="display: flex; justify-content: center; align-items: flex-start; gap: 4px; height: 260px; overflow-x: auto; padding-bottom: 0.5rem;">
+              <!-- Left side tines (8 tines: D6, B5, G5, E5, C5, A4, F4, D4) -->
+              <div class="aids-tine" style="height: 155px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('D6')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">D6</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">2̇̇</span>
+              </div>
+              <div class="aids-tine" style="height: 165px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('B5')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">B5</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">7̇</span>
+              </div>
+              <div class="aids-tine" style="height: 175px; width: 34px; background: linear-gradient(180deg, #38bdf8 0%, #0284c7 75%, #bae6fd 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('G5')">
+                <span style="font-size: 0.7rem; font-weight: 700;">G5</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">5̇</span>
+              </div>
+              <div class="aids-tine" style="height: 185px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('E5')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">E5</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">3̇</span>
+              </div>
+              <div class="aids-tine" style="height: 198px; width: 34px; background: linear-gradient(180deg, #f43f5e 0%, #e11d48 75%, #fecdd3 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('C5')">
+                <span style="font-size: 0.7rem; font-weight: 700;">C5</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">1̇</span>
+              </div>
+              <div class="aids-tine" style="height: 210px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('A4')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">A4</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">6</span>
+              </div>
+              <div class="aids-tine" style="height: 222px; width: 34px; background: linear-gradient(180deg, #38bdf8 0%, #0284c7 75%, #bae6fd 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('F4')">
+                <span style="font-size: 0.7rem; font-weight: 700;">F4</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">4</span>
+              </div>
+              <div class="aids-tine" style="height: 235px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('D4')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">D4</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">2</span>
+              </div>
+
+              <!-- CENTER TINE (Longest C4 - 1) -->
+              <div class="aids-tine" style="height: 250px; width: 40px; background: linear-gradient(180deg, #fbbf24 0%, #d97706 75%, #fef3c7 100%); border: 2px solid #b45309; border-radius: 0 0 12px 12px; box-shadow: 0 5px 10px rgba(0,0,0,0.3); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; z-index: 2;" onclick="App.playAidsNote('C4')">
+                <span style="font-size: 0.75rem; font-weight: 800; color: #78350f;">C4</span>
+                <span style="font-size: 1.15rem; font-weight: 900; color: #78350f;">1</span>
+              </div>
+
+              <!-- Right side tines (8 tines: E4, G4, B4, D5, F5, A5, C6, E6) -->
+              <div class="aids-tine" style="height: 235px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('E4')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">E4</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">3</span>
+              </div>
+              <div class="aids-tine" style="height: 222px; width: 34px; background: linear-gradient(180deg, #38bdf8 0%, #0284c7 75%, #bae6fd 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('G4')">
+                <span style="font-size: 0.7rem; font-weight: 700;">G4</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">5</span>
+              </div>
+              <div class="aids-tine" style="height: 210px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('B4')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">B4</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">7</span>
+              </div>
+              <div class="aids-tine" style="height: 198px; width: 34px; background: linear-gradient(180deg, #f43f5e 0%, #e11d48 75%, #fecdd3 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('D5')">
+                <span style="font-size: 0.7rem; font-weight: 700;">D5</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">2̇</span>
+              </div>
+              <div class="aids-tine" style="height: 185px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('F5')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">F5</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">4̇</span>
+              </div>
+              <div class="aids-tine" style="height: 175px; width: 34px; background: linear-gradient(180deg, #38bdf8 0%, #0284c7 75%, #bae6fd 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.25); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px; color: #ffffff;" onclick="App.playAidsNote('A5')">
+                <span style="font-size: 0.7rem; font-weight: 700;">A5</span>
+                <span style="font-size: 0.85rem; font-weight: 800;">6̇</span>
+              </div>
+              <div class="aids-tine" style="height: 165px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('C6')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">C6</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">1̇̇</span>
+              </div>
+              <div class="aids-tine" style="height: 155px; width: 34px; background: linear-gradient(180deg, #94a3b8 0%, #cbd5e1 75%, #f1f5f9 100%); border-radius: 0 0 10px 10px; box-shadow: 0 3px 6px rgba(0,0,0,0.2); cursor: pointer; text-align: center; padding-top: 6px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 8px;" onclick="App.playAidsNote('E6')">
+                <span style="font-size: 0.7rem; font-weight: 700; color: #475569;">E6</span>
+                <span style="font-size: 0.85rem; font-weight: 800; color: #1e293b;">3̇̇</span>
+              </div>
+            </div>
+            <div style="text-align: center; font-size: 0.8rem; color: #78350f; font-weight: 700; margin-top: 0.5rem;">
+              ◀ ฝั่งซ้าย (นิ้วโป้งซ้าย) &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ลิ้นกลาง C4 [1] &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; ฝั่งขวา (นิ้วโป้งขวา) ▶
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Song Sheets -->
+        <div id="pane-aids-songs" style="display: none;">
+          <!-- Song 1: Mary Had a Little Lamb -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; color: #1e3a8a; font-size: 1.05rem; font-weight: 800;">
+                  🐑 บทเพลงที่ 1: เพลงหนูมาลี (Mary Had a Little Lamb) — สำหรับชั้น ม.1
+                </h4>
+                <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                  อัตราจังหวะ 4/4 • ความเร็ว 60-80 BPM • ใช้เฉพาะลิ่มเสียงกลาง 1, 2, 3, 5
+                </div>
+              </div>
+              <button class="btn-nav-action" style="font-size: 0.8rem; background: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-weight: 700;" onclick="VirtualKalimba.playSong(1)">
+                ▶ ฟังตัวอย่างทำนองเพลง
+              </button>
+            </div>
+
+            <!-- Score Visual Box -->
+            <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.95rem; line-height: 1.8; overflow-x: auto;">
+              <div style="color: #0369a1; font-weight: 700;">[ท่อนที่ 1]</div>
+              <div>แท็บตัวเลข: | <strong>3</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;- &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;| <strong>3</strong> &nbsp;<strong>5</strong> &nbsp;<strong>5</strong> &nbsp;- &nbsp;|</div>
+              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| มี &nbsp;เร &nbsp;โด &nbsp;เร &nbsp;| มี &nbsp;มี &nbsp;มี &nbsp;- &nbsp;| เร &nbsp;เร &nbsp;เร &nbsp;- &nbsp;| มี &nbsp;ซอล ซอล - &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;&nbsp;| หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ลูก แมว เหมียว | ลูก แมว เหมียว |</div>
+              <div style="margin-top: 0.75rem; color: #0369a1; font-weight: 700;">[ท่อนที่ 2]</div>
+              <div>แท็บตัวเลข: | <strong>3</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>1</strong> &nbsp;- &nbsp;- &nbsp;- &nbsp;|</div>
+              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| มี &nbsp;เร &nbsp;โด &nbsp;เร &nbsp;| มี &nbsp;มี &nbsp;มี &nbsp;มี &nbsp;| เร &nbsp;เร &nbsp;มี &nbsp;เร &nbsp;| โด &nbsp;- &nbsp;- &nbsp;- &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;&nbsp;| หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ขน มัน ดู คล้าย | สำ &nbsp;ลี &nbsp;- &nbsp;- &nbsp;|</div>
+            </div>
+          </div>
+
+          <!-- Song 2: Twinkle Twinkle Little Star -->
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; color: #1e3a8a; font-size: 1.05rem; font-weight: 800;">
+                  ⭐ บทเพลงที่ 2: เพลงดาวดวงน้อย (Twinkle Twinkle Little Star) — สำหรับชั้น ม.1
+                </h4>
+                <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                  อัตราจังหวะ 4/4 • ฝึกโน้ตก้าวกระโดดจากลิ่ม 1 ไปลิ่ม 5
+                </div>
+              </div>
+            </div>
+            <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.95rem; line-height: 1.8; overflow-x: auto;">
+              <div>แท็บตัวเลข: | <strong>1</strong> &nbsp;<strong>1</strong> &nbsp;<strong>5</strong> &nbsp;<strong>5</strong> &nbsp;| <strong>6</strong> &nbsp;<strong>6</strong> &nbsp;<strong>5</strong> &nbsp;- &nbsp;| <strong>4</strong> &nbsp;<strong>4</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;- &nbsp;|</div>
+              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| โด &nbsp;โด &nbsp;ซอล ซอล | ลา &nbsp;ลา &nbsp;ซอล - &nbsp;| ฟา &nbsp;ฟา &nbsp;มี &nbsp;มี &nbsp;| เร &nbsp;เร &nbsp;โด &nbsp;- &nbsp;|</div>
+              <div style="margin-top: 0.5rem;">แท็บตัวเลข: | <strong>5</strong> &nbsp;<strong>5</strong> &nbsp;<strong>4</strong> &nbsp;<strong>4</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;| <strong>5</strong> &nbsp;<strong>5</strong> &nbsp;<strong>4</strong> &nbsp;<strong>4</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;|</div>
+              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| ซอล ซอล ฟา &nbsp;ฟา &nbsp;| มี &nbsp;มี &nbsp;เร &nbsp;- &nbsp;| ซอล ซอล ฟา &nbsp;ฟา &nbsp;| มี &nbsp;มี &nbsp;เร &nbsp;- &nbsp;|</div>
+            </div>
+          </div>
+
+          <!-- Song 3: Row, Row, Row Your Boat (Canon / Round) -->
+          <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%); border: 2px solid #86efac; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; color: #15803d; font-size: 1.08rem; font-weight: 800;">
+                  🚣 บทเพลงที่ 3: เพลงวนรอบ Row, Row, Row Your Boat (Canon / Round) — สำหรับชั้น ม.2
+                </h4>
+                <div style="font-size: 0.78rem; color: #166534; margin-top: 2px;">
+                  การบรรเลงรวมวงประสานเสียง 2-3 กลุ่ม • ศ 2.1 ม.2/4 ร้องและเล่นดนตรีเดี่ยวและรวมวง
+                </div>
+              </div>
+            </div>
+
+            <!-- Canon Rehearsal Guide Map -->
+            <div style="background: #ffffff; border: 1.5px solid #bbf7d0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+              <div style="font-weight: 800; font-size: 0.9rem; color: #15803d; margin-bottom: 0.5rem;">
+                🎯 แผนผังคิวการเข้าเล่นรวมวง 3 กลุ่ม (Rehearsal Cue Map):
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+                <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 0.65rem;">
+                  <strong style="color: #15803d;">🟢 กลุ่ม A (ผู้นำวง):</strong><br>
+                  เริ่มบรรเลงตั้งแต่ห้องที่ 1<br>
+                  <span style="font-size: 0.76rem; color: #166534;">* เล่นจังหวะสม่ำเสมอ ห้ามเร่งหนีเพื่อน</span>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #93c5fd; border-radius: 6px; padding: 0.65rem;">
+                  <strong style="color: #1d4ed8;">🔵 กลุ่ม B (กลุ่มตามที่ 1):</strong><br>
+                  เริ่มห้อง 1 เมื่อกลุ่ม A เข้าสู่ห้องที่ 3<br>
+                  <span style="font-size: 0.76rem; color: #1e40af;">* สังเกตสัญญาณมือจากคุณครู</span>
+                </div>
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 0.65rem;">
+                  <strong style="color: #b45309;">🟡 กลุ่ม C หรือ Ostinato:</strong><br>
+                  ดีดโน้ต C4 (1) ค้าง 4 จังหวะคลอเบส<br>
+                  <span style="font-size: 0.76rem; color: #92400e;">* ตีคุมจังหวะให้ทั้งสองกลุ่มนิ่ง</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Score Table -->
+            <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.95rem; line-height: 1.8; overflow-x: auto;">
+              <div style="color: #15803d; font-weight: 800;">[ห้องที่ 1 - 2] — (กลุ่ม A เริ่มต้น)</div>
+              <div>โน้ต/แท็บ: | <strong>1</strong> &nbsp;. &nbsp;<strong>1</strong> &nbsp;. &nbsp;| <strong>1</strong> &nbsp;<strong>2</strong> &nbsp;<strong>3</strong> &nbsp;. &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;| Row &nbsp;row &nbsp;| row your boat |</div>
+              <div style="margin-top: 0.75rem; color: #15803d; font-weight: 800;">[ห้องที่ 3 - 4] — <span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 0.82rem;">🔔 กลุ่ม B เริ่มเล่นห้อง 1 ตรงนี้!</span></div>
+              <div>โน้ต/แท็บ: | <strong>3</strong> &nbsp;<strong>2</strong> &nbsp;<strong>3</strong> &nbsp;<strong>4</strong> &nbsp;| <strong>5</strong> &nbsp;. &nbsp;. &nbsp;. &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;| Gently down the &nbsp;| stream - - - &nbsp;|</div>
+              <div style="margin-top: 0.75rem; color: #15803d; font-weight: 800;">[ห้องที่ 5 - 6]</div>
+              <div>โน้ต/แท็บ: | <strong>1̇</strong> <strong>1̇</strong> <strong>1̇</strong> &nbsp;<strong>5</strong> <strong>5</strong> <strong>5</strong> &nbsp;| <strong>3</strong> <strong>3</strong> <strong>3</strong> &nbsp;<strong>1</strong> <strong>1</strong> <strong>1</strong> &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;| Mer-ri-ly mer-ri-ly &nbsp;| mer-ri-ly mer-ri-ly &nbsp;|</div>
+              <div style="margin-top: 0.75rem; color: #15803d; font-weight: 800;">[ห้องที่ 7 - 8]</div>
+              <div>โน้ต/แท็บ: | <strong>5</strong> &nbsp;<strong>4</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>1</strong> &nbsp;. &nbsp;. &nbsp;. &nbsp;|</div>
+              <div>เนื้อร้อง: &nbsp;| Life is but a &nbsp;&nbsp;&nbsp;| dream - - - &nbsp;|</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: Rhythm Table -->
+        <div id="pane-aids-rhythm" style="display: none;">
+          <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #92400e;">
+            ⏱️ <strong>ระบบจังหวะและค่าตัวโน้ตสากล (Rhythm & Note Values):</strong> อัตราจังหวะพื้นฐาน 4/4 หมายถึง ใน 1 ห้องเพลงมี 4 จังหวะ โดยโน้ตตัวดำมีค่าเท่ากับ 1 จังหวะ
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
+              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅝</div>
+              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวกลม (Whole Note)</div>
+              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 4 จังหวะ</div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">เคาะ 1 แล้วลากยาว 2 3 4</div>
+            </div>
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
+              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅗𝅥</div>
+              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวขาว (Half Note)</div>
+              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 2 จังหวะ</div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">เคาะ 1 แล้วลากยาวถึง 2</div>
+            </div>
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
+              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅘𝅥</div>
+              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวดำ (Quarter Note)</div>
+              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 1 จังหวะ</div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">1 โน้ต ต่อ 1 จังหวะเคาะ</div>
+            </div>
+            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
+              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅘𝅥𝅮</div>
+              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวเขบ็จ 1 ชั้น (Eighth)</div>
+              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 1/2 จังหวะ</div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">2 โน้ต ต่อ 1 จังหวะเคาะ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="background: #f8fafc; padding: 0.75rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0;">
+        <span style="font-size: 0.8rem; color: #64748b;">
+          💡 แตะที่ตัวโน้ตหรือลิ่มเสียง เพื่อฟังเสียงจริง (Acoustic Web Audio API)
+        </span>
+        <button class="btn-nav-action primary" style="background: #1e3a8a; border-color: #1e3a8a; font-weight: 700; padding: 0.45rem 1.25rem;" onclick="App.closeMusicAidsModal()">
+          ปิดหน้าต่าง
         </button>
       </div>
     </div>

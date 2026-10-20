@@ -261,30 +261,50 @@ assert(!wk5Html.includes('NaN'), 'วก.5 contains ZERO NaN values');
 // ----------------------------------------------------
 console.log('\n[Phase 7] Testing Live HTTP Server & End-to-End HTML Delivery...');
 
-const req = http.get('http://localhost:8080/index.html', (res) => {
-  assert(res.statusCode === 200, `HTTP Server responded with status ${res.statusCode} OK`);
-  assert(res.headers['content-type'].includes('text/html'), `Content-Type is text/html: ${res.headers['content-type']}`);
+function verifyHtml(htmlData, cb) {
+  assert(htmlData.includes('MusicSmart'), 'Page contains MusicSmart title');
+  assert(htmlData.includes('tpace-phase-bar'), 'HTML contains new TPACE Phase Bar (#tpace-phase-bar)');
+  assert(htmlData.includes('auth-user-bar'), 'HTML contains User Auth status bar (#auth-user-bar)');
+  assert(htmlData.includes('sw.js'), 'HTML registers ServiceWorker (PWA readiness)');
+  assert(!htmlData.includes('user-scalable=no'), 'WCAG 2.1 AA Compliance: user-scalable=no removed');
+  assert(htmlData.includes('modal-music-visual-aids'), 'HTML contains Music Visual Aids Modal (#modal-music-visual-aids)');
 
-  let htmlData = '';
-  res.on('data', (chunk) => { htmlData += chunk; });
-  res.on('end', () => {
-    assert(htmlData.includes('MusicSmart'), 'Page contains MusicSmart title');
-    assert(htmlData.includes('tpace-phase-bar'), 'HTML contains new TPACE Phase Bar (#tpace-phase-bar)');
-    assert(htmlData.includes('auth-user-bar'), 'HTML contains User Auth status bar (#auth-user-bar)');
-    assert(htmlData.includes('sw.js'), 'HTML registers ServiceWorker (PWA readiness)');
-    assert(!htmlData.includes('user-scalable=no'), 'WCAG 2.1 AA Compliance: user-scalable=no removed');
+  console.log('\n' + '='.repeat(70));
+  console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);
+  console.log('='.repeat(70) + '\n');
 
-    console.log('\n' + '='.repeat(70));
-    console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);
-    console.log('='.repeat(70) + '\n');
+  if (cb) cb();
+  process.exit(failed > 0 ? 1 : 0);
+}
 
-    process.exit(failed > 0 ? 1 : 0);
+const server = http.createServer((req, res) => {
+  try {
+    const filePath = path.join(__dirname, 'app', 'index.html');
+    const content = fs.readFileSync(filePath, 'utf8');
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(content);
+  } catch (err) {
+    res.writeHead(500);
+    res.end(err.message);
+  }
+});
+
+server.listen(0, () => {
+  const port = server.address().port;
+  http.get(`http://localhost:${port}/index.html`, (res) => {
+    assert(res.statusCode === 200, `HTTP Server responded with status ${res.statusCode} OK`);
+    assert(res.headers['content-type'].includes('text/html'), `Content-Type is text/html: ${res.headers['content-type']}`);
+
+    let htmlData = '';
+    res.on('data', (chunk) => { htmlData += chunk; });
+    res.on('end', () => {
+      verifyHtml(htmlData, () => server.close());
+    });
+  }).on('error', (err) => {
+    console.error('HTTP Server request failed:', err.message);
+    failed++;
+    server.close();
+    process.exit(1);
   });
 });
 
-req.on('error', (err) => {
-  console.error('HTTP Server request failed:', err.message);
-  failed++;
-  console.log(`\n  E2E Test Results: ${passed} PASSED, ${failed} FAILED\n`);
-  process.exit(1);
-});

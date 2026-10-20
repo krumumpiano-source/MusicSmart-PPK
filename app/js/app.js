@@ -2997,6 +2997,65 @@ const App = {
     document.getElementById('modal-reflection').classList.remove('active');
   },
 
+  // --- Music Visual Aids & Interactive Staff/Kalimba Modal ---
+  openMusicAidsModal(initialTab = 'staff') {
+    const modal = document.getElementById('modal-music-visual-aids');
+    if (modal) {
+      modal.classList.add('active');
+      this.switchMusicAidsTab(initialTab);
+    }
+  },
+
+  closeMusicAidsModal() {
+    const modal = document.getElementById('modal-music-visual-aids');
+    if (modal) {
+      modal.classList.remove('active');
+    }
+  },
+
+  switchMusicAidsTab(tab) {
+    const tabs = ['staff', 'kalimba', 'songs', 'rhythm'];
+    tabs.forEach(t => {
+      const pane = document.getElementById(`pane-aids-${t}`);
+      const btn = document.getElementById(`tab-btn-aids-${t}`);
+      if (pane) {
+        pane.style.display = (t === tab) ? 'block' : 'none';
+      }
+      if (btn) {
+        if (t === tab) {
+          btn.classList.add('active');
+          btn.style.background = '#ffffff';
+          btn.style.color = '#1e3a8a';
+          btn.style.fontWeight = '700';
+        } else {
+          btn.classList.remove('active');
+          btn.style.background = 'transparent';
+          btn.style.color = '#64748b';
+          btn.style.fontWeight = '600';
+        }
+      }
+    });
+  },
+
+  playAidsNote(note) {
+    if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.playNote) {
+      VirtualKalimba.playNote(note);
+    }
+    // Visual feedback on staff note card
+    const card = document.getElementById(`aids-note-card-${note}`);
+    if (card) {
+      card.style.transform = 'scale(1.08)';
+      card.style.borderColor = '#0284c7';
+      card.style.boxShadow = '0 0 12px rgba(2, 132, 199, 0.4)';
+      setTimeout(() => {
+        card.style.transform = 'scale(1)';
+        card.style.borderColor = '#cbd5e1';
+        card.style.boxShadow = 'none';
+      }, 250);
+    }
+  },
+
+
   saveSessionAndFinish() {
     const className = this.state.selectedClass;
     const period = this.state.selectedPeriod;
