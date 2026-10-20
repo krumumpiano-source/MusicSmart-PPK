@@ -1,0 +1,18 @@
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Editor & AI Tooling Caches
+.kilo/
+.kilocode/
+.qodo/
+.gemini/
+scratch/
+
+# OS & Log Files
+Thumbs.db
+Desktop.ini
+*.log
+*.tmp

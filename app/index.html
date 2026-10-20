@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MusicSmart • ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE - โรงเรียนพะเยาพิทยาคม</title>
+  <meta name="description" content="MusicSmart ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE แพลตฟอร์มบริหารจัดการชั้นเรียน วัดประเมินผล และวิจัยในชั้นเรียน สาระการเรียนรู้ดนตรี โรงเรียนพะเยาพิทยาคม">
+  
+  <!-- Typography: Google Fonts (Prompt & Sarabun) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- PWA Progressive Web App & Mobile App Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MusicSmart">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <!-- School & Innovation Brand Identity -->
+      <div class="brand-section">
+        <div class="school-crest-badge" id="app-crest-badge" title="T-PACE MusicSmart • โรงเรียนพะเยาพิทยาคม">
+          <span style="font-size: 0.85rem; font-weight: 800; letter-spacing: -0.5px;">T-PACE</span>
+        </div>
+        <div class="school-title-group">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <h1 id="app-display-name" style="font-size: 1.35rem; font-weight: 800; letter-spacing: -0.5px; color: var(--ppk-navy-dark); margin: 0;">MusicSmart</h1>
+            <span class="badge-primary" id="app-display-badge" style="font-size: 0.72rem; padding: 1px 7px; border-radius: 9999px; font-weight: 700;">T-PACE Ecosystem</span>
+          </div>
+          <p id="app-display-sub" style="font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0 0;">
+            ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE • โรงเรียนพะเยาพิทยาคม
+          </p>
+        </div>
+
+        <!-- Role-Based Navigation Switcher -->
+        <div class="role-selector-pill" id="role-selector-pill">
+          <button id="btn-role-teacher" class="role-pill-btn active" onclick="App.switchRole('teacher')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            ครูผู้สอน
+          </button>
+          <button id="btn-role-student" class="role-pill-btn" onclick="App.switchRole('student')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+            นักเรียน
+          </button>
+        </div>
+      </div>
+
+      <!-- Semester & Dynamic Course Switcher -->
+      <div class="header-middle" id="header-middle-teacher">
+        <div id="btn-semester-trigger" class="semester-badge" onclick="App.openSemesterModal()" title="คลิกเพื่อจัดการเทอมและคลังย้อนหลัง">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          <span id="header-semester-label">ภาคเรียนที่ 2/2569</span>
+        </div>
+
+        <nav id="header-course-nav" class="course-tabs-nav">
+          <!-- Dynamically Injected from Store.getAllSubjects() -->
+        </nav>
+      </div>
+
+      <!-- Instructor Profile & Navigation Actions -->
+      <div class="header-actions">
+        <!-- Teacher Actions Group -->
+        <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <div id="instructor-chip" class="teacher-chip" onclick="App.openInstructorModal()" title="คลิกเพื่อสลับผู้สอน (ครูประจำวิชา / ครูฝึกสอน)">
+            <span id="badge-instructor-role" class="teacher-role-tag">ครูประจำวิชา</span>
+            <span id="badge-instructor-name" class="teacher-name-label">คุณครูพงศธร โพธิแก้ว</span>
+          </div>
+
+          <!-- Quick Tools & Services Dropdown Wrapper -->
+          <div class="quick-tools-wrapper" style="position: relative;">
+            <button id="btn-quick-tools" class="btn-nav-action" onclick="App.toggleToolsMenu(event)" title="เปิดคลังเครื่องมือดนตรีและเอกสารวิชาการ" aria-haspopup="true" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              <span>คลังเครื่องมือ & วก.</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+
+            <!-- Dropdown Popover Panel -->
+            <div id="tools-dropdown-panel" class="tools-dropdown-panel" style="display: none;">
+              <div class="tools-dropdown-header">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.88rem; color: var(--ppk-navy-dark);">คลังเครื่องมือและเอกสารการสอน</div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 1px;">ระบบนิเวศดนตรี T-PACE • ร.ร.พะเยาพิทยาคม</div>
+                </div>
+                <button class="tools-dropdown-close" onclick="App.closeToolsMenu()">✕</button>
+              </div>
+
+              <div class="tools-dropdown-grid">
+                <!-- Group 1: Music Tools -->
+                <div class="tools-group">
+                  <div class="tools-group-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                    เครื่องมือดนตรีดิจิทัล
+                  </div>
+                  <button class="tools-item-btn" onclick="Tuner.openModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #e0f2fe; color: #0284c7;">🎙️</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ตั้งเสียง Tuner</div>
+                      <div class="tool-desc">ตั้งเสียงคาลิมบ้า 17 คีย์ & โครมาติก</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="VirtualKalimba.openModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #dbeafe; color: #1d4ed8;">🎹</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ซ้อมคาลิมบ้า (Virtual)</div>
+                      <div class="tool-desc">ห้องซ้อมดนตรี 17 เสียง & Backing Track</div>
+                    </div>
+                  </button>
+                </div>
+
+                <!-- Group 2: Academic Docs -->
+                <div class="tools-group">
+                  <div class="tools-group-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    งานวิชาการ & วก.
+                  </div>
+                  <button class="tools-item-btn" onclick="App.openAcademicDocsModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #fef3c7; color: #d97706;">📁</span>
+                    <div class="tool-text">
+                      <div class="tool-name">คลังเอกสาร วก.1 - วก.7</div>
+                      <div class="tool-desc">หลักสูตร, แผนการสอน, สื่อ, รูบริก</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="OfficialForms.openModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #e0e7ff; color: #4338ca;">🖨️</span>
+                    <div class="tool-text">
+                      <div class="tool-name">พิมพ์ ปพ.5 / วก.5</div>
+                      <div class="tool-desc">แบบฟอร์มทางการมาตรฐาน A4</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="CARAnalytics.openModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #dcfce7; color: #15803d;">📈</span>
+                    <div class="tool-text">
+                      <div class="tool-name">วิจัย CAR (วPA คศ.4)</div>
+                      <div class="tool-desc">สถิติ Paired t-test & E1/E2</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="QuizEngine.openQuizModal(1); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #fdf2f8; color: #db2777;">📝</span>
+                    <div class="tool-text">
+                      <div class="tool-name">คลังแบบทดสอบท้ายหน่วย (40 ข้อ)</div>
+                      <div class="tool-desc">ตรวจข้อสอบ สุ่มข้อและสลับตัวเลือก</div>
+                    </div>
+                  </button>
+                </div>
+
+                <!-- Group 3: System Management -->
+                <div class="tools-group">
+                  <div class="tools-group-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    จัดการระบบการสอน
+                  </div>
+                  <button class="tools-item-btn" onclick="App.openTimetableModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">📅</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ตารางสอน</div>
+                      <div class="tool-desc">ตารางสอนประจำสัปดาห์</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="App.openSemesterModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">🗂️</span>
+                    <div class="tool-text">
+                      <div class="tool-name">คลังเทอม / ประวัติ</div>
+                      <div class="tool-desc">จัดการเทอมและดูข้อมูลย้อนหลัง</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="App.openSubjectsModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">📖</span>
+                    <div class="tool-text">
+                      <div class="tool-name">จัดการรายวิชา</div>
+                      <div class="tool-desc">ตั้งค่ารหัสวิชาและห้องเรียน</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="App.openSettingsModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">🔧</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ตั้งค่านวัตกรรม</div>
+                      <div class="tool-desc">สถานศึกษาและรูปแบบ T-PACE</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Primary Export / Report Button -->
+          <button class="btn-nav-action primary" onclick="App.openExportModal()" title="ส่งออกข้อมูลและบันทึกหลังสอน วก.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            รายงาน & วก.5
+          </button>
+        </div>
+
+        <!-- Student Actions Group -->
+        <div id="student-actions-group" style="display: none; align-items: center; gap: 0.65rem;">
+          <!-- In student mode, student actions are handled here -->
+        </div>
+
+        <!-- Current Auth User & Subtle Logout Action (Decluttered Header) -->
+        <div id="auth-user-bar" style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.25rem; border-left: 1px solid var(--border-subtle); padding-left: 0.5rem;">
+          <div id="auth-user-badge" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; display: none;">
+            <!-- Injected via JS -->
+          </div>
+          <button class="btn-nav-action" style="background: transparent; color: var(--text-muted); border-color: var(--border-subtle); font-weight: 600; padding: 0.4rem 0.6rem;" onclick="App.handleLogout()" title="ออกจากระบบ">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span class="hide-on-tablet">ออก</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main-wrapper">
+
+    <!-- Archive View Warning Banner -->
+    <div id="archive-notification-banner" class="archive-view-banner" style="display: none;">
+      <div>
+        <strong>กำลังดูข้อมูลประวัติย้อนหลัง:</strong>
+        <span id="archive-banner-text">ภาคเรียนที่ 1/2569</span> (โหมดอ่านอย่างเดียว)
+      </div>
+      <button class="btn-nav-action" onclick="App.exitArchiveView()">กลับสู่ภาคเรียนปัจจุบัน</button>
+    </div>
+
+    <!-- VIEW 1: Dashboard (Classrooms Board) -->
+    <section id="view-dashboard">
+      
+      <!-- Dashboard Top Grid: Today's Schedule + Teacher To-Do List -->
+      <div class="dashboard-top-grid">
+        <!-- Today's Teaching Schedule Panel -->
+        <div class="section-panel" style="margin-bottom: 0;">
+          <div class="panel-header-row">
+            <div class="panel-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              <span id="today-schedule-title">ตารางสอนประจำวันนี้</span>
+            </div>
+            <button class="btn-nav-action" onclick="App.openTimetableModal()">ตารางสอน</button>
+          </div>
+
+          <div id="today-slots-grid" class="today-slots-flex">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Teacher To-Do List & Action Required Panel -->
+        <div class="section-panel" style="margin-bottom: 0;">
+          <div class="panel-header-row">
+            <div class="panel-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              <span>รายการที่ต้องทำ (To-Do & ติดตามงาน)</span>
+            </div>
+            <span id="teacher-todo-count-badge" class="badge-warning" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px;">0 รายการ</span>
+          </div>
+
+          <div id="teacher-todo-list" class="teacher-todo-container">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Classroom Selection Heading -->
+      <div class="section-heading-row">
+        <div>
+          <h2 id="dashboard-title" class="section-heading-title">ห้องเรียนระดับชั้นมัธยมศึกษาปีที่ 1</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+            เลือกห้องเรียนเพื่อเข้าสู่การจัดการเรียนการสอน บันทึกเวลาเรียน และการประเมินผล
+          </p>
+        </div>
+      </div>
+
+      <!-- Classrooms Cards Grid -->
+      <div id="classrooms-grid" class="classes-grid">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- VIEW 2: Classroom Cockpit (Live Teaching Session) -->
+    <section id="view-cockpit">
+      <div class="cockpit-header-card">
+        <div class="cockpit-top-row">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <button class="btn-nav-action" onclick="App.showDashboard()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                กลับหน้ารวมห้อง
+              </button>
+              <h2 id="cockpit-class-title" class="cockpit-class-title">ห้อง ม.1/1</h2>
+            </div>
+            <div id="cockpit-instructor-info" class="cockpit-meta-info">
+              ผู้สอนปัจจุบัน: คุณครูพงศธร โพธิแก้ว (ครูประจำวิชา)
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
+            <!-- Smart T-PACE Digital Timer & Phase Progress Tracker -->
+            <div class="timer-widget tpace-smart-timer">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span id="timer-display" class="timer-digits">50:00</span>
+                <button class="timer-btn primary-timer-btn" onclick="App.timerStart()" title="เริ่มนับถอยหลัง 50 นาที">▶ เริ่ม</button>
+                <button class="timer-btn" onclick="App.timerPause()" title="หยุดเวลาชั่วคราว">⏸ พัก</button>
+                <button class="timer-btn" onclick="App.timerReset()" title="รีเซ็ตเวลา 50 นาที">↺ รีเซ็ต</button>
+              </div>
+              <div id="tpace-phase-bar" class="tpace-phase-bar" title="คลิกที่ขั้น T-P-A-C-E เพื่อข้ามไปยังเวลาของขั้นนั้นทันที">
+                <button type="button" class="tpace-phase-chip active" data-phase="0" onclick="App.jumpToTpacePhase(0)">T: 6น.</button>
+                <button type="button" class="tpace-phase-chip" data-phase="1" onclick="App.jumpToTpacePhase(1)">P: 18น.</button>
+                <button type="button" class="tpace-phase-chip" data-phase="2" onclick="App.jumpToTpacePhase(2)">A: 10น.</button>
+                <button type="button" class="tpace-phase-chip" data-phase="3" onclick="App.jumpToTpacePhase(3)">C: 8น.</button>
+                <button type="button" class="tpace-phase-chip" data-phase="4" onclick="App.jumpToTpacePhase(4)">E: 8น.</button>
+              </div>
+            </div>
+
+            <!-- Interactive Metronome & Beats -->
+            <div class="cockpit-audio-bar">
+              <button id="cockpit-metro-btn" class="btn-nav-action" onclick="AudioTools.toggleMetronome()" title="เปิด/ปิด เมโทรนอมเคาะจังหวะ">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                เมโทรนอม 100
+              </button>
+              <div id="metro-beat-dots-container" class="metro-beat-dots-container" title="จังหวะเคาะ 1-4">
+                <div class="metro-beat-dot accent-ready"></div>
+                <div class="metro-beat-dot"></div>
+                <div class="metro-beat-dot"></div>
+                <div class="metro-beat-dot"></div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 2px;">
+                <button class="timer-btn" onclick="AudioTools.changeBpmBy(-5)" title="ลด 5 BPM">-5</button>
+                <button class="timer-btn" onclick="AudioTools.changeBpmBy(5)" title="เพิ่ม 5 BPM">+5</button>
+                <button class="timer-btn" onclick="AudioTools.tapTempo()" title="เคาะเพื่อจับความเร็ว (Tap Tempo)">Tap</button>
+              </div>
+            </div>
+
+            <button class="btn-nav-action" onclick="Tuner.openModal()" title="เครื่องตั้งเสียงคาลิมบ้า 17 คีย์และโครมาติก">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+              ตั้งเสียง Tuner
+            </button>
+
+            <button class="btn-nav-action" onclick="App.openAcademicDocsForPeriod()" title="เปิดดูแผน วก.5 และใบกิจกรรมประจำคาบนี้">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              เอกสาร วก. คาบนี้
+            </button>
+            <button class="btn-nav-action" onclick="App.openReflectionModal()" title="บันทึกผลการสอนและส่งต่องานทันที">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              บันทึกหลังสอน
+            </button>
+            <button class="btn-nav-action" onclick="App.openHolidayModal()" title="บันทึกกรณีงดสอน">
+              บันทึกงดสอน
+            </button>
+          </div>
+        </div>
+
+        <!-- Period Selector Pills -->
+        <div class="period-selector-bar">
+          <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-right: 0.4rem;">คาบเรียน:</span>
+          <div id="period-pills-container" style="display: flex; gap: 0.35rem;">
+            <!-- 1 to 20 period pills injected -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Make-up / Remedial Alert Banner -->
+      <div id="makeup-alert-banner" class="archive-view-banner" style="background: #eff6ff; border-color: #bfdbfe; color: #1e40af; display: none;">
+        <div>
+          <strong>ติดตามงานค้าง / สอบซ่อม:</strong>
+          มีนักเรียนค้างประเมินจากคาบก่อน <span id="makeup-alert-count" style="font-weight: 700;">0</span> คน
+        </div>
+        <button class="btn-nav-action primary" onclick="App.openMakeupModal()">บันทึกคะแนนสอบซ่อม</button>
+      </div>
+
+      <!-- Cockpit Tabs -->
+      <nav class="cockpit-tabs-bar">
+        <button id="tab-btn-lesson" class="cockpit-tab-item active" onclick="App.switchTab('lesson')">
+          แผนการจัดการเรียนรู้ & สื่อ
+        </button>
+        <button id="tab-btn-attendance" class="cockpit-tab-item" onclick="App.switchTab('attendance')">
+          บันทึกเวลาเรียน (<span id="tab-badge-attendance">40</span> คน)
+        </button>
+        <button id="tab-btn-assessment" class="cockpit-tab-item" onclick="App.switchTab('assessment')">
+          บันทึกผลการประเมิน
+        </button>
+        <button id="tab-btn-submissions" class="cockpit-tab-item" onclick="App.switchTab('submissions')">
+          กล่องงานนักเรียน & คำแนะนำ (<span id="tab-badge-submissions">0</span>)
+        </button>
+      </nav>
+
+      <!-- TAB 1: Lesson Plan View -->
+      <div id="tab-content-lesson">
+        <div class="lesson-plan-card">
+          <h3 id="lesson-topic" style="font-size: 1.2rem; font-weight: 700; color: var(--ppk-navy-dark); margin-bottom: 0.75rem;">
+            หัวข้อบทเรียน
+          </h3>
+
+          <!-- KPA Objectives -->
+          <div class="kpa-grid-container">
+            <div class="kpa-card kpa-k">
+              <div class="kpa-badge-title">
+                <span class="kpa-tag tag-k">K</span>
+                <span>ด้านความรู้ (Knowledge)</span>
+              </div>
+              <div id="kpa-k" class="kpa-desc">-</div>
+            </div>
+            <div class="kpa-card kpa-p">
+              <div class="kpa-badge-title">
+                <span class="kpa-tag tag-p">P</span>
+                <span>ด้านทักษะปฏิบัติ (Practice)</span>
+              </div>
+              <div id="kpa-p" class="kpa-desc">-</div>
+            </div>
+            <div class="kpa-card kpa-a">
+              <div class="kpa-badge-title">
+                <span class="kpa-tag tag-a">A</span>
+                <span>เจตคติ/คุณลักษณะ (Attitude)</span>
+              </div>
+              <div id="kpa-a" class="kpa-desc">-</div>
+            </div>
+          </div>
+
+          <!-- Teaching Steps Timeline -->
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--ppk-navy-dark); margin-top: 1.25rem; margin-bottom: 0.75rem;">
+            ลำดับขั้นตอนการจัดกิจกรรมการเรียนรู้ (50 นาที)
+          </h4>
+          <div id="steps-timeline" class="lesson-timeline-steps">
+            <!-- Injected -->
+          </div>
+
+          <!-- Mentor Tips -->
+          <div id="mentor-tips-container" class="mentor-tip-box">
+            <strong>ข้อเสนอแนะสำหรับการสอน:</strong>
+            <div id="mentor-tips-text" style="margin-top: 0.25rem;">-</div>
+          </div>
+
+          <!-- Media Links -->
+          <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">สื่อและเอกสารประกอบการสอน:</div>
+            <div id="media-list" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <!-- Injected -->
+            </div>
+          </div>
+
+          <!-- Interactive Ear Training Solfege Drone -->
+          <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div style="font-weight: 700; font-size: 0.9rem; color: var(--ppk-navy-dark);">
+                🎧 โดรนเทียบเสียงสำหรับฝึก Ear Training & Solfege Hand Signs:
+              </div>
+              <span id="drone-active-status" style="font-size: 0.82rem; color: var(--text-muted);">
+                คลิกเลือกโน้ตเพื่อฟังเสียงเทียบต่อเนื่อง
+              </span>
+            </div>
+            <div class="drone-grid-bar">
+              <button class="drone-note-btn" data-note="C4" onclick="AudioTools.toggleDrone('C4')">โด (C4)</button>
+              <button class="drone-note-btn" data-note="D4" onclick="AudioTools.toggleDrone('D4')">เร (D4)</button>
+              <button class="drone-note-btn" data-note="E4" onclick="AudioTools.toggleDrone('E4')">มี (E4)</button>
+              <button class="drone-note-btn" data-note="F4" onclick="AudioTools.toggleDrone('F4')">ฟา (F4)</button>
+              <button class="drone-note-btn" data-note="G4" onclick="AudioTools.toggleDrone('G4')">ซอล (G4)</button>
+              <button class="drone-note-btn" data-note="A4" onclick="AudioTools.toggleDrone('A4')">ลา (A4)</button>
+              <button class="drone-note-btn" data-note="B4" onclick="AudioTools.toggleDrone('B4')">ที (B4)</button>
+              <button class="drone-note-btn" data-note="C5" onclick="AudioTools.toggleDrone('C5')">โดสูง (C5)</button>
+              <button class="btn-nav-action danger" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" onclick="AudioTools.stopDrone()">ปิดเสียง</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Attendance & Status Management -->
+      <div id="tab-content-attendance" style="display: none;">
+        <div class="section-panel" style="margin-bottom: 1rem; padding: 0.85rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; gap: 1rem; font-size: 0.85rem; font-weight: 600;">
+            <span style="color: var(--status-success-text);">มา: <span id="count-present">0</span></span>
+            <span style="color: var(--status-danger-text);">ขาด: <span id="count-absent">0</span></span>
+            <span style="color: var(--status-warning-text);">ลา: <span id="count-leave">0</span></span>
+            <span style="color: #9a3412;">สาย: <span id="count-late">0</span></span>
+            <span style="color: var(--status-neutral-text);">จำหน่าย/ย้าย: <span id="count-withdrawn">0</span></span>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn-nav-action" onclick="App.setAllPresent()">ตั้งเป็น "มา" ทั้งหมด</button>
+          </div>
+        </div>
+
+        <div id="students-attendance-grid" class="students-grid">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+      <!-- TAB 3: Assessment & Rubrics -->
+      <div id="tab-content-assessment" style="display: none;">
+        <div id="rubric-banner" class="section-panel" style="margin-bottom: 1rem; padding: 1rem 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div style="font-size: 0.95rem; font-weight: 700; color: var(--ppk-navy-dark);">เกณฑ์การประเมินตามสภาพจริง (Rubric Assessment)</div>
+            <span id="assessment-max-score" style="font-size: 0.82rem; font-weight: 700; color: var(--ppk-blue); background: var(--ppk-blue-light); padding: 2px 8px; border-radius: 4px;">คะแนนเต็ม: 3</span>
+          </div>
+          <div id="rubrics-list" style="font-size: 0.85rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.35rem;">
+            <!-- Injected -->
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div style="font-size: 0.85rem; color: var(--text-muted);">แตะเลือกระดับคะแนน 3 (ดีมาก) / 2 (ผ่านเกณฑ์) / 1 (ปรับปรุง):</div>
+          <div style="display: flex; gap: 0.4rem;">
+            <button class="btn-nav-action" onclick="App.batchScoreAll(3)">ให้ 3 ทุกคน</button>
+            <button class="btn-nav-action" onclick="App.batchScoreAll(2)">ให้ 2 ทุกคน</button>
+          </div>
+        </div>
+
+        <div id="students-scoring-grid" class="students-grid">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+
+      <!-- TAB 4: Student Submissions & Teacher Feedback Loop -->
+      <div id="tab-content-submissions" style="display: none;">
+        <div class="section-panel" style="margin-bottom: 1rem; padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: var(--ppk-navy-dark);">
+                กล่องงานนักเรียน & คำแนะนำเพื่อการพัฒนา (Teacher Feedback Loop)
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                ตรวจผลงานการส่งงานประจำคาบ ให้คำแนะนำรายบุคคล และบันทึกคะแนนเก็บแบบ Real-time
+              </div>
+            </div>
+            <div id="submissions-filter-summary" style="font-size: 0.85rem; font-weight: 600; color: var(--ppk-blue);">
+              <!-- Summary count -->
+            </div>
+          </div>
+
+          <!-- Submissions Status Filter Pills -->
+          <div class="submissions-filter-bar" style="display: flex; gap: 0.5rem; margin-top: 0.85rem; border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; flex-wrap: wrap;">
+            <button id="btn-sub-filter-all" class="sub-filter-pill active" onclick="App.setSubmissionsFilter('all')">
+              ทั้งหมด (<span id="sub-filter-count-all">0</span>)
+            </button>
+            <button id="btn-sub-filter-submitted" class="sub-filter-pill" onclick="App.setSubmissionsFilter('submitted')">
+              ส่งงานแล้ว (<span id="sub-filter-count-submitted">0</span>)
+            </button>
+            <button id="btn-sub-filter-pending" class="sub-filter-pill" onclick="App.setSubmissionsFilter('pending')">
+              ยังไม่ส่ง (<span id="sub-filter-count-pending">0</span>)
+            </button>
+          </div>
+        </div>
+
+        <div id="teacher-submissions-list" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <!-- Injected via App.renderSubmissionsTab() -->
+        </div>
+      </div>
+
+      <!-- Cockpit Bottom Bar -->
+      <div class="cockpit-bottom-bar">
+        <div>
+          <div style="font-size: 0.78rem; color: var(--text-muted);">ระบบบันทึกข้อมูล:</div>
+          <div style="font-size: 0.88rem; font-weight: 600; color: #059669;">บันทึกในเครื่องอัตโนมัติ (Local-First)</div>
+        </div>
+        <button class="btn-complete-period" onclick="App.openReflectionModal()">
+          สรุปผลการสอนและบันทึกหลังสอน (วก.5)
+        </button>
+      </div>
+    </section>
+
+    <!-- VIEW 3: Student Portal (มุมมองนักเรียน) -->
+    <section id="view-student" style="display: none;">
+      <!-- Student Header & Profile Bar -->
+      <div class="student-profile-bar">
+        <div class="student-profile-left">
+          <div class="student-avatar-badge" id="student-portal-avatar">
+            🎓
+          </div>
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <h2 id="student-portal-name" style="font-size: 1.25rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+                เด็กชายกานต์พงศ์ พร้อมมูล (สกาย)
+              </h2>
+              <span id="student-portal-status-badge" class="badge-success">สถานะปกติ</span>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
+              รหัสนักเรียน: <strong id="student-portal-id">35994</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">ม.1/1</strong> เลขที่ <strong id="student-portal-no">1</strong> • รายวิชา: <strong id="student-portal-subject">ศ21102 ดนตรีสากล 1</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Switcher (for demo or student selection) -->
+        <div class="student-profile-right" id="student-switcher-container">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <label for="select-student-class" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">ห้อง:</label>
+            <select id="select-student-class" class="form-select" style="width: 105px; padding: 0.35rem 0.5rem;" onchange="App.onStudentClassChange(this.value)">
+              <!-- Injected via JS -->
+            </select>
+
+            <label for="select-student-person" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">นักเรียน:</label>
+            <select id="select-student-person" class="form-select" style="max-width: 230px; padding: 0.35rem 0.5rem;" onchange="App.onStudentPersonChange(this.value)">
+              <!-- Injected via JS -->
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gamification Achievement Badges Strip -->
+      <div id="student-badges-strip" class="student-badges-strip">
+        <!-- Injected via App.renderStudentPortal() & Store.getStudentBadges() -->
+      </div>
+
+      <!-- Student Metrics Row (Progress, Attendance, Score Breakdown) -->
+      <div class="student-metrics-grid">
+        <!-- Metric 1: Course Progress -->
+        <div class="student-metric-card">
+          <div class="metric-top">
+            <span class="metric-title">ความก้าวหน้าในรายวิชา</span>
+            <span class="metric-icon" style="color: var(--ppk-blue);">📈</span>
+          </div>
+          <div class="metric-value-row">
+            <span class="metric-big-number" id="student-progress-text">คาบที่ 1/20</span>
+            <span class="metric-pct-tag" id="student-progress-pct">5%</span>
+          </div>
+          <div class="progress-bar-bg" style="margin-top: 0.75rem;">
+            <div id="student-progress-bar" class="progress-bar-fill" style="width: 5%;"></div>
+          </div>
+          <div class="metric-footnote" id="student-progress-footnote">จัดการเรียนรู้แล้ว 1 จากทั้งหมด 20 คาบ</div>
+        </div>
+
+        <!-- Metric 2: Attendance Rate -->
+        <div class="student-metric-card">
+          <div class="metric-top">
+            <span class="metric-title">เวลาเรียน (สถิติการเข้าเรียน)</span>
+            <span class="metric-icon" style="color: #16a34a;">⏱️</span>
+          </div>
+          <div class="metric-value-row">
+            <span class="metric-big-number" id="student-attendance-pct" style="color: #16a34a;">100%</span>
+            <span class="badge-success" id="student-attendance-status">มีสิทธิ์สอบ</span>
+          </div>
+          <div class="attendance-mini-breakdown" id="student-attendance-breakdown" style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            มาเรียน 1 ครั้ง • ขาด 0 • ลา 0
+          </div>
+          <div class="metric-footnote">เกณฑ์เวลาเรียนขั้นต่ำ 80% ตามระเบียบ สพฐ.</div>
+        </div>
+
+        <!-- Metric 3: Score Summary -->
+        <div class="student-metric-card">
+          <div class="metric-top">
+            <span class="metric-title">คะแนนเก็บสะสม</span>
+            <span class="metric-icon" style="color: #d97706;">⭐</span>
+          </div>
+          <div class="metric-value-row">
+            <span class="metric-big-number" id="student-score-text">3 / 3</span>
+            <span class="metric-pct-tag" id="student-score-pct" style="background: #fef3c7; color: #92400e;">100%</span>
+          </div>
+          <div class="score-aspect-bars" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+              <span>ทฤษฎีดนตรีสากล:</span> <strong id="score-theory-text">3/3</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
+              <span>ทักษะปฏิบัติและการมีส่วนร่วม:</span> <strong id="score-practice-text">ผ่านเกณฑ์</strong>
+            </div>
+          </div>
+          <div class="metric-footnote">คะแนนเก็บระหว่างภาคเรียน</div>
+        </div>
+      </div>
+
+      <!-- Student 2-Column Workspace: Left = To-Do List & Periods, Right = Lesson Reader + In-Page Submission -->
+      <div class="student-workspace-grid">
+        <!-- Left Column: To-Do List & Period Navigation -->
+        <div class="student-left-col">
+          <!-- To-Do Card -->
+          <div class="student-panel-card">
+            <div class="student-panel-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              ภารกิจและงานที่ต้องทำ (To-Do List)
+            </div>
+            <div id="student-todo-list" class="student-todo-list">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+
+          <!-- Periods Selector Card -->
+          <div class="student-panel-card" style="margin-top: 1rem;">
+            <div class="student-panel-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              สารบัญบทเรียน (20 คาบ)
+            </div>
+            <div id="student-periods-list" class="student-periods-selector">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Clean Spacious Lesson Content & In-Page Submission Workspace -->
+        <div class="student-right-col">
+          <div class="student-workspace-card">
+            <div class="workspace-header">
+              <div>
+                <span class="workspace-period-badge" id="student-workspace-period-badge">คาบที่ 1</span>
+                <h3 class="workspace-title" id="student-workspace-title">บรรทัด 5 เส้น และกุญแจซอล (Treble Clef)</h3>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <button class="btn-nav-action" onclick="Tuner.openModal()" title="เครื่องตั้งเสียงคาลิมบ้าและโครมาติก">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                  ตั้งเสียงคาลิมบ้า (Tuner)
+                </button>
+                <button class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมและเครื่องจำลองคาลิมบ้า 17 คีย์">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                  🎵 ซ้อมคาลิมบ้า (Virtual Kalimba)
+                </button>
+                <div id="student-submission-status-chip">
+                  <!-- status chip -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Lesson Objectives & Material -->
+            <div class="workspace-content-body">
+              <div class="content-box">
+                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--ppk-navy); margin-bottom: 0.5rem;">
+                  📖 เนื้อหาและใบความรู้ประจำคาบ
+                </h4>
+                <div id="student-lesson-text" style="font-size: 0.95rem; line-height: 1.7; color: var(--text-primary);">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- Smart Assessment Quick Actions for Student -->
+              <div id="student-assessment-quick-bar" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                  <div style="width: 34px; height: 34px; border-radius: 50%; background: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                    📝
+                  </div>
+                  <div>
+                    <div id="student-quiz-action-title" style="font-weight: 700; color: #166534; font-size: 0.92rem;">
+                      แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียนท้ายหน่วย
+                    </div>
+                    <div id="student-quiz-action-desc" style="font-size: 0.78rem; color: #15803d;">
+                      10 ข้อ 10 คะแนน • วัดตามพิมพ์เขียว Test Blueprint (ดึงเข้าสมุดคะแนนอัตโนมัติ)
+                    </div>
+                  </div>
+                </div>
+
+                <div id="student-quiz-action-buttons" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- Teacher Feedback Card (Two-way Teacher Feedback Loop) -->
+              <div id="student-teacher-feedback-card" class="teacher-feedback-card" style="display: none;">
+                <!-- Injected via App.renderStudentPortal() -->
+              </div>
+
+              <!-- In-Page Assignment Submission Area -->
+              <div class="assignment-submission-box">
+                <div class="submission-header">
+                  <h4 style="font-size: 1rem; font-weight: 700; color: var(--ppk-navy-dark); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    แบบฝึกหัดและภารกิจส่งงานในคาบเรียน (In-Page Submission)
+                  </h4>
+                  <span id="student-assignment-max-score" style="font-size: 0.82rem; font-weight: 600; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">
+                    คะแนนเต็ม: 3 คะแนน
+                  </span>
+                </div>
+
+                <div id="student-assignment-prompt" class="assignment-prompt-box">
+                  ภารกิจ: บันทึกความเข้าใจ หรืออธิบายตำแหน่งของตัวโน้ตบนบรรทัด 5 เส้น พร้อมทั้งตอบคำถามท้ายบทเรียน
+                </div>
+
+                <!-- In-Page Text Response Form -->
+                <div class="form-group" style="margin-top: 1rem;">
+                  <label class="form-label" for="student-submission-text">
+                    พิมพ์คำตอบ / บันทึกผลการฝึกปฏิบัติ:
+                  </label>
+                  <textarea id="student-submission-text" class="form-textarea" rows="4" placeholder="พิมพ์คำตอบ อธิบายความรู้ หรือบันทึกข้อสังเกตจากการฝึกปฏิบัติที่นี่..."></textarea>
+                </div>
+
+                <!-- Optional Attachment Link -->
+                <div class="form-group">
+                  <label class="form-label" for="student-submission-url">
+                    ลิงก์ผลงาน / ลิงก์คลิปวิดีโอการบรรเลง (YouTube / Google Drive):
+                  </label>
+                  <input type="url" id="student-submission-url" class="form-input" placeholder="https://..." />
+                </div>
+
+                <!-- Submit Button (Always visible, prominent primary color) -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+                  <div id="student-submission-timestamp" style="font-size: 0.82rem; color: var(--text-muted);">
+                    ยังไม่ได้ส่งงานในคาบนี้
+                  </div>
+                  <button class="btn-nav-action primary" style="padding: 0.65rem 1.5rem; font-size: 0.95rem; font-weight: 600;" onclick="App.handleStudentSubmit()">
+                    ส่งงาน / บันทึกคำตอบ
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+       MODALS
+       ========================================================================== -->
+
+  <!-- AUTH MODAL: Login & PIN Registration Gateway -->
+  <div id="modal-auth-login" class="modal-overlay" style="backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.78); z-index: 99999;">
+    <div class="modal-card" style="max-width: 500px; width: 94vw; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15); padding: 0;">
+      
+      <!-- Auth Modal Header Banner -->
+      <div style="background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%); padding: 1.75rem 1.5rem; color: #ffffff; text-align: center;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; background: rgba(255, 255, 255, 0.18); border-radius: 14px; margin-bottom: 0.75rem; backdrop-filter: blur(4px);">
+          <img src="images/ppk_crest.png" alt="PPK Crest" style="height: 38px; width: auto;" onerror="this.style.display='none'">
+        </div>
+        <h2 style="margin: 0; font-size: 1.45rem; font-weight: 800; letter-spacing: -0.5px;">MusicSmart</h2>
+        <div style="font-size: 0.85rem; opacity: 0.95; margin-top: 4px; font-weight: 500;">
+          ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE
+        </div>
+        <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 2px;">
+          โรงเรียนพะเยาพิทยาคม • กลุ่มสาระการเรียนรู้ศิลปะ
+        </div>
+      </div>
+
+      <!-- Auth Role Tabs -->
+      <div style="display: flex; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+        <button id="auth-tab-student-btn" class="auth-tab-btn active" style="flex: 1; padding: 0.85rem 1rem; border: none; background: #ffffff; font-weight: 700; color: #1e3a8a; cursor: pointer; border-bottom: 3px solid #0284c7; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="App.switchAuthTab('student')">
+          <span>🎓</span> นักเรียน (Student)
+        </button>
+        <button id="auth-tab-teacher-btn" class="auth-tab-btn" style="flex: 1; padding: 0.85rem 1rem; border: none; background: #f1f5f9; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="App.switchAuthTab('teacher')">
+          <span>👨‍🏫</span> ครูผู้สอน (Teacher)
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.5rem; background: #ffffff;">
+
+        <!-- 1. STUDENT AUTH PANE -->
+        <div id="auth-pane-student">
+          <!-- Student ID Input -->
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
+              รหัสประจำตัวนักเรียน (5 หลัก):
+            </label>
+            <div style="position: relative;">
+              <input type="text" id="auth-student-id" class="form-input" placeholder="เช่น 35994" maxlength="5" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 2px; padding: 0.65rem 0.85rem;" oninput="App.onAuthStudentIdInput(this.value)">
+              <span id="auth-student-id-indicator" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; display: none;"></span>
+            </div>
+            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
+              * กรอกรหัสนักเรียน 5 หลักตามที่โรงเรียนกำหนด
+            </div>
+          </div>
+
+          <!-- Student Lookup Live Preview Box -->
+          <div id="auth-student-preview-box" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.15rem;">
+            <div style="font-size: 0.8rem; color: #166534; font-weight: 600;">✅ พบข้อมูลนักเรียนในระบบ:</div>
+            <div id="auth-student-preview-name" style="font-size: 1.05rem; font-weight: 700; color: #14532d; margin-top: 2px;">
+              -
+            </div>
+            <div id="auth-student-preview-meta" style="font-size: 0.82rem; color: #15803d; margin-top: 2px;">
+              -
+            </div>
+          </div>
+
+          <!-- Case A: Existing Student (Login with 6-digit PIN) -->
+          <div id="auth-student-mode-login" style="display: none;">
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
+                รหัสผ่าน PIN 6 หลัก:
+              </label>
+              <input type="password" id="auth-student-pin" class="form-input" placeholder="••••••" maxlength="6" inputmode="numeric" style="font-size: 1.25rem; font-weight: 800; letter-spacing: 6px; text-align: center; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleStudentLogin()">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                <span style="font-size: 0.78rem; color: #64748b;">กรอกรหัส PIN 6 หลักของท่าน</span>
+                <a href="javascript:void(0)" onclick="alert('กรณีลืมรหัส PIN: กรุณาแจ้งคุณครูประจำวิชาเพื่อขอรีเซ็ตรหัส PIN ได้ทันทีครับ')" style="font-size: 0.78rem; color: #0284c7; text-decoration: underline;">ลืมรหัส PIN?</a>
+              </div>
+            </div>
+
+            <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center;" onclick="App.handleStudentLogin()">
+              🚀 เข้าสู่ระบบบทเรียนดนตรี
+            </button>
+          </div>
+
+          <!-- Case B: First-Time Student (Set 6-digit PIN by yourself) -->
+          <div id="auth-student-mode-register" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="font-size: 0.9rem; font-weight: 700; color: #92400e; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.35rem;">
+              <span>✨</span> เข้าใช้งานครั้งแรก: ตั้งรหัส PIN 6 หลักด้วยตนเอง
+            </div>
+            <p style="font-size: 0.8rem; color: #b45309; line-height: 1.5; margin-bottom: 0.85rem;">
+              กรุณาตั้งรหัสผ่าน PIN ตัวเลข 6 หลักที่คุณจำได้ง่าย (เช่น วันเดือนปีเกิด) เพื่อใช้ล็อกอินเข้าเรียนในครั้งต่อไป
+            </p>
+
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #78350f;">
+                ตั้งรหัส PIN 6 หลักใหม่:
+              </label>
+              <input type="password" id="auth-student-new-pin" class="form-input" placeholder="ตัวเลข 6 หลัก" maxlength="6" inputmode="numeric" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 4px; text-align: center;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #78350f;">
+                ยืนยันรหัส PIN 6 หลักอีกครั้ง:
+              </label>
+              <input type="password" id="auth-student-confirm-pin" class="form-input" placeholder="กรอกซ้ำอีกครั้ง" maxlength="6" inputmode="numeric" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 4px; text-align: center;" onkeydown="if(event.key==='Enter') App.handleStudentRegisterPin()">
+            </div>
+
+            <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #d97706; border-color: #b45309;" onclick="App.handleStudentRegisterPin()">
+              💾 บันทึก PIN และเริ่มเรียนทันที
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. TEACHER AUTH PANE -->
+        <div id="auth-pane-teacher" style="display: none;">
+          <div class="form-group" style="margin-bottom: 1.15rem;">
+            <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
+              อีเมลครูผู้สอน (Teacher Email):
+            </label>
+            <input type="email" id="auth-teacher-email" class="form-input" placeholder="music@ppk.ac.th" value="music@ppk.ac.th" style="font-size: 1rem; padding: 0.65rem 0.85rem;">
+            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
+              * ใช้อีเมลประจำตัวคุณครูผู้สอน
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
+              รหัสผ่าน (Password) หรือ รหัส PIN ครู:
+            </label>
+            <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN" value="ppk1234" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
+            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
+              * รหัสเริ่มต้นของระบบคือ <code>ppk1234</code> (สามารถเปลี่ยนได้ที่เมนูตั้งค่านวัตกรรม)
+            </div>
+          </div>
+
+          <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center;" onclick="App.handleTeacherLogin()">
+            🔐 เข้าสู่ห้องปฏิบัติการครู (Teacher Cockpit)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Auth Footer -->
+      <div style="background: #f8fafc; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.76rem; color: #64748b;">
+        ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE • โรงเรียนพะเยาพิทยาคม
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 1: Reflection & Handover Modal -->
+  <div id="modal-reflection" class="modal-overlay">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 class="modal-title">สรุปผลการจัดการเรียนรู้และบันทึกหลังสอน (วก.5)</h3>
+        <button class="btn-close-modal" onclick="App.closeReflectionModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: var(--bg-subtle); padding: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.85rem;">
+          <div>การเข้าเรียน: <strong id="refl-stat-attendance">100%</strong></div>
+          <div>ผู้สอน: <strong id="refl-stat-instructor">คุณครูพงศธร โพธิแก้ว</strong></div>
+        </div>
+
+        <div class="form-group" style="background: #fffbeb; border: 1px solid #fde68a; padding: 0.85rem; border-radius: var(--radius-sm);">
+          <label class="form-label" style="color: #92400e;">บันทึกส่งต่องานถึงครูผู้สอนท่านต่อไป (Handover Note):</label>
+          <p style="font-size: 0.78rem; color: #b45309; margin-bottom: 0.4rem;">
+            *กรณีสลับผู้สอน ครูอีกท่านจะเห็นข้อความนี้ทันทีเพื่อจัดการเรียนรู้ต่อได้ตรงจุด
+          </p>
+          <textarea id="refl-handover-note" class="form-textarea" rows="3" placeholder="ระบุสิ่งที่ฝึกถึง ปัญหาของนักเรียนรายบุคคล หรือจุดที่ควรเริ่มในคาบถัดไป..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">1. ผลการจัดการเรียนรู้ (Learning Outcomes):</label>
+          <textarea id="refl-outcomes" class="form-textarea" rows="2"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">2. ปัญหาและอุปสรรค (Problems & Obstacles):</label>
+          <textarea id="refl-problems" class="form-textarea" rows="2"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">3. แนวทางแก้ไขและพัฒนา (Solutions):</label>
+          <textarea id="refl-solutions" class="form-textarea" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeReflectionModal()">ยกเลิก</button>
+        <button class="btn-complete-period" onclick="App.saveSessionAndFinish()">บันทึกข้อมูลและปิดคาบ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Instructor Switcher -->
+  <div id="modal-instructor" class="modal-overlay">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">สลับบทบาทผู้สอน</h3>
+        <button class="btn-close-modal" onclick="App.closeInstructorModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          เลือกว่าใครเป็นผู้ปฏิบัติการสอนในคาบนี้ ข้อมูลการประเมินและบันทึกหลังสอนจะลงชื่อตามผู้ที่เลือก
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div id="opt-instructor-mentor" class="student-card" style="cursor: pointer; border-color: var(--ppk-navy);" onclick="App.selectInstructorRole('ครูประจำวิชา')">
+            <div>
+              <div style="font-weight: 700; color: var(--ppk-navy);">ครูประจำวิชา</div>
+              <div id="modal-instructor-mentor-name" style="font-size: 0.9rem; color: var(--text-primary);">คุณครูพงศธร โพธิแก้ว</div>
+            </div>
+            <span id="check-mentor" style="color: var(--ppk-navy); font-weight: 700;">✓</span>
+          </div>
+
+          <div id="opt-instructor-trainee" class="student-card" style="cursor: pointer;" onclick="App.selectInstructorRole('ครูฝึกสอน')">
+            <div style="flex: 1;">
+              <div style="font-weight: 700; color: var(--ppk-sky);">ครูฝึกสอน</div>
+              <input type="text" id="input-trainee-name" class="form-input" style="margin-top: 0.35rem;" value="คุณครูฝึกสอน" onclick="event.stopPropagation()" onchange="App.updateTraineeName(this.value)">
+            </div>
+            <span id="check-trainee" style="color: var(--ppk-sky); font-weight: 700; display: none;">✓</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action primary" onclick="App.closeInstructorModal()">ตกลง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: Weekly Timetable Modal (10 Periods) -->
+  <div id="modal-timetable" class="modal-overlay">
+    <div class="modal-card" style="max-width: 1360px; width: 96vw;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <img src="images/ppk_crest.png" alt="PPK Crest" style="height: 38px; width: auto;" onerror="this.style.display='none'">
+          <div>
+            <h3 id="timetable-modal-title" class="modal-title" style="margin: 0; font-size: 1.12rem;">ตารางสอน 612 ครูพงศธร โพธิแก้ว ภาคเรียนที่ 2/2569 โรงเรียนพะเยาพิทยาคม</h3>
+            <div id="timetable-modal-sub" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              กลุ่มสาระการเรียนรู้ศิลปะ (ดนตรีสากล) • ห้องปฏิบัติการดนตรี: <strong>อส.5</strong> • ออกให้ ณ วันที่ 20.10.2569
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.resetToOfficialTimetable()" title="คืนค่าตารางสอนทางการตามเอกสาร 2/2569">
+            🔄 คืนค่าตารางทางการ
+          </button>
+          <button class="btn-nav-action" onclick="App.toggleTimetableMode()" id="btn-toggle-tt-mode" title="สลับระหว่างโหมดแก้ไขกับมุมมองทางการ">
+            👁️ ดูแบบทางการ
+          </button>
+          <button class="btn-nav-action" onclick="App.printTimetable()" title="พิมพ์ตารางสอน">
+            🖨️ พิมพ์
+          </button>
+          <button class="btn-close-modal" onclick="App.closeTimetableModal()">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" id="timetable-modal-body">
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; align-items: center;">
+          <span style="color: #92400e;"><strong>ช่วงพักเบรก:</strong> หลังคาบ 2 พัก 20 นาที (10.00 - 10.20 น.) • หลังคาบ 4 พัก 20 นาที (12.00 - 12.20 น.) • หลังคาบ 7 พัก 10 นาที (14.50 - 15.00 น.)</span>
+          <span style="color: var(--ppk-navy);"><strong>ห้องเรียน:</strong> ทุกคาบสอนจัดการเรียนรู้อยู่ที่ห้อง <strong>อส.5</strong> (อาคารศิลปะ 5)</span>
+        </div>
+
+        <div style="overflow-x: auto;" id="timetable-table-container">
+          <table id="timetable-editor-table" class="timetable-table">
+            <!-- Injected via JavaScript -->
+          </table>
+        </div>
+
+        <div class="timetable-signatures-row" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed var(--border-subtle); display: flex; justify-content: space-around; font-size: 0.88rem; color: var(--text-secondary); text-align: center;">
+          <div>ลงชื่อ...............................................................รองฯ กลุ่มบริหารงานวิชาการ</div>
+          <div>ลงชื่อ...............................................................ผู้อำนวยการ</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeTimetableModal()">ปิดหน้าต่าง</button>
+        <button class="btn-nav-action primary" onclick="App.saveTimetableFromEditor()" id="btn-save-timetable">บันทึกตารางสอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: Make-up Assessment Dialog -->
+  <div id="modal-makeup" class="modal-overlay">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">บันทึกคะแนนสอบซ่อม / งานค้างเก็บตก</h3>
+        <button class="btn-close-modal" onclick="App.closeMakeupModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          รายชื่อนักเรียนที่ขาดเรียนหรือค้างการประเมินในคาบที่มีการเก็บคะแนน แตะให้คะแนนเพื่ออัปเดตย้อนหลังได้ทันที:
+        </p>
+        <div id="makeup-students-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action primary" onclick="App.closeMakeupModal()">เสร็จสิ้น</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: Holiday / School Activity Logger -->
+  <div id="modal-holiday" class="modal-overlay">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">บันทึกงดการสอน (วันหยุด/กิจกรรมโรงเรียน)</h3>
+        <button class="btn-close-modal" onclick="App.closeHolidayModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          บันทึกเหตุผลงดสอนในสัปดาห์นี้ <strong>ระบบจะไม่เลื่อนเลขคาบเรียน</strong> เพื่อให้เนื้อหาบทเรียนยังคงครบ 20 คาบ
+        </p>
+        <div class="form-group">
+          <label class="form-label">สาเหตุที่งดการเรียนการสอน:</label>
+          <select id="holiday-reason-select" class="form-select">
+            <option value="วันหยุดนักขัตฤกษ์ / วันหยุดชดเชย">วันหยุดนักขัตฤกษ์ / วันหยุดชดเชย</option>
+            <option value="กิจกรรมโรงเรียน (กีฬาสี / วันไหว้ครู / วันสำคัญ)">กิจกรรมโรงเรียน (กีฬาสี / วันไหว้ครู / วันสำคัญ)</option>
+            <option value="สัปดาห์สอบกลางภาค / สอบปลายภาค">สัปดาห์สอบกลางภาค / สอบปลายภาค</option>
+            <option value="กิจกรรมทัศนศึกษา / ค่ายวิชาการ">กิจกรรมทัศนศึกษา / ค่ายวิชาการ</option>
+            <option value="ครูติดราชการ / อบรมพัฒนาวิชาชีพ">ครูติดราชการ / อบรมพัฒนาวิชาชีพ</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">หมายเหตุเพิ่มเติม (ถ้ามี):</label>
+          <input type="text" id="holiday-custom-note" class="form-input" placeholder="เช่น หยุดชดเชยวันปิยมหาราช">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeHolidayModal()">ยกเลิก</button>
+        <button class="btn-nav-action primary" onclick="App.confirmHolidayLog()">บันทึกงดสอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: Export & Reports Hub -->
+  <div id="modal-export" class="modal-overlay">
+    <div class="modal-card" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3 class="modal-title">ศูนย์ส่งออกรายงานและข้อมูล (Export Hub)</h3>
+        <button class="btn-close-modal" onclick="App.closeExportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">เลือกห้องเรียน:</label>
+          <select id="export-class-select" class="form-select">
+            <!-- Injected -->
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+          <div class="section-panel" style="margin-bottom: 0;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">ตารางคะแนนและเวลาเรียน (Excel)</div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+              ไฟล์ .xlsx รวมรายชื่อ เลขที่ เวลาเรียน และคะแนนเก็บทุกคาบ ตรงตามโครงสร้าง MIS โรงเรียน
+            </p>
+            <button class="btn-nav-action primary" style="width: 100%; justify-content: center;" onclick="App.exportExcel()">
+              ดาวน์โหลด Excel (.xlsx)
+            </button>
+          </div>
+
+          <div class="section-panel" style="margin-bottom: 0;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">สรุปบันทึกหลังสอน (วก.5)</div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+              คัดลอกข้อความสรุปผล ปัญหา และแนวทางแก้ไขทุกคาบ เพื่อนำไปวางใน Word แบบฟอร์ม วก.5
+            </p>
+            <button class="btn-nav-action" style="width: 100%; justify-content: center;" onclick="App.exportWk5()">
+              คัดลอกบันทึกหลังสอน
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.backupJSON()">สำรองไฟล์ระบบ (Backup JSON)</button>
+          <button class="btn-nav-action" onclick="document.getElementById('file-restore-input').click()">กู้คืนข้อมูล (Restore)</button>
+          <input type="file" id="file-restore-input" style="display: none;" accept=".json" onchange="App.handleRestoreFile(event)">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeExportModal()">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 7: Student Lifecycle / Status Management (จำหน่ายออก / ย้ายสถานศึกษา) -->
+  <div id="modal-student-status" class="modal-overlay">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">จัดการสถานะผู้เรียน</h3>
+        <button class="btn-close-modal" onclick="App.closeStudentStatusModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: var(--bg-subtle); padding: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
+          <div id="status-modal-student-name" style="font-weight: 700; font-size: 1rem; color: var(--ppk-navy-dark);">-</div>
+          <div id="status-modal-student-meta" style="font-size: 0.82rem; color: var(--text-muted);">-</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">สถานะการเป็นนักเรียน:</label>
+          <select id="student-status-select" class="form-select">
+            <option value="active">ปกติ (กำลังศึกษาอยู่)</option>
+            <option value="transferred">ย้ายสถานศึกษา (โอนย้าย)</option>
+            <option value="withdrawn">จำหน่ายออก / ลาออกกลางคัน</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">วันที่ดำเนินการ / มีผล:</label>
+          <input type="text" id="student-status-date" class="form-input" placeholder="เช่น 14 ต.ค. 2569">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">สาเหตุการย้าย/จำหน่าย:</label>
+          <input type="text" id="student-status-reason" class="form-input" placeholder="เช่น ย้ายตามผู้ปกครอง, ลาออก">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">หมายเหตุเพิ่มเติม:</label>
+          <input type="text" id="student-status-note" class="form-input" placeholder="ระบุเลขที่หนังสือส่งตัว หรือหมายเหตุวิชาการ">
+        </div>
+
+        <div class="form-group" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.75rem; border-radius: var(--radius-sm); margin-top: 0.75rem;">
+          <label style="display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; margin: 0;">
+            <input type="checkbox" id="student-status-pdpa" style="margin-top: 3px; accent-color: #16a34a; width: 16px; height: 16px;">
+            <span style="font-size: 0.82rem; color: #166534; line-height: 1.4;">
+              <strong>🛡️ ความยินยอม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA)</strong><br>
+              ผู้ปกครองและนักเรียนยินยอมให้บันทึกภาพถ่าย/วิดีโอขณะฝึกปฏิบัติคาลิมบ้า เพื่อการประเมินผลการเรียนรู้และรายงานวิจัยในชั้นเรียน (CAR)
+            </span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button class="btn-nav-action" onclick="App.openHandoverTranscriptFromStatus()">
+          ออกใบสรุปคะแนนส่งต่อ
+        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.closeStudentStatusModal()">ยกเลิก</button>
+          <button class="btn-nav-action primary" onclick="App.saveStudentStatusFromModal()">บันทึกสถานะ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 8: Official Student Handover Transcript (A4 Printable) -->
+  <div id="modal-transcript" class="modal-overlay">
+    <div class="modal-card" style="max-width: 900px; width: 95vw;">
+      <div class="modal-header">
+        <h3 class="modal-title">ใบสรุปผลการเรียนและคะแนนเก็บรายบุคคล (กรณีส่งต่อ/ย้ายสถานศึกษา)</h3>
+        <button class="btn-close-modal" onclick="App.closeTranscriptModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="background: #e2e8f0; padding: 1.5rem;">
+        
+        <!-- Printable Paper Sheet -->
+        <div id="printable-transcript-content" class="transcript-a4-sheet">
+          <!-- Injected via JavaScript -->
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.exportTranscriptExcel()">ส่งออก Excel (.xlsx)</button>
+        <button class="btn-nav-action primary" onclick="window.print()">พิมพ์เอกสาร (Print / PDF)</button>
+        <button class="btn-nav-action" onclick="App.closeTranscriptModal()">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 9: Semester Lifecycle & Term Archive -->
+  <div id="modal-semester" class="modal-overlay">
+    <div class="modal-card" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 class="modal-title">จัดการภาคเรียนและคลังข้อมูลย้อนหลัง</h3>
+        <button class="btn-close-modal" onclick="App.closeSemesterModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Active Semester Info -->
+        <div class="section-panel" style="margin-bottom: 1.25rem; background: var(--ppk-blue-light); border-color: #bfdbfe;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: var(--ppk-blue);">ภาคเรียนปัจจุบันที่เปิดใช้งาน</div>
+              <div id="active-semester-display-title" style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin-top: 2px;">
+                ภาคเรียนที่ 1 ปีการศึกษา 2569
+              </div>
+            </div>
+            <button class="btn-nav-action" onclick="App.backupJSON()">สำรองข้อมูลเทอมนี้ (.json)</button>
+          </div>
+        </div>
+
+        <!-- Start New Term Section -->
+        <div class="section-panel" style="margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">
+            ปิดเทอมและเริ่มต้นภาคเรียนใหม่ (Start New Semester)
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+            เมื่อจบภาคเรียน ระบบจะนำข้อมูลการสอน เช็คชื่อ และคะแนนของเทอมปัจจุบันเข้าสู่ <strong>"คลังย้อนหลัง"</strong> โดยอัตโนมัติ แล้วรีเซ็ตความก้าวหน้าเพื่อเริ่มต้นสอนคาบที่ 1 ในเทอมใหม่ ข้อมูลเก่าจะไม่สูญหาย
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+            <div>
+              <label class="form-label">ปีการศึกษาใหม่:</label>
+              <input type="text" id="new-term-year-input" class="form-input" value="2569">
+            </div>
+            <div>
+              <label class="form-label">ภาคเรียนใหม่:</label>
+              <select id="new-term-no-select" class="form-select">
+                <option value="1">ภาคเรียนที่ 1</option>
+                <option value="2" selected>ภาคเรียนที่ 2</option>
+                <option value="3">ภาคเรียนฤดูร้อน (Summer)</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-complete-period" style="width: 100%; justify-content: center;" onclick="App.confirmStartNewSemester()">
+            เริ่มต้นภาคเรียนใหม่
+          </button>
+        </div>
+
+        <!-- Historical Archive List -->
+        <div>
+          <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy-dark); margin-bottom: 0.5rem;">
+            คลังประวัติภาคเรียนย้อนหลัง (Archived Semesters)
+          </div>
+          <div id="archived-semesters-list" style="display: flex; flex-direction: column; gap: 0.65rem;">
+            <!-- Injected -->
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeSemesterModal()">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 10: Dynamic Subject Manager -->
+  <div id="modal-subjects" class="modal-overlay">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 class="modal-title">จัดการรายวิชา (Subject Management)</h3>
+        <button class="btn-close-modal" onclick="App.closeSubjectsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          กำหนดรายวิชาที่เปิดสอนในกลุ่มสาระการเรียนรู้ศิลปะ สามารถเพิ่มวิชาใหม่ แก้ไขรหัสวิชา หรือซ่อนรายวิชาที่ไม่ใช้งานได้ทันที
+        </p>
+
+        <!-- Subjects List Table -->
+        <table class="timetable-table" style="margin-bottom: 1.5rem;">
+          <thead>
+            <tr>
+              <th style="min-width: 80px;">รหัสวิชา</th>
+              <th>ชื่อวิชา</th>
+              <th style="min-width: 70px;">ระดับชั้น</th>
+              <th style="min-width: 60px;">คาบ</th>
+              <th style="min-width: 80px;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="subjects-table-body">
+            <!-- Injected -->
+          </tbody>
+        </table>
+
+        <!-- Add New Subject Form -->
+        <div class="section-panel" style="margin-bottom: 0;">
+          <div style="font-weight: 700; font-size: 0.9rem; color: var(--ppk-navy-dark); margin-bottom: 0.75rem;">
+            เพิ่มรายวิชาใหม่
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <div>
+              <label class="form-label" style="font-size: 0.75rem;">รหัสวิชา:</label>
+              <input type="text" id="new-subj-code" class="form-input" placeholder="เช่น ศ31101">
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.75rem;">ชื่อวิชา:</label>
+              <input type="text" id="new-subj-name" class="form-input" placeholder="เช่น ดนตรีสากล ม.4">
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.75rem;">ระดับชั้น:</label>
+              <select id="new-subj-grade" class="form-select">
+                <option value="ม.1">ม.1</option>
+                <option value="ม.2">ม.2</option>
+                <option value="ม.3">ม.3</option>
+                <option value="ม.4">ม.4</option>
+                <option value="ม.5">ม.5</option>
+                <option value="ม.6">ม.6</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.75rem;">จำนวนคาบ:</label>
+              <input type="number" id="new-subj-periods" class="form-input" value="20">
+            </div>
+          </div>
+          <button class="btn-nav-action primary" style="width: 100%; justify-content: center;" onclick="App.handleAddNewSubject()">
+            บันทึกเพิ่มรายวิชา
+          </button>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-nav-action" onclick="App.closeSubjectsModal()">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Academic Documents Hub (คลังเอกสารวิชาการ วก.1 - วก.7) -->
+  <div id="modal-academic-docs" class="modal-overlay">
+    <div class="modal-card academic-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <div class="school-crest-badge" style="width: 36px; height: 36px; font-size: 0.95rem;">วก</div>
+          <div>
+            <h3 class="modal-title">คลังเอกสารวิชาการและแผนการจัดการเรียนรู้ (วก. 1 - วก. 7)</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 1px;">
+              โรงเรียนพะเยาพิทยาคม • กลุ่มสาระการเรียนรู้ศิลปะ (ดนตรี 1 ศ21101 ม.1) • T-PACE Framework & วPA คศ.4
+            </p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="App.closeAcademicDocsModal()">&times;</button>
+      </div>
+
+      <!-- Academic Category Navigation Tabs -->
+      <div class="academic-tabs-bar">
+        <button id="ac-tab-wk3" class="academic-tab-btn active" onclick="App.switchAcademicTab('wk3')">
+          วก.3 โครงสร้างรายวิชา
+        </button>
+        <button id="ac-tab-wk4" class="academic-tab-btn" onclick="App.switchAcademicTab('wk4')">
+          วก.4 หน่วยการเรียนรู้ (4 หน่วย)
+        </button>
+        <button id="ac-tab-wk5" class="academic-tab-btn" onclick="App.switchAcademicTab('wk5')">
+          วก.5 แผนการจัดการเรียนรู้ (18 แผน)
+        </button>
+        <button id="ac-tab-manuals" class="academic-tab-btn" onclick="App.switchAcademicTab('manuals')">
+          คู่มือครู (22 เล่ม)
+        </button>
+        <button id="ac-tab-media" class="academic-tab-btn" onclick="App.switchAcademicTab('media')">
+          สื่อ & ใบกิจกรรม (ผ01–ผ18)
+        </button>
+        <button id="ac-tab-eval" class="academic-tab-btn" onclick="App.switchAcademicTab('eval')">
+          เครื่องมือวัดผล & รูบริก (ฉบับ 1–8)
+        </button>
+        <button id="ac-tab-tests" class="academic-tab-btn" onclick="App.switchAcademicTab('tests')">
+          พิมพ์เขียว & ข้อสอบ
+        </button>
+        <button id="ac-tab-supp" class="academic-tab-btn" onclick="App.switchAcademicTab('supp')">
+          เอกสารวิจัย (วก.7 / PDPA / T-PACE)
+        </button>
+      </div>
+
+      <!-- Academic Sub-Selector & Action Toolbar -->
+      <div class="academic-toolbar">
+        <div id="academic-selector-container" style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+          <!-- Dropdown or filter injected via JS based on active tab -->
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.copyCurrentAcademicDoc()" title="คัดลอกข้อความในเอกสาร">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            คัดลอกข้อความ
+          </button>
+          <button class="btn-nav-action primary" onclick="App.printCurrentAcademicDoc()" title="พิมพ์เอกสารราชการ">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            พิมพ์เอกสาร
+          </button>
+        </div>
+      </div>
+
+      <!-- Document Display Area -->
+      <div class="academic-doc-body" id="academic-doc-display">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);" id="academic-doc-meta-footer">
+          มาตรฐานหลักสูตรโรงเรียนพะเยาพิทยาคม • กลุ่มบริหารวิชาการ
+        </span>
+        <button class="btn-nav-action" onclick="App.closeAcademicDocsModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Chromatic & 17-Key Kalimba Tuner -->
+  <div id="modal-tuner" class="modal-overlay">
+    <div class="tuner-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              เครื่องตั้งเสียงคาลิมบ้าอัจฉริยะ (Smart Kalimba Tuner)
+            </h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              ระบบตรวจจับความถี่เสียงจริงผ่านไมค์ พร้อมผังลิ่ม 17 คีย์และเสียงสังเคราะห์เทียบเคียง
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="Tuner.closeModal()">✕</button>
+      </div>
+
+      <!-- Mode Selector & Controls -->
+      <div style="padding: 0.75rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="btn-tuner-mode-kalimba" class="academic-tab-btn active" onclick="Tuner.setMode('kalimba')">
+            โหมดคาลิมบ้า 17 คีย์ (C Major)
+          </button>
+          <button id="btn-tuner-mode-chrom" class="academic-tab-btn" onclick="Tuner.setMode('chromatic')">
+            โหมดโครมาติกทั่วไป (All Notes)
+          </button>
+        </div>
+
+        <button id="btn-tuner-toggle" class="btn-nav-action primary" onclick="Tuner.toggleListening()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          เริ่มเปิดไมโครโฟนตั้งเสียง
+        </button>
+      </div>
+
+      <!-- Gauge Display Panel -->
+      <div class="tuner-display-panel">
+        <div id="tuner-display-status" style="font-size: 0.9rem; color: #94a3b8; font-weight: 500;">
+          คลิกปุ่มเปิดไมค์ หรือคลิกลิ่มคาลิมบ้าเพื่อฟังเสียงเทียบ
+        </div>
+
+        <!-- Meter Arc & Needle -->
+        <div class="tuner-meter-arc">
+          <div class="tuner-meter-track"></div>
+          <div id="tuner-needle" class="tuner-needle"></div>
+          <div class="tuner-center-pivot"></div>
+        </div>
+
+        <div class="tuner-ticks-row">
+          <span>-50 cents (ต่ำ)</span>
+          <span style="color: #38bdf8; font-weight: 700;">0 (ตรงเป๊ะ)</span>
+          <span>+50 cents (สูง)</span>
+        </div>
+
+        <!-- Note & Frequency Readout -->
+        <div id="tuner-display-note" class="tuner-note-main">--</div>
+        <div id="tuner-display-number" style="font-size: 1.1rem; font-weight: 700; color: #e2e8f0; margin-top: -2px;"></div>
+        <div id="tuner-display-freq" style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">0.0 Hz</div>
+        <div id="tuner-display-cents" class="tuner-cents-tag in-tune">0 cents</div>
+      </div>
+
+      <!-- Kalimba 17-Key Soundboard & Visual Rack -->
+      <div class="kalimba-board-container">
+        <div style="width: 100%; max-width: 740px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <span style="font-size: 0.85rem; font-weight: 700; color: #334155;">
+            ผังลิ่มคาลิมบ้า 17 คีย์ (แตะที่ลิ่มเพื่อฟังเสียงสังเคราะห์ / เมื่อดีดเสียงจริงลิ่มจะสว่างขึ้น)
+          </span>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            L = นิ้วโป้งซ้าย | R = นิ้วโป้งขวา
+          </span>
+        </div>
+
+        <div id="tuner-kalimba-keyboard" class="kalimba-tines-rack">
+          <!-- Injected via Tuner.renderTinesKeyboard() -->
+        </div>
+      </div>
+
+      <!-- Footer & Tuning Tips -->
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          💡 เคล็ดลับ T-PACE: หากเสียงต่ำ (Flat) ให้ใช้ค้อนเคาะปลายลิ่มขึ้นเบาๆ / หากเสียงสูง (Sharp) ให้เคาะหัวลิ่มลง
+        </span>
+        <button class="btn-nav-action" onclick="Tuner.closeModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Online Unit Quiz & Blueprint 40 -->
+  <div id="modal-quiz" class="modal-overlay">
+    <div class="quiz-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div>
+            <h3 id="quiz-modal-title" style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              แบบทดสอบท้ายหน่วยการเรียนรู้
+            </h3>
+            <div id="quiz-modal-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              อิงพิมพ์เขียวข้อสอบ Test Blueprint 40 ข้อ • วัดผลตามมาตรฐานกลุ่มสาระการเรียนรู้ศิลปะ
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <div id="quiz-anti-cheat-toggle" class="quiz-anti-cheat-pill" onclick="QuizEngine.toggleShuffle()" title="คลิกเพื่อสลับโหมดการสุ่มข้อและตัวเลือก (ป้องกันการคัดลอกคำตอบ)">
+            <span>🎲 สุ่มข้อ &amp; สลับตัวเลือก: <strong>เปิด (Anti-Cheat ON)</strong></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 700; color: var(--ppk-blue); background: var(--ppk-blue-light); padding: 4px 10px; border-radius: var(--radius-sm);">
+            ⏱ เวลาที่ใช้: <span id="quiz-timer-display">00:00</span>
+          </div>
+          <button class="modal-close-btn" onclick="QuizEngine.closeQuizModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Question Number Nav Pills -->
+      <div id="quiz-question-pills" class="quiz-pills-bar">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Question Content / Review Body -->
+      <div id="quiz-question-container" style="flex: 1; overflow-y: auto;">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Interactive Matrix Rubric Scoring (ระดับ คศ.4) -->
+  <div id="modal-rubric-scoring" class="modal-overlay">
+    <div class="rubric-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+          </div>
+          <div>
+            <h3 id="rubric-modal-rubric-title" style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              ตารางประเมินผลตามสภาพจริง (Rubrics 4 ระดับคุณภาพ ระดับ คศ.4)
+            </h3>
+            <div id="rubric-modal-student-name" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+              กำลังประเมินนักเรียน...
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="RubricMatrix.closeModal()">✕</button>
+      </div>
+
+      <!-- Toolbar: Quick Fill & Score Readout -->
+      <div style="padding: 0.65rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem;">
+          <span style="color: var(--text-muted);">เลือกให้ทั้งตาราง:</span>
+          <button class="btn-nav-action" style="padding: 2px 8px; font-size: 0.78rem;" onclick="RubricMatrix.selectLevelAll(4)">ดีเยี่ยม (4)</button>
+          <button class="btn-nav-action" style="padding: 2px 8px; font-size: 0.78rem;" onclick="RubricMatrix.selectLevelAll(3)">ดี (3)</button>
+          <button class="btn-nav-action" style="padding: 2px 8px; font-size: 0.78rem;" onclick="RubricMatrix.selectLevelAll(2)">พอใช้ (2)</button>
+        </div>
+
+        <div id="rubric-modal-computed-score" style="font-size: 0.88rem; color: var(--ppk-navy-dark);">
+          <!-- Score computed -->
+        </div>
+      </div>
+
+      <!-- Table Matrix Body -->
+      <div id="rubric-modal-matrix-container" style="flex: 1; overflow-y: auto; padding: 1rem 1.5rem;">
+        <!-- Injected via RubricMatrix.renderModalContent() -->
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          เกณฑ์การประเมินมาตรฐานโรงเรียนพะเยาพิทยาคม • สาระการเรียนรู้ศิลปะ (ดนตรี 1)
+        </span>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="RubricMatrix.closeModal()">ยกเลิก</button>
+          <button class="btn-nav-action primary" onclick="RubricMatrix.saveScore()">💾 บันทึกผลคะแนนรูบริก</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Feldman 4-Step Music Criticism Workspace -->
+  <div id="modal-feldman-criticism" class="modal-overlay">
+    <div class="feldman-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #fdf2f8; color: #db2777; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          </div>
+          <div>
+            <h3 id="feldman-modal-title" style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              แบบวิจารณ์ผลงานดนตรีตามแนวทาง Feldman (4 ขั้นตอน)
+            </h3>
+            <div id="feldman-modal-meta" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              หน่วยการเรียนรู้ที่ 4 สุนทรียภาพแห่งการฟัง • พัฒนาการคิดขั้นสูง
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div id="feldman-status-badge"></div>
+          <button class="modal-close-btn" onclick="FeldmanCriticism.closeModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Form Body -->
+      <div style="flex: 1; overflow-y: auto; padding: 1.5rem 2rem;">
+        <div style="margin-bottom: 1.25rem;">
+          <label style="display: block; font-weight: 700; font-size: 0.9rem; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">
+            ชื่อบทเพลงหรือการแสดงที่รับฟัง / วิจารณ์:
+          </label>
+          <input type="text" id="feldman-song-title" class="input-text" placeholder="เช่น เพลงพื้นบ้านพะเยาประยุกต์ / Mini-Recital กลุ่มที่ 1" style="width: 100%;">
+        </div>
+
+        <!-- K.S.4 Interactive 2D Emotion Coordinate Grid & Word Cloud Outlier Analyzer (Plans 16-17) -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 1.15rem 1.25rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">
+                📊 พิกัดอารมณ์เพลง 2 แกน (Valence–Arousal Grid) &amp; คลังคีย์เวิร์ดวิเคราะห์ความเห็นต่าง (Outlier Debate)
+              </div>
+              <div style="font-size: 0.78rem; color: #475569;">
+                คลิกจุดพิกัดอารมณ์และเลือกคีย์เวิร์ดที่ได้ยินเพื่อสร้าง Word Cloud ของห้องเรียน พร้อมดึงหลักฐานเข้าสู่ขั้นที่ 1–2 อัตโนมัติ
+              </div>
+            </div>
+            <button type="button" class="btn-nav-action primary" style="font-size: 0.78rem; padding: 4px 10px;" onclick="FeldmanCriticism.autoPopulateFromAnalytics()">
+              ⚡ ดึงข้อมูลคีย์เวิร์ดและพิกัดเข้าสู่ขั้นที่ 1–3 อัตโนมัติ
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; align-items: stretch;">
+            <!-- Left: 2D Valence vs Arousal Coordinate Grid -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem;">
+              <div style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 0.4rem; display: flex; justify-content: space-between;">
+                <span>🎯 กราฟพิกัดอารมณ์ 2 มิติ (คลิกเพื่อพล็อตจุด)</span>
+                <span id="feldman-coord-readout" style="color: #2563eb;">(Valence: +6, Arousal: -4 สงบ/Alpha)</span>
+              </div>
+              <div id="feldman-2d-grid" onclick="FeldmanCriticism.onGridClick(event)" style="position: relative; height: 170px; background: linear-gradient(135deg, #fef2f2 0%, #eff6ff 50%, #f0fdf4 100%); border: 1px solid #94a3b8; border-radius: 6px; cursor: crosshair; overflow: hidden;">
+                <!-- Axes -->
+                <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #64748b;"></div>
+                <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #64748b;"></div>
+                <!-- Axis Labels -->
+                <span style="position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 0.68rem; font-weight: 700; color: #dc2626; background: rgba(255,255,255,0.85); padding: 1px 6px; border-radius: 4px;">Arousal สูง (ตื่นตัว / 110 BPM)</span>
+                <span style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 0.68rem; font-weight: 700; color: #059669; background: rgba(255,255,255,0.85); padding: 1px 6px; border-radius: 4px;">Arousal ต่ำ (สงบ Alpha / 60–70 BPM)</span>
+                <span style="position: absolute; left: 4px; top: 50%; transform: translateY(-50%); font-size: 0.68rem; font-weight: 700; color: #475569; background: rgba(255,255,255,0.85); padding: 1px 4px; border-radius: 4px;">เศร้า/หม่น (-Valence)</span>
+                <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.68rem; font-weight: 700; color: #1d4ed8; background: rgba(255,255,255,0.85); padding: 1px 4px; border-radius: 4px;">สุข/อบอุ่น (+Valence)</span>
+                <!-- Simulated Classroom Cluster & Outliers -->
+                <div title="กลุ่มส่วนใหญ่ของห้อง (34 คน): สงบ อบอุ่น ผ่อนคลาย" style="position: absolute; left: 72%; top: 68%; width: 42px; height: 42px; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(37, 99, 235, 0.22); border: 1.5px dashed #2563eb;"></div>
+                <div title="จุดเห็นต่าง (Outlier 3 คน): รู้สึกเหงา/คิดถึงบ้าน เพราะหางเสียงซอและจังหวะช้า" style="position: absolute; left: 28%; top: 70%; width: 22px; height: 22px; transform: translate(-50%, -50%); border-radius: 50%; background: rgba(245, 158, 11, 0.35); border: 2px solid #d97706;"></div>
+                <!-- User Active Marker -->
+                <div id="feldman-user-marker" style="position: absolute; left: 74%; top: 66%; width: 14px; height: 14px; transform: translate(-50%, -50%); border-radius: 50%; background: #dc2626; border: 2px solid #ffffff; box-shadow: 0 0 6px rgba(0,0,0,0.4);"></div>
+              </div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem; display: flex; justify-content: space-between;">
+                <span>🔵 วงสีน้ำเงิน = กลุ่มใหญ่ (34 คน)</span>
+                <span>🟠 วงสีส้ม = จุดเห็นต่าง (Outliers 3 คน)</span>
+                <span>🔴 จุดสีแดง = พิกัดของคุณ</span>
+              </div>
+            </div>
+
+            <!-- Right: Classroom Word Cloud & Outlier Debate -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 0.4rem;">
+                  ☁️ คลังคีย์เวิร์ดห้องเรียน (คลิกคีย์เวิร์ดเพื่อเลือกใช้เป็นหลักฐาน)
+                </div>
+                <div id="feldman-wordcloud-box" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; padding: 0.4rem; background: #f8fafc; border-radius: 6px; min-height: 92px;">
+                  <!-- Injected via FeldmanCriticism.renderWordCloud() -->
+                </div>
+              </div>
+              <div id="feldman-outlier-callout" style="margin-top: 0.5rem; padding: 0.45rem 0.65rem; background: #fffbeb; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 0.76rem; color: #92400e;">
+                💡 <strong>ประเด็นถกเถียง Outliers (ขั้นที่ 3):</strong> เพื่อนส่วนใหญ่ (85%) รู้สึก <em>"สงบอบอุ่น"</em> จากจังหวะ 65 BPM และเสียงคาลิมบ้าโปร่งใส แต่มี 15% รู้สึก <em>"เหงา/คิดถึงบ้าน"</em> เพราะทำนองช่วงท้ายทอดจังหวะช้าลง (Ritardando)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 1: Description -->
+        <div class="feldman-step-box">
+          <div class="feldman-step-header">
+            <span>ขั้นที่ 1: การระบุข้อมูลและการบรรยาย (Description)</span>
+          </div>
+          <div class="feldman-step-prompt">
+            💡 บรรยายข้อมูลพื้นฐานที่ได้ยิน: ชื่อเพลง ผู้ประพันธ์/ผู้แสดง ประเภทเพลง จังหวะ และเครื่องดนตรีหลักที่ใช้บรรเลง
+          </div>
+          <textarea id="feldman-step1-desc" class="feldman-textarea" placeholder="ระบุสิ่งที่ได้ยินอย่างตรงไปตรงมา โดยยังไม่ตัดสินถูกผิด..."></textarea>
+        </div>
+
+        <!-- Step 2: Formal Analysis -->
+        <div class="feldman-step-box">
+          <div class="feldman-step-header">
+            <span>ขั้นที่ 2: การวิเคราะห์องค์ประกอบดนตรี (Formal Analysis)</span>
+          </div>
+          <div class="feldman-step-prompt">
+            💡 วิเคราะห์การจัดระเบียบองค์ประกอบ: จังหวะ (Tempo/Meter), ทำนอง (Melody/Contour), พื้นผิว (Texture), ความดัง-เบา (Dynamics), และสีสันของเสียง (Timbre)
+          </div>
+          <textarea id="feldman-step2-analysis" class="feldman-textarea" placeholder="วิเคราะห์ความสัมพันธ์ขององค์ประกอบดนตรีและการประสานเสียง..."></textarea>
+        </div>
+
+        <!-- Step 3: Interpretation -->
+        <div class="feldman-step-box">
+          <div class="feldman-step-header">
+            <span>ขั้นที่ 3: การตีความอารมณ์ความรู้สึก (Interpretation)</span>
+          </div>
+          <div class="feldman-step-prompt">
+            💡 ตีความสิ่งที่บทเพลงต้องการสื่อสาร: อารมณ์ความรู้สึก จินตภาพ เรื่องราว หรือบรรยากาศที่เกิดขึ้น และความหมายทางสังคม/วัฒนธรรม
+          </div>
+          <textarea id="feldman-step3-interp" class="feldman-textarea" placeholder="อธิบายอารมณ์ความรู้สึกและจินตภาพที่ได้รับจากบทเพลง..."></textarea>
+        </div>
+
+        <!-- Step 4: Evaluation -->
+        <div class="feldman-step-box">
+          <div class="feldman-step-header">
+            <span>ขั้นที่ 4: การประเมินคุณค่าเชิงสุนทรียะ (Evaluation & Judgment)</span>
+          </div>
+          <div class="feldman-step-prompt">
+            💡 สรุปและประเมินคุณค่าของผลงานดนตรีอย่างมีหลักการ: จุดเด่นที่ประทับใจ ความสำเร็จในการสื่ออารมณ์ และข้อเสนอแนะเชิงสร้างสรรค์
+          </div>
+          <textarea id="feldman-step4-eval" class="feldman-textarea" placeholder="สรุปข้อคิด คุณค่า และข้อเสนอแนะต่อการแสดงดนตรีชิ้นนี้..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <button class="btn-nav-action" onclick="FeldmanCriticism.saveDraft()">💾 บันทึกแบบร่าง (Save Draft)</button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="FeldmanCriticism.closeModal()">ปิด</button>
+          <button class="btn-nav-action primary" onclick="FeldmanCriticism.submitCriticism()">ส่งใบวิจารณ์ดนตรี ✅</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CAR Research Analytics Engine (วก.7 & วPA) -->
+  <div id="modal-car-analytics" class="modal-overlay">
+    <div class="modal-card" style="max-width: 960px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #dbeafe; color: #1e40af; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"></path></svg>
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              ระบบวิเคราะห์สถิติวิจัยในชั้นเรียน (CAR Analytics for วPA)
+            </h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              วิจัยเชิงปฏิบัติการในชั้นเรียน • ประเมินผลสัมฤทธิ์ T-PACE • รองรับเกณฑ์ วPA วิทยฐานะ คศ.4
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <select id="car-class-select" class="form-select" style="min-width: 140px; font-weight: 600;">
+            <!-- Injected via CARAnalytics.renderClassSelector() -->
+          </select>
+          <button class="modal-close-btn" onclick="CARAnalytics.closeModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Analytics Content Body -->
+      <div id="car-analytics-display" style="flex: 1; overflow-y: auto; padding: 1.25rem 1.75rem; background: #f8fafc;">
+        <!-- Injected via CARAnalytics.renderAnalytics() -->
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          สูตรคำนวณตามมาตรฐานสถิติทางการศึกษา: t-test Dependent, Normalized Gain &lt;g&gt;, และประสิทธิภาพนวัตกรรม E1/E2
+        </span>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button class="btn-nav-action primary" style="background: #10b981; border: none; font-weight: 700;" onclick="CARAnalytics.openFullReportModal()">
+            📄 พิมพ์เล่มรายงานวิจัย วก.7 ฉบับเต็ม (5 บท)
+          </button>
+          <button class="btn-nav-action" onclick="CARAnalytics.closeModal()">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Full 5-Chapter CAR Action Research Report (วก.7 เล่มเต็ม) -->
+  <div id="modal-car-full-report" class="modal-overlay">
+    <div class="modal-card" style="max-width: 960px; width: 95vw; max-height: 94vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            📄
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              เล่มรายงานการวิจัยปฏิบัติการในชั้นเรียน 5 บท (วก.7 ฉบับเต็ม)
+            </h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              เอกสารวิจัยประกอบการประเมิน วPA (คศ.4) • สมบูรณ์ทั้ง 5 บท พร้อมตารางสถิติและจุดลงนาม
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="CARAnalytics.copyFullReportText()" title="คัดลอกเนื้อหาทั้งหมดเพื่อนำไปวางใน Microsoft Word">
+            📋 คัดลอกใส่ Word
+          </button>
+          <button class="btn-nav-action primary" onclick="CARAnalytics.printFullReport()" title="สั่งพิมพ์หน้าเอกสาร A4 หรือบันทึกเป็น PDF">
+            🖨️ สั่งพิมพ์ A4 (Print / PDF)
+          </button>
+          <button class="modal-close-btn" onclick="CARAnalytics.closeFullReportModal()">✕</button>
+        </div>
+      </div>
+
+      <!-- Report Sheet Preview Body -->
+      <div style="flex: 1; overflow-y: auto; background: #e2e8f0; padding: 2rem 1rem; display: flex; justify-content: center;">
+        <div id="car-full-report-content" class="official-a4-sheet" style="background: #ffffff; padding: 3cm 2.5cm 2.5cm 2.5cm; max-width: 860px; width: 100%; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 4px;">
+          <!-- Injected via CARAnalytics.openFullReportModal() -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          เอกสารทางการมาตรฐาน วก.7 จัดหน้าตามระเบียบงานวิจัยโรงเรียนพะเยาพิทยาคม
+        </span>
+        <button class="btn-nav-action" onclick="CARAnalytics.closeFullReportModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 17-Key Virtual Kalimba & Interactive Practice Synthesizer -->
+  <div id="modal-virtual-kalimba" class="modal-overlay">
+    <div class="modal-card" style="max-width: 980px; width: 96vw; max-height: 94vh; display: flex; flex-direction: column; background: #0f172a; color: #f8fafc; border: 1px solid #334155;">
+      <div class="modal-header" style="background: #1e293b; border-bottom: 1px solid #334155;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #3b82f6; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            🎵
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #ffffff; margin: 0;">
+              คาลิมบ้าจำลอง 17 เสียง & ห้องซ้อมดนตรี (Virtual Kalimba 17-Key)
+            </h3>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+              ระบบเสียงฟิสิกส์สังเคราะห์ Web Audio Acoustic Model • ซ้อมเพลงพร้อมจังหวะ (BPM) และไฟแสดงโน้ต
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-btn" style="color: #cbd5e1;" onclick="VirtualKalimba.closeModal()">✕</button>
+      </div>
+
+      <!-- Kalimba Controls & Song Selector -->
+      <div style="padding: 1rem 1.5rem; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <label style="font-size: 0.85rem; font-weight: 600; color: #93c5fd;">บทเพลงฝึกซ้อม:</label>
+          <select id="kalimba-song-select" class="form-select" style="background: #0f172a; color: #ffffff; border-color: #475569; min-width: 220px;" onchange="VirtualKalimba.onSongChange(this.value)">
+            <!-- Injected dynamically -->
+          </select>
+          <button id="btn-kalimba-play" class="btn-nav-action primary" style="background: #10b981; border: none; font-weight: 700;" onclick="VirtualKalimba.togglePlay()">
+            ▶️ เล่นตัวอย่าง (Play Along)
+          </button>
+          <button class="btn-nav-action" style="background: #334155; color: #ffffff; border: 1px solid #475569;" onclick="VirtualKalimba.stopPlay()">
+            ⏹️ หยุด
+          </button>
+        </div>
+
+        <!-- Tempo / BPM Slider -->
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <span style="font-size: 0.85rem; color: #94a3b8;">ความเร็ว (BPM):</span>
+          <input type="range" id="kalimba-bpm-slider" min="50" max="160" value="90" style="width: 100px; accent-color: #38bdf8;" oninput="VirtualKalimba.setTempo(this.value)">
+          <span id="kalimba-bpm-display" style="font-size: 0.9rem; font-weight: 700; color: #38bdf8; min-width: 45px;">90</span>
+        </div>
+      </div>
+
+      <!-- Current Note Display Banner -->
+      <div style="padding: 0.75rem 1.5rem; background: #0f172a; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span style="font-size: 0.82rem; color: #64748b;">โน้ตที่กำลังเล่น:</span>
+          <span id="kalimba-current-note" style="font-size: 1.15rem; font-weight: 800; color: #fbbf24;">-</span>
+        </div>
+        <div style="font-size: 0.8rem; color: #64748b;">
+          💡 รองรับคีย์บอร์ดคอมพิวเตอร์: กด 1-9 และ Q-Y เพื่อดีดลิ้นเสียง
+        </div>
+      </div>
+
+      <!-- Kalimba Soundboard & Tines Container -->
+      <div style="flex: 1; overflow-y: auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);">
+        
+        <!-- Wooden Soundboard Body Styling -->
+        <div class="kalimba-soundboard" style="max-width: 820px; width: 100%; position: relative;">
+
+          <!-- Bridge rod + clamp bar (tine tails are pinned under these) -->
+          <div class="kalimba-bridge"></div>
+          <div class="kalimba-clamp"></div>
+
+          <!-- 17 Steel Tines hanging down; free tips toward the player's thumbs -->
+          <div id="kalimba-tines-container" class="kalimba-tines-area">
+            <!-- 17 Tines Injected via VirtualKalimba.renderTines() -->
+          </div>
+
+          <!-- Sound Hole -->
+          <div class="kalimba-sound-hole"></div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer" style="justify-content: space-between; background: #1e293b; border-top: 1px solid #334155;">
+        <span style="font-size: 0.8rem; color: #94a3b8;">
+          * การฝึกซ้อมด้วยคาลิมบ้าจำลองจะบันทึกชั่วโมงซ้อมอัตโนมัติ เพื่อปลดล็อกเข็มกลัดความสำเร็จ 🎵
+        </span>
+        <button class="btn-nav-action" style="background: #334155; color: #ffffff; border: 1px solid #475569;" onclick="VirtualKalimba.closeModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Official Forms Generator (ปพ.5 & บันทึกหลังแผน วก.5 A4) -->
+  <div id="modal-official-forms" class="modal-overlay">
+    <div class="modal-card" style="max-width: 1040px; width: 95vw; max-height: 94vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #fef2f2; color: #dc2626; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              พิมพ์แบบฟอร์มเอกสารทางการ (Official Forms A4)
+            </h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              แบบรายงาน ปพ.5 สมบูรณ์ และบันทึกผลหลังการจัดการเรียนรู้ วก.5 ตามระเบียบราชการ สพฐ.
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="OfficialForms.closeModal()">✕</button>
+      </div>
+
+      <!-- Toolbar -->
+      <div style="padding: 0.75rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <button id="btn-form-tab-ppk5" class="academic-tab-btn active" onclick="OfficialForms.switchTab('ppk5')">
+            📄 ปพ.5 (สมุดประเมินผลรายห้อง)
+          </button>
+          <button id="btn-form-tab-wk5" class="academic-tab-btn" onclick="OfficialForms.switchTab('wk5')">
+            📑 วก.5 (บันทึกผลหลังแผน 20 คาบ)
+          </button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <div id="official-form-sub-selector"></div>
+          <button class="btn-nav-action primary" onclick="OfficialForms.printActiveForm()">
+            🖨️ สั่งพิมพ์เอกสาร A4 (Print / PDF)
+          </button>
+        </div>
+      </div>
+
+      <!-- Document Preview Sheet (A4 format) -->
+      <div style="flex: 1; overflow-y: auto; background: #64748b; padding: 2rem 1rem; display: flex; justify-content: center;">
+        <div id="official-form-sheet" class="official-a4-sheet">
+          <!-- Injected via OfficialForms -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          ฟอร์มราชการมาตรฐาน: จัดหน้ากระดาษ A4 ขอบ 2.0 ซม. พร้อมจุดลงนามครูผู้สอน หัวหน้ากลุ่มสาระฯ และผู้บริหาร
+        </span>
+        <button class="btn-nav-action" onclick="OfficialForms.closeModal()">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: System & Innovation Settings (Zero Hardcoding) -->
+  <div id="modal-app-settings" class="modal-overlay">
+    <div class="modal-card" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </div>
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
+              ตั้งค่านวัตกรรมและข้อมูลสถานศึกษา (System & Innovation Settings)
+            </h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              ปรับแต่งชื่อโปรแกรม ชื่อนวัตกรรม ชื่องานวิจัย และข้อมูลผู้ลงนามในเอกสารราชการ (100% Dynamic)
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="App.closeSettingsModal()">✕</button>
+      </div>
+
+      <div style="flex: 1; overflow-y: auto; padding: 1.5rem 2rem;">
+        <!-- Group 1: Innovation & Program Identity -->
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy); margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 4px;">
+          1. ข้อมูลนวัตกรรมและชื่อโปรแกรม
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label">ชื่อโปรแกรม (Application Name):</label>
+            <input type="text" id="setting-app-name" class="form-input" placeholder="เช่น MusicSmart">
+          </div>
+          <div>
+            <label class="form-label">ป้ายกำกับ (Badge):</label>
+            <input type="text" id="setting-app-badge" class="form-input" placeholder="เช่น T-PACE">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">ชื่อนวัตกรรมทางการ (Innovation Model):</label>
+          <input type="text" id="setting-innovation-name" class="form-input" placeholder="เช่น รูปแบบการจัดการเรียนรู้เชิงรุก T-PACE Framework ร่วมกับแอปพลิเคชัน MusicSmart">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">ชื่อเรื่องงานวิจัยในชั้นเรียน (CAR Research Title):</label>
+          <textarea id="setting-research-title" class="form-textarea" rows="2" placeholder="ระบุชื่อเรื่องงานวิจัยสำหรับรายงาน วก.7 และ วPA..."></textarea>
+        </div>
+
+        <!-- Group 2: School & Official Signatures -->
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy); margin-top: 1.5rem; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-color); padding-bottom: 4px;">
+          2. ข้อมูลสถานศึกษาและผู้ลงนามเอกสารทางการ
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label">ชื่อสถานศึกษา:</label>
+            <input type="text" id="setting-school-name" class="form-input" placeholder="เช่น โรงเรียนพะเยาพิทยาคม">
+          </div>
+          <div>
+            <label class="form-label">ชื่อย่อ:</label>
+            <input type="text" id="setting-school-short" class="form-input" placeholder="เช่น พ.พ.">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">กลุ่มสาระการเรียนรู้:</label>
+          <input type="text" id="setting-department-name" class="form-input" placeholder="เช่น กลุ่มสาระการเรียนรู้ศิลปะ (สาระดนตรี)">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label">ชื่อครูผู้สอนประจำวิชา:</label>
+            <input type="text" id="setting-teacher-name" class="form-input" placeholder="เช่น นายพงศธร โพธิแก้ว">
+          </div>
+          <div>
+            <label class="form-label">ชื่อหัวหน้ากลุ่มสาระการเรียนรู้ศิลปะ:</label>
+            <input type="text" id="setting-dept-head" class="form-input" placeholder="เช่น นายอุดม ไชยวุฒิ">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div>
+            <label class="form-label">ชื่อรองผู้อำนวยการกลุ่มบริหารงานวิชาการ:</label>
+            <input type="text" id="setting-academic-head" class="form-input" placeholder="เช่น นายกฤศ วงค์เรือง">
+          </div>
+          <div>
+            <label class="form-label">ชื่อผู้อำนวยการสถานศึกษา:</label>
+            <input type="text" id="setting-director-name" class="form-input" placeholder="เช่น ว่าที่ร้อยตรีญาณบดินทร์ อินเตชะ">
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 2px dashed #e2e8f0;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
+            <span>🔐</span> บัญชีเข้าสู่ระบบของครูผู้สอน (Teacher Credentials)
+          </h4>
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div>
+              <label class="form-label">อีเมลครูผู้สอนสำหรับล็อกอิน:</label>
+              <input type="email" id="setting-teacher-email" class="form-input" placeholder="เช่น music@ppk.ac.th">
+            </div>
+            <div>
+              <label class="form-label">รหัสผ่าน / PIN ของครู:</label>
+              <input type="text" id="setting-teacher-secret" class="form-input" placeholder="เช่น ppk1234">
+            </div>
+          </div>
+          <div style="font-size: 0.78rem; color: #64748b;">
+            * สามารถกำหนดเป็นรหัสผ่านตัวอักษร หรือรหัส PIN ตัวเลขตามที่ครูสะดวก
+          </div>
+        </div>
+
+        <div style="margin-top: 1.25rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h4 style="font-size: 0.92rem; font-weight: 700; color: #334155; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.35rem;">
+            <span>🔑</span> เครื่องมือรีเซ็ตรหัส PIN 6 หลักของนักเรียน (กรณีนักเรียนลืม)
+          </h4>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <select id="setting-pin-reset-class" class="form-select" style="max-width: 110px;" onchange="App.onPinResetClassChange(this.value)">
+              <!-- classes -->
+            </select>
+            <select id="setting-pin-reset-student" class="form-select" style="flex: 1; min-width: 180px;">
+              <!-- students -->
+            </select>
+            <button class="btn-nav-action" style="background: #fff1f2; color: #e11d48; border-color: #fecdd3; font-weight: 600;" onclick="App.handleResetStudentPinClick()">
+              รีเซ็ต PIN นักเรียน
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
+        <button class="btn-nav-action" style="color: #dc2626;" onclick="App.resetDefaultSettings()">คืนค่าเริ่มต้น</button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.closeSettingsModal()">ยกเลิก</button>
+          <button class="btn-nav-action primary" onclick="App.saveSettingsFromModal()">💾 บันทึกการตั้งค่า</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="data/students.js"></script>
+  <script src="data/lessons.js"></script>
+  <script src="data/academic_docs.js"></script>
+  <script src="data/quizzes.js"></script>
+  <script src="data/store.js"></script>
+  <script src="js/tuner.js"></script>
+  <script src="js/audio-tools.js"></script>
+  <script src="js/quiz-engine.js"></script>
+  <script src="js/rubric-matrix.js"></script>
+  <script src="js/feldman-criticism.js"></script>
+  <script src="js/car-analytics.js"></script>
+  <script src="js/official-forms.js"></script>
+  <script src="js/virtual-kalimba.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- Service Worker Registration for PWA Offline Caching -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => {
+            console.log('MusicSmart Service Worker Registered successfully:', reg.scope);
+          })
+          .catch(err => {
+            console.warn('MusicSmart Service Worker registration failed:', err);
+          });
+      });
+    }
+  </script>
+</body>
+</html>
