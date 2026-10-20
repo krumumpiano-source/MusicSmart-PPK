@@ -2317,6 +2317,11 @@ const App = {
       return;
     }
 
+    const customBadge = document.getElementById('lesson-customized-badge');
+    if (customBadge) {
+      customBadge.style.display = lesson.isCustomized ? 'inline-flex' : 'none';
+    }
+
     document.getElementById('lesson-topic').textContent = `คาบที่ ${lesson.period}: ${lesson.topic}`;
     document.getElementById('kpa-k').textContent = lesson.kpa?.k || '-';
     document.getElementById('kpa-p').textContent = lesson.kpa?.p || '-';
@@ -4497,6 +4502,339 @@ const App = {
     setTimeout(() => {
       printWin.print();
     }, 500);
+  },
+
+  // =========================================================================
+  // Customizable Curriculum & Lesson Plan Editor (Overlay Architecture)
+  // =========================================================================
+
+  openCurrentLessonEditor() {
+    this.openLessonEditorModal(this.state.grade || 'M1', this.state.selectedPeriod || 1);
+  },
+
+  openLessonEditorModal(grade, period) {
+    const p = Number(period);
+    const g = grade || 'M1';
+    const lesson = Store.getLesson(g, p);
+    if (!lesson) {
+      alert(`ไม่พบข้อมูลบทเรียนคาบที่ ${p}`);
+      return;
+    }
+
+    const titleEl = document.getElementById('modal-lesson-editor-title');
+    if (titleEl) {
+      titleEl.textContent = `✏️ ปรับแต่งแผนการสอน (${g === 'M1' ? 'ม.1 ศ21101/ศ21102' : 'ม.2 ศ22101/ศ22102'} / คาบที่ ${p})`;
+    }
+
+    document.getElementById('editor-lesson-grade').value = g;
+    document.getElementById('editor-lesson-period').value = p;
+    document.getElementById('editor-lesson-topic').value = lesson.topic || '';
+    document.getElementById('editor-lesson-unit-name').value = lesson.unit_name || lesson.unitName || '';
+
+    // KPA
+    document.getElementById('editor-kpa-k').value = lesson.kpa?.k || '';
+    document.getElementById('editor-kpa-p').value = lesson.kpa?.p || '';
+    document.getElementById('editor-kpa-a').value = lesson.kpa?.a || '';
+
+    // 5 T-PACE Steps
+    const stepsContainer = document.getElementById('editor-steps-container');
+    if (stepsContainer) {
+      stepsContainer.innerHTML = '';
+      const defaultSteps = [
+        { phase: 'ขั้นนำเข้าสู่บทเรียน (Tune-in)', duration: 5, desc: '' },
+        { phase: 'ขั้นสอนและชี้แจง (Present)', duration: 10, desc: '' },
+        { phase: 'ขั้นปฏิบัติการและฝึกฝน (Apply)', duration: 20, desc: '' },
+        { phase: 'ขั้นตรวจสอบและร่วมวิจารณ์ (Check)', duration: 10, desc: '' },
+        { phase: 'ขั้นสรุปและประเมินผล (Evaluate)', duration: 5, desc: '' }
+      ];
+      const steps = (lesson.steps && lesson.steps.length > 0) ? lesson.steps : defaultSteps;
+      steps.forEach((s, idx) => {
+        const stepRow = document.createElement('div');
+        stepRow.style.cssText = 'background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem;';
+        stepRow.innerHTML = `
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #1e293b;">ขั้นตอนที่ ${idx + 1}:</label>
+              <input type="text" class="form-input editor-step-phase" value="${App.escapeHtml(s.phase || '')}" placeholder="ชื่อขั้นตอน">
+            </div>
+            <div>
+              <label style="font-size: 0.76rem; font-weight: 700; color: #1e293b;">เวลา (นาที):</label>
+              <input type="number" min="1" max="120" class="form-input editor-step-duration" value="${Number(s.duration || s.time_min || 10)}" oninput="App.recalcEditorTotalDuration()">
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 0.76rem; font-weight: 600; color: #64748b;">กิจกรรมการจัดการเรียนรู้:</label>
+            <textarea class="form-input editor-step-desc" rows="2" placeholder="รายละเอียดกิจกรรม">${App.escapeHtml(s.desc || s.action || '')}</textarea>
+          </div>
+        `;
+        stepsContainer.appendChild(stepRow);
+      });
+    }
+
+    // Media
+    this.renderEditorMediaRows(lesson.media || []);
+
+    // Mentor Tips
+    document.getElementById('editor-mentor-tips').value = lesson.mentor_tips || lesson.mentor_tip || '';
+
+    this.recalcEditorTotalDuration();
+
+    const modal = document.getElementById('modal-lesson-editor');
+    if (modal) modal.classList.add('active');
+  },
+
+  recalcEditorTotalDuration() {
+    const durInputs = document.querySelectorAll('.editor-step-duration');
+    let total = 0;
+    durInputs.forEach(inp => {
+      total += Number(inp.value || 0);
+    });
+    const badge = document.getElementById('editor-total-duration-badge');
+    if (badge) {
+      badge.textContent = `รวม ${total} นาที`;
+    }
+  },
+
+  renderEditorMediaRows(mediaList = []) {
+    const container = document.getElementById('editor-media-container');
+    if (!container) return;
+    container.innerHTML = '';
+    if (mediaList.length === 0) {
+      container.innerHTML = `<div id="editor-media-empty-text" style="font-size: 0.8rem; color: #94a3b8; text-align: center; padding: 0.5rem;">ยังไม่มีสื่อหรือเอกสารแนบในคาบนี้</div>`;
+      return;
+    }
+    mediaList.forEach(m => this.addEditorMediaRow(m));
+  },
+
+  addEditorMediaRow(item = null) {
+    const container = document.getElementById('editor-media-container');
+    if (!container) return;
+    const emptyText = document.getElementById('editor-media-empty-text');
+    if (emptyText) emptyText.remove();
+
+    const row = document.createElement('div');
+    row.className = 'editor-media-row';
+    row.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 0.5rem; align-items: center; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.4rem 0.6rem;';
+    
+    const titleVal = item ? (item.title || '') : '';
+    const typeVal = item ? (item.type || 'link') : 'link';
+    const urlVal = item ? (item.url || '') : '';
+
+    row.innerHTML = `
+      <input type="text" class="form-input editor-media-title" value="${App.escapeHtml(titleVal)}" placeholder="ชื่อสื่อ/เอกสาร" style="font-size: 0.82rem; padding: 4px 8px;">
+      <select class="form-select editor-media-type" style="font-size: 0.82rem; padding: 4px 8px;">
+        <option value="video" ${typeVal === 'video' ? 'selected' : ''}>🎬 วิดีโอ/คลิป</option>
+        <option value="doc" ${typeVal === 'doc' ? 'selected' : ''}>📄 เอกสาร/ชีต</option>
+        <option value="link" ${typeVal === 'link' ? 'selected' : ''}>🔗 ลิงก์ภายนอก</option>
+        <option value="drive" ${typeVal === 'drive' ? 'selected' : ''}>📁 Google Drive</option>
+      </select>
+      <input type="text" class="form-input editor-media-url" value="${App.escapeHtml(urlVal)}" placeholder="URL หรือพาธไฟล์" style="font-size: 0.82rem; padding: 4px 8px; font-family: monospace;">
+      <button type="button" class="btn-preset-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca; font-weight: 700; padding: 3px 8px;" onclick="App.removeEditorMediaRow(this)" title="ลบสื่อนี้">
+        ✕
+      </button>
+    `;
+    container.appendChild(row);
+  },
+
+  removeEditorMediaRow(btn) {
+    if (!btn) return;
+    const row = btn.closest('.editor-media-row');
+    if (row) row.remove();
+    const container = document.getElementById('editor-media-container');
+    if (container && container.children.length === 0) {
+      container.innerHTML = `<div id="editor-media-empty-text" style="font-size: 0.8rem; color: #94a3b8; text-align: center; padding: 0.5rem;">ยังไม่มีสื่อหรือเอกสารแนบในคาบนี้</div>`;
+    }
+  },
+
+  saveLessonEditorModal() {
+    const grade = document.getElementById('editor-lesson-grade').value || 'M1';
+    const period = Number(document.getElementById('editor-lesson-period').value || 1);
+    const topic = document.getElementById('editor-lesson-topic').value.trim();
+    const unitName = document.getElementById('editor-lesson-unit-name').value.trim();
+
+    if (!topic) {
+      alert('⚠️ กรุณาระบุหัวข้อบทเรียน');
+      return;
+    }
+
+    const kpa = {
+      k: document.getElementById('editor-kpa-k').value.trim(),
+      p: document.getElementById('editor-kpa-p').value.trim(),
+      a: document.getElementById('editor-kpa-a').value.trim()
+    };
+
+    // Steps
+    const stepRows = document.querySelectorAll('#editor-steps-container > div');
+    const steps = [];
+    let totalDuration = 0;
+    stepRows.forEach(row => {
+      const phase = row.querySelector('.editor-step-phase')?.value.trim() || '';
+      const duration = Number(row.querySelector('.editor-step-duration')?.value || 10);
+      const desc = row.querySelector('.editor-step-desc')?.value.trim() || '';
+      totalDuration += duration;
+      steps.push({ phase, duration, desc });
+    });
+
+    // Media
+    const mediaRows = document.querySelectorAll('#editor-media-container .editor-media-row');
+    const media = [];
+    mediaRows.forEach(row => {
+      const title = row.querySelector('.editor-media-title')?.value.trim() || '';
+      const type = row.querySelector('.editor-media-type')?.value || 'link';
+      const url = row.querySelector('.editor-media-url')?.value.trim() || '';
+      if (title || url) {
+        media.push({ title: title || url, type, url: url || '#' });
+      }
+    });
+
+    const mentorTips = document.getElementById('editor-mentor-tips').value.trim();
+
+    const customData = {
+      topic,
+      unit_name: unitName,
+      unitName,
+      kpa,
+      steps,
+      duration_min: totalDuration || 50,
+      media,
+      mentor_tips: mentorTips
+    };
+
+    Store.saveCustomLesson(grade, period, customData);
+    this.closeLessonEditorModal();
+
+    // If currently in Cockpit on that period, refresh immediately
+    if (this.state.grade === grade && Number(this.state.selectedPeriod) === period) {
+      this.renderLessonTab();
+      if (this.setupTpaceTimer) this.setupTpaceTimer(true);
+    }
+
+    // If Curriculum Hub is open, refresh cards
+    const hubModal = document.getElementById('modal-curriculum-hub');
+    if (hubModal && hubModal.classList.contains('active')) {
+      this.renderCurriculumHubCards(grade);
+    }
+
+    alert(`✅ บันทึกและปรับแต่งแผนการสอน (${grade === 'M1' ? 'ม.1' : 'ม.2'} คาบที่ ${period}) เรียบร้อยแล้ว!\nระบบได้อัปเดตเวลานาฬิกา T-PACE และส่งซิงค์คู่ขนานขึ้น Google Sheets ให้โดยอัตโนมัติครับ`);
+  },
+
+  resetCurrentLessonModal() {
+    const grade = document.getElementById('editor-lesson-grade').value || 'M1';
+    const period = Number(document.getElementById('editor-lesson-period').value || 1);
+
+    if (!confirm(`คุณครูต้องการคืนค่าแผนการสอน คาบที่ ${period} กลับเป็น "แผนมาตรฐานของโรงเรียน" ใช่หรือไม่?`)) {
+      return;
+    }
+
+    Store.resetCustomLesson(grade, period);
+    this.closeLessonEditorModal();
+
+    if (this.state.grade === grade && Number(this.state.selectedPeriod) === period) {
+      this.renderLessonTab();
+      if (this.setupTpaceTimer) this.setupTpaceTimer(true);
+    }
+
+    const hubModal = document.getElementById('modal-curriculum-hub');
+    if (hubModal && hubModal.classList.contains('active')) {
+      this.renderCurriculumHubCards(grade);
+    }
+
+    alert(`🔄 คืนค่าแผนการสอนคาบที่ ${period} เป็นแผนมาตรฐานโรงเรียนเรียบร้อยแล้วครับ`);
+  },
+
+  closeLessonEditorModal() {
+    const modal = document.getElementById('modal-lesson-editor');
+    if (modal) modal.classList.remove('active');
+  },
+
+  // --- Curriculum Hub (คลังแผนการสอน 40 คาบ) ---
+  openCurriculumHubModal(defaultGrade = null) {
+    const grade = defaultGrade || this.state.grade || 'M1';
+    this.currentHubGrade = grade;
+    this.switchCurriculumHubGrade(grade);
+    const modal = document.getElementById('modal-curriculum-hub');
+    if (modal) modal.classList.add('active');
+  },
+
+  closeCurriculumHubModal() {
+    const modal = document.getElementById('modal-curriculum-hub');
+    if (modal) modal.classList.remove('active');
+  },
+
+  switchCurriculumHubGrade(grade) {
+    this.currentHubGrade = grade;
+    const tabM1 = document.getElementById('hub-tab-m1');
+    const tabM2 = document.getElementById('hub-tab-m2');
+    if (tabM1 && tabM2) {
+      if (grade === 'M1') {
+        tabM1.className = 'btn-nav-action primary';
+        tabM2.className = 'btn-nav-action';
+      } else {
+        tabM1.className = 'btn-nav-action';
+        tabM2.className = 'btn-nav-action primary';
+      }
+    }
+    this.renderCurriculumHubCards(grade);
+  },
+
+  renderCurriculumHubCards(grade) {
+    const container = document.getElementById('curriculum-hub-cards');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const lessons = Store.getAllLessons(grade) || [];
+    lessons.forEach(l => {
+      const isCustom = !!l.isCustomized;
+      const totalDuration = (l.steps || []).reduce((acc, s) => acc + (s.duration || s.time_min || 10), 0) || l.duration_min || 50;
+      const card = document.createElement('div');
+      card.style.cssText = `
+        background: #ffffff;
+        border: 1px solid ${isCustom ? '#fde68a' : '#e2e8f0'};
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      `;
+      card.innerHTML = `
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <span style="font-weight: 700; font-size: 0.85rem; color: #1e40af;">คาบที่ ${l.period}</span>
+            <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px; ${isCustom ? 'background: #fef3c7; color: #b45309; border: 1px solid #fde68a;' : 'background: #f1f5f9; color: #475569;'}">
+              ${isCustom ? '✏️ ปรับแต่งเฉพาะ' : 'มาตรฐาน'}
+            </span>
+          </div>
+          <div style="font-size: 0.76rem; color: #64748b; margin-bottom: 0.25rem;">
+            ${App.escapeHtml(l.unit_name || l.unitName || 'หน่วยการเรียนรู้')}
+          </div>
+          <div style="font-weight: 700; font-size: 0.92rem; color: #0f172a; margin-bottom: 0.5rem; line-height: 1.4;">
+            ${App.escapeHtml(l.topic || '')}
+          </div>
+          <div style="font-size: 0.78rem; color: #475569; margin-bottom: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+            <strong>K:</strong> ${App.escapeHtml(l.kpa?.k || '-')}
+          </div>
+        </div>
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 0.65rem; margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">⏱️ ${totalDuration} นาที</span>
+          <button type="button" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 4px 10px; cursor: pointer;" onclick="App.openLessonEditorModal('${grade}', ${l.period})">
+            ✏️ ปรับแต่งแผน
+          </button>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  },
+
+  resetAllCurriculumModal() {
+    if (!confirm('⚠️ คุณครูต้องการคืนค่าแผนการสอนทั้งหมด 40 คาบ (ทั้ง ม.1 และ ม.2) กลับเป็น "แผนมาตรฐานของโรงเรียน" ใช่หรือไม่?')) {
+      return;
+    }
+    Store.resetAllCustomLessons();
+    this.renderCurriculumHubCards(this.currentHubGrade || 'M1');
+    if (this.renderLessonTab) this.renderLessonTab();
+    if (this.setupTpaceTimer) this.setupTpaceTimer(true);
+    alert('🔄 คืนค่าแผนการสอนทั้ง 40 คาบเป็นแผนมาตรฐานโรงเรียนเรียบร้อยแล้วครับ');
   },
 
   escapeHtml(str) {

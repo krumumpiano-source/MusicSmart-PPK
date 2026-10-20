@@ -406,6 +406,10 @@ function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('btn-google-sheets-pill'), 'HTML contains Google Sheets Sync Header Pill (#btn-google-sheets-pill)');
   assert(htmlData.includes('cockpit-sync-badge'), 'HTML contains Cockpit Sync Badge (#cockpit-sync-badge)');
   assert(htmlData.includes('google-sheet-sync.js'), 'HTML loads google-sheet-sync.js script');
+  assert(htmlData.includes('modal-lesson-editor'), 'HTML contains Lesson Plan Editor Modal (#modal-lesson-editor)');
+  assert(htmlData.includes('modal-curriculum-hub'), 'HTML contains Curriculum Hub Modal (#modal-curriculum-hub)');
+  assert(htmlData.includes('btn-curriculum-hub'), 'HTML contains Curriculum Hub Nav Button (#btn-curriculum-hub)');
+  assert(htmlData.includes('lesson-customized-badge'), 'HTML contains Lesson Customized Badge (#lesson-customized-badge)');
 
   console.log('\n' + '='.repeat(70));
   console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);
