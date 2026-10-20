@@ -1190,47 +1190,289 @@ const App = {
     if (nameEl) nameEl.textContent = inst.name;
   },
 
-  openInstructorModal() {
+  // --- User & Admin Management System ---
+  openUserManagementModal(initialTab = 'admin') {
+    const modal = document.getElementById('modal-user-management');
+    if (!modal) return;
+    this.switchUserMgmtTab(initialTab);
+    modal.classList.add('active');
+  },
+
+  closeUserManagementModal() {
+    const modal = document.getElementById('modal-user-management');
+    if (modal) modal.classList.remove('active');
+  },
+
+  switchUserMgmtTab(tabName) {
+    const tabs = ['admin', 'teachers', 'students'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(`tab-btn-user-${t}`);
+      const pane = document.getElementById(`user-pane-${t}`);
+      if (btn) {
+        if (t === tabName) {
+          btn.classList.add('active');
+          btn.style.background = '#1e3a8a';
+          btn.style.color = '#ffffff';
+        } else {
+          btn.classList.remove('active');
+          btn.style.background = '#ffffff';
+          btn.style.color = '#475569';
+        }
+      }
+      if (pane) {
+        pane.style.display = (t === tabName) ? 'block' : 'none';
+      }
+    });
+
+    if (tabName === 'admin') this.renderAdminProfileTab();
+    else if (tabName === 'teachers') this.renderTeachersTab();
+    else if (tabName === 'students') this.renderStudentPinsTab();
+  },
+
+  renderAdminProfileTab() {
+    const adminAcc = Store.getTeacherAccount();
     const inst = Store.getInstructor();
-    const settings = Store.getAppSettings ? Store.getAppSettings() : null;
-    const mentorNameEl = document.getElementById('modal-instructor-mentor-name');
-    if (mentorNameEl && settings && settings.teacherName) {
-      mentorNameEl.textContent = settings.teacherName;
-    }
-    const isMentor = inst.role === 'ครูประจำวิชา';
-    document.getElementById('check-mentor').style.display = isMentor ? 'inline' : 'none';
-    document.getElementById('check-trainee').style.display = !isMentor ? 'inline' : 'none';
+    const nameDisplay = document.getElementById('user-admin-name-display');
+    const emailDisplay = document.getElementById('user-admin-email-display');
+    if (nameDisplay) nameDisplay.textContent = adminAcc.name || inst.name || 'นายพงศธร โพธิแก้ว';
+    if (emailDisplay) emailDisplay.innerHTML = `อีเมลล็อกอิน: <strong>${adminAcc.email || 'krumum.piano@gmail.com'}</strong>`;
 
-    if (!isMentor && inst.name) {
-      document.getElementById('input-trainee-name').value = inst.name;
-    }
-    document.getElementById('modal-instructor').classList.add('active');
+    const newPassInput = document.getElementById('admin-new-password');
+    const confPassInput = document.getElementById('admin-confirm-password');
+    if (newPassInput) newPassInput.value = '';
+    if (confPassInput) confPassInput.value = '';
   },
 
-  closeInstructorModal() {
-    document.getElementById('modal-instructor').classList.remove('active');
-  },
+  handleAdminPasswordChange() {
+    const newPass = (document.getElementById('admin-new-password')?.value || '').trim();
+    const confPass = (document.getElementById('admin-confirm-password')?.value || '').trim();
 
-  selectInstructorRole(role) {
-    if (role === 'ครูประจำวิชา') {
-      const s = Store.getAppSettings ? Store.getAppSettings() : null;
-      const defaultTeacher = (s && s.teacherName) || 'คุณครูพงศธร โพธิแก้ว';
-      Store.setInstructor('ครูประจำวิชา', defaultTeacher);
+    if (!newPass) {
+      alert('⚠️ กรุณาระบุรหัสผ่านใหม่');
+      return;
+    }
+    if (newPass.length < 4) {
+      alert('⚠️ รหัสผ่านควรมีความยาวอย่างน้อย 4 ตัวอักษรขึ้นไป');
+      return;
+    }
+    if (newPass !== confPass) {
+      alert('⚠️ รหัสผ่านใหม่และรหัสยืนยันไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
+      return;
+    }
+
+    const res = Store.changeAdminPassword(newPass);
+    if (res.success) {
+      alert(`✅ ${res.message}\nรหัสผ่านใหม่ของคุณครูคือ: ${newPass}`);
+      this.renderAdminProfileTab();
     } else {
-      const traineeName = document.getElementById('input-trainee-name').value.trim() || 'คุณครูฝึกสอน';
-      Store.setInstructor('ครูฝึกสอน', traineeName);
-    }
-    this.updateInstructorBadge();
-    this.closeInstructorModal();
-    if (this.state.selectedClass) {
-      this.updateCockpitHeader();
+      alert(`❌ ${res.message}`);
     }
   },
 
+  renderTeachersTab() {
+    const list = Store.getTeachersList();
+    const currentInst = Store.getInstructor();
+    const container = document.getElementById('user-mgmt-teachers-list');
+    if (!container) return;
+
+    if (!list || list.length === 0) {
+      container.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 2rem;">ไม่พบข้อมูลครูผู้สอน</div>';
+      return;
+    }
+
+    container.innerHTML = list.map(t => {
+      const isActiveTeaching = t.activeTeaching || (currentInst && currentInst.name === t.name);
+      const isMentor = !!t.isAdmin || t.id === 'admin_primary';
+      const roleBadgeBg = isMentor ? '#2563eb' : (t.role.includes('ฝึกสอน') ? '#0284c7' : '#10b981');
+      const roleIcon = isMentor ? '👑' : (t.role.includes('ฝึกสอน') ? '🎓' : '🤝');
+
+      return `
+        <div class="student-card" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.15rem; border-radius: 12px; border: 1.5px solid ${isActiveTeaching ? '#2563eb' : '#e2e8f0'}; background: ${isActiveTeaching ? '#f0f7ff' : '#ffffff'}; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+          <div style="display: flex; align-items: center; gap: 0.85rem; flex: 1; min-width: 0;">
+            <div style="width: 44px; height: 44px; border-radius: 50%; background: ${roleBadgeBg}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+              ${roleIcon}
+            </div>
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: #0f172a;">${t.name}</span>
+                <span class="badge" style="background: ${roleBadgeBg}; color: #ffffff; padding: 2px 7px; border-radius: 9999px; font-size: 0.7rem; font-weight: 700;">
+                  ${t.role}
+                </span>
+                ${isActiveTeaching ? '<span class="badge" style="background: #16a34a; color: #ffffff; padding: 2px 7px; border-radius: 9999px; font-size: 0.7rem; font-weight: 700;">🎯 กำลังสอนคาบนี้</span>' : ''}
+              </div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <span>🏫 สังกัด: <strong>${t.institution || 'โรงเรียนพะเยาพิทยาคม'}</strong></span>
+                <span>📧 บัญชี: <strong>${t.email}</strong></span>
+                <span>🔑 รหัสผ่าน/PIN: <code>${t.secret || '****'}</code></span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0;">
+            ${!isActiveTeaching ? `
+              <button class="btn-nav-action" style="font-size: 0.8rem; padding: 0.35rem 0.75rem; background: #ffffff; border-color: #cbd5e1; font-weight: 600;" onclick="App.handleSelectActiveTeacher('${t.id}')" title="สลับให้ท่านนี้เป็นผู้ปฏิบัติการสอนในคาบนี้">
+                🎯 เลือกสอนคาบนี้
+              </button>
+            ` : `
+              <span style="font-size: 0.8rem; font-weight: 700; color: #16a34a; padding: 0.35rem 0.65rem;">✓ ผู้สอนหลักในคาบ</span>
+            `}
+            ${!isMentor ? `
+              <button class="btn-nav-action" style="color: #ef4444; border-color: #fecaca; background: #fff5f5; padding: 0.35rem 0.65rem;" onclick="App.handleDeleteTeacher('${t.id}')" title="ลบครูท่านนี้">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  toggleAddTeacherForm(show) {
+    const box = document.getElementById('add-teacher-form-box');
+    if (!box) return;
+    const isShowing = box.style.display !== 'none';
+    const targetShow = (show !== undefined) ? show : !isShowing;
+    box.style.display = targetShow ? 'block' : 'none';
+    if (targetShow) {
+      document.getElementById('new-teacher-name').value = '';
+      document.getElementById('new-teacher-email').value = '';
+      document.getElementById('new-teacher-secret').value = '1234';
+      document.getElementById('new-teacher-institution').value = 'มหาวิทยาลัยพะเยา';
+      document.getElementById('new-teacher-name').focus();
+    }
+  },
+
+  handleSaveNewTeacher() {
+    const name = (document.getElementById('new-teacher-name')?.value || '').trim();
+    const role = document.getElementById('new-teacher-role')?.value || 'ครูนักศึกษาฝึกสอน';
+    const institution = (document.getElementById('new-teacher-institution')?.value || '').trim();
+    const email = (document.getElementById('new-teacher-email')?.value || '').trim();
+    const secret = (document.getElementById('new-teacher-secret')?.value || '').trim();
+
+    if (!name) {
+      alert('⚠️ กรุณาระบุชื่อ-นามสกุลครูผู้สอน');
+      return;
+    }
+    if (!secret) {
+      alert('⚠️ กรุณากำหนดรหัสผ่านหรือ PIN เริ่มต้น');
+      return;
+    }
+
+    const res = Store.addTeacher({
+      name,
+      role,
+      institution: institution || 'มหาวิทยาลัยพะเยา',
+      email: email || `teacher_${Date.now().toString().slice(-4)}@ppk.ac.th`,
+      secret
+    });
+
+    if (res.success) {
+      alert(`✅ เพิ่ม ${name} (${role}) เข้าระบบเรียบร้อยแล้ว!`);
+      this.toggleAddTeacherForm(false);
+      this.renderTeachersTab();
+      this.updateInstructorBadge();
+    } else {
+      alert(`❌ ${res.message}`);
+    }
+  },
+
+  handleSelectActiveTeacher(id) {
+    const res = Store.setActiveTeacher(id);
+    if (res.success) {
+      this.updateInstructorBadge();
+      this.renderTeachersTab();
+      if (this.state.selectedClass) {
+        this.updateCockpitHeader();
+      }
+      alert(`🎯 สลับผู้ปฏิบัติการสอนเป็น: ${res.teacher.name} (${res.teacher.role}) เรียบร้อยแล้ว`);
+    } else {
+      alert(`❌ ${res.message}`);
+    }
+  },
+
+  handleDeleteTeacher(id) {
+    if (confirm('ต้องการลบข้อมูลครูผู้สอนท่านนี้ออกจากระบบหรือไม่?')) {
+      const res = Store.deleteTeacher(id);
+      if (res.success) {
+        this.renderTeachersTab();
+        this.updateInstructorBadge();
+        alert('🗑️ ลบข้อมูลเรียบร้อยแล้ว');
+      } else {
+        alert(`❌ ${res.message}`);
+      }
+    }
+  },
+
+  renderStudentPinsTab() {
+    const classSel = document.getElementById('user-pin-reset-class');
+    if (!classSel) return;
+    const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];
+    classSel.innerHTML = '';
+    classes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      classSel.appendChild(opt);
+    });
+    this.onUserPinClassChange(classes[0] || 'ม.1/1');
+  },
+
+  onUserPinClassChange(className) {
+    const studentSel = document.getElementById('user-pin-reset-student');
+    if (!studentSel) return;
+    studentSel.innerHTML = '';
+    const students = Store.getStudents(className);
+    const accounts = Store.getAllStudentAccounts();
+
+    students.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      const hasPin = !!(accounts[s.id] && (accounts[s.id].pinHash || accounts[s.id].pin));
+      opt.textContent = `เลขที่ ${s.rollNo} • ${s.id} - ${s.name} ${hasPin ? '🔒 (มี PIN แล้ว)' : '🔓 (ยังไม่ตั้ง)'}`;
+      studentSel.appendChild(opt);
+    });
+  },
+
+  handleUserResetStudentPin() {
+    const studentSel = document.getElementById('user-pin-reset-student');
+    if (!studentSel || !studentSel.value) {
+      alert('⚠️ กรุณาเลือกนักเรียน');
+      return;
+    }
+    const studentId = studentSel.value;
+    const sName = studentSel.options[studentSel.selectedIndex]?.text || studentId;
+
+    if (confirm(`ต้องการรีเซ็ตรหัส PIN ของ ${sName}\nกลับเป็นค่าเริ่มต้น (เลขประจำตัว 5 หลัก) หรือไม่?`)) {
+      if (Store.resetStudentPin(studentId)) {
+        alert(`✅ รีเซ็ต PIN เรียบร้อยแล้ว!\nนักเรียนสามารถล็อกอินด้วยเลขประจำตัว ${studentId} ได้ทันที`);
+        const classSel = document.getElementById('user-pin-reset-class');
+        if (classSel) this.onUserPinClassChange(classSel.value);
+      } else {
+        alert('❌ เกิดข้อผิดพลาดในการรีเซ็ต PIN');
+      }
+    }
+  },
+
+  // Fallback compatibility for previous openInstructorModal
+  openInstructorModal() {
+    this.openUserManagementModal('teachers');
+  },
+  closeInstructorModal() {
+    this.closeUserManagementModal();
+  },
+  selectInstructorRole(role) {
+    const list = Store.getTeachersList();
+    const target = list.find(t => t.role === role) || list[0];
+    if (target) {
+      this.handleSelectActiveTeacher(target.id);
+    }
+    this.closeInstructorModal();
+  },
   updateTraineeName(name) {
-    const inst = Store.getInstructor();
-    if (inst.role === 'ครูฝึกสอน') {
-      Store.setInstructor('ครูฝึกสอน', name);
+    const list = Store.getTeachersList();
+    const trainee = list.find(t => t.roleCategory === 'trainee');
+    if (trainee) {
+      Store.updateTeacher(trainee.id, { name });
       this.updateInstructorBadge();
     }
   },

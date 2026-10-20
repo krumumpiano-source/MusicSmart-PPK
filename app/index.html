@@ -73,7 +73,7 @@
       <div class="header-actions">
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
-          <div id="instructor-chip" class="teacher-chip" onclick="App.openInstructorModal()" title="คลิกเพื่อสลับผู้สอน (ครูประจำวิชา / ครูฝึกสอน)">
+          <div id="instructor-chip" class="teacher-chip" onclick="App.openUserManagementModal('teachers')" title="คลิกเพื่อจัดการบัญชีผู้ดูแล และสลับผู้สอน (ครูประจำวิชา / ครูฝึกสอน)">
             <span id="badge-instructor-role" class="teacher-role-tag">ครูประจำวิชา</span>
             <span id="badge-instructor-name" class="teacher-name-label">คุณครูพงศธร โพธิแก้ว</span>
           </div>
@@ -180,6 +180,13 @@
                     <div class="tool-text">
                       <div class="tool-name">จัดการรายวิชา</div>
                       <div class="tool-desc">ตั้งค่ารหัสวิชาและห้องเรียน</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" onclick="App.openUserManagementModal('admin'); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #eef2ff; color: #4338ca;">👤</span>
+                    <div class="tool-text">
+                      <div class="tool-name">บัญชีแอดมิน & จัดการผู้ใช้</div>
+                      <div class="tool-desc">เปลี่ยนรหัสผ่าน, เพิ่มครูฝึกสอน, รีเซ็ต PIN</div>
                     </div>
                   </button>
                   <button class="tools-item-btn" onclick="App.openSettingsModal(); App.closeToolsMenu();">
@@ -986,41 +993,193 @@
     </div>
   </div>
 
-  <!-- MODAL 2: Instructor Switcher -->
-  <div id="modal-instructor" class="modal-overlay">
-    <div class="modal-card" style="max-width: 480px;">
-      <div class="modal-header">
-        <h3 class="modal-title">สลับบทบาทผู้สอน</h3>
-        <button class="btn-close-modal" onclick="App.closeInstructorModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-          เลือกว่าใครเป็นผู้ปฏิบัติการสอนในคาบนี้ ข้อมูลการประเมินและบันทึกหลังสอนจะลงชื่อตามผู้ที่เลือก
-        </p>
-
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div id="opt-instructor-mentor" class="student-card" style="cursor: pointer; border-color: var(--ppk-navy);" onclick="App.selectInstructorRole('ครูประจำวิชา')">
-            <div>
-              <div style="font-weight: 700; color: var(--ppk-navy);">ครูประจำวิชา</div>
-              <div id="modal-instructor-mentor-name" style="font-size: 0.9rem; color: var(--text-primary);">คุณครูพงศธร โพธิแก้ว</div>
-            </div>
-            <span id="check-mentor" style="color: var(--ppk-navy); font-weight: 700;">✓</span>
+  <!-- MODAL 2: User & Admin Management Modal -->
+  <div id="modal-user-management" class="modal-overlay">
+    <div class="modal-card" style="max-width: 740px; width: 94vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); color: #ffffff;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            👤
           </div>
-
-          <div id="opt-instructor-trainee" class="student-card" style="cursor: pointer;" onclick="App.selectInstructorRole('ครูฝึกสอน')">
-            <div style="flex: 1;">
-              <div style="font-weight: 700; color: var(--ppk-sky);">ครูฝึกสอน</div>
-              <input type="text" id="input-trainee-name" class="form-input" style="margin-top: 0.35rem;" value="คุณครูฝึกสอน" onclick="event.stopPropagation()" onchange="App.updateTraineeName(this.value)">
+          <div>
+            <h3 class="modal-title" style="margin: 0; color: #ffffff; font-size: 1.12rem;">การจัดการผู้ใช้งานและบัญชีผู้ดูแล (User & Admin Management)</h3>
+            <div style="font-size: 0.76rem; color: #cbd5e1; margin-top: 2px;">
+              ตั้งค่าส่วนตัวแอดมิน • เปลี่ยนรหัสผ่าน • จัดการทีมครูผู้สอน/ครูฝึกสอน • บริหารจัดการ PIN นักเรียน
             </div>
-            <span id="check-trainee" style="color: var(--ppk-sky); font-weight: 700; display: none;">✓</span>
           </div>
         </div>
+        <button class="modal-close-btn" style="color: #ffffff;" onclick="App.closeUserManagementModal()">✕</button>
       </div>
-      <div class="modal-footer">
-        <button class="btn-nav-action primary" onclick="App.closeInstructorModal()">ตกลง</button>
+
+      <!-- Segmented Navigation Tabs -->
+      <div style="display: flex; gap: 0.5rem; padding: 0.75rem 1.25rem; background: #f8fafc; border-bottom: 1px solid #e2e8f0; overflow-x: auto;">
+        <button id="tab-btn-user-admin" class="role-pill-btn active" style="padding: 0.45rem 1rem; border-radius: 9999px; font-weight: 700; font-size: 0.85rem;" onclick="App.switchUserMgmtTab('admin')">
+          🔐 บัญชีแอดมิน & เปลี่ยนรหัสผ่าน
+        </button>
+        <button id="tab-btn-user-teachers" class="role-pill-btn" style="padding: 0.45rem 1rem; border-radius: 9999px; font-weight: 700; font-size: 0.85rem;" onclick="App.switchUserMgmtTab('teachers')">
+          👥 ทีมครูผู้สอน & ครูฝึกสอน
+        </button>
+        <button id="tab-btn-user-students" class="role-pill-btn" style="padding: 0.45rem 1rem; border-radius: 9999px; font-weight: 700; font-size: 0.85rem;" onclick="App.switchUserMgmtTab('students')">
+          🎓 บัญชีนักเรียน & รีเซ็ต PIN
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem 1.5rem; overflow-y: auto; max-height: calc(85vh - 130px);">
+        
+        <!-- PANE 1: ADMIN PROFILE & PASSWORD -->
+        <div id="user-pane-admin" class="user-mgmt-pane">
+          <div style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 12px; padding: 1.15rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #1e3a8a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; font-weight: 800; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                👑
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                  <span id="user-admin-name-display" style="font-size: 1.05rem; font-weight: 800; color: #0f172a;">นายพงศธร โพธิแก้ว</span>
+                  <span class="badge" style="background: #2563eb; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-size: 0.72rem; font-weight: 700;">ผู้ดูแลระบบสูงสุด (Super Admin)</span>
+                </div>
+                <div id="user-admin-email-display" style="font-size: 0.82rem; color: #475569; margin-top: 2px;">
+                  อีเมลล็อกอิน: <strong>krumum.piano@gmail.com</strong>
+                </div>
+              </div>
+            </div>
+            <div style="text-align: right; font-size: 0.75rem; color: #059669; font-weight: 600; background: #ffffff; padding: 4px 10px; border-radius: 8px; border: 1px solid #d1fae5;">
+              🟢 สิทธิ์แอดมินเปิดใช้งานสมบูรณ์
+            </div>
+          </div>
+
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🔑</span> เปลี่ยนรหัสผ่าน / PIN บัญชีแอดมิน
+            </h4>
+            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">
+              กำหนดรหัสผ่านใหม่สำหรับอีเมล <code>krumum.piano@gmail.com</code> (ตั้งเป็นตัวอักษรหรือตัวเลข PIN ได้ตามสะดวก)
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1rem;">
+              <div>
+                <label class="form-label" style="font-weight: 700;">รหัสผ่านใหม่ (New Password):</label>
+                <input type="text" id="admin-new-password" class="form-input" placeholder="กรอกรหัสผ่านใหม่..." style="font-size: 0.95rem;">
+              </div>
+              <div>
+                <label class="form-label" style="font-weight: 700;">ยืนยันรหัสผ่านใหม่อีกครั้ง:</label>
+                <input type="text" id="admin-confirm-password" class="form-input" placeholder="พิมพ์ซ้ำเพื่อยืนยัน..." style="font-size: 0.95rem;">
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+              <button class="btn-nav-action primary" onclick="App.handleAdminPasswordChange()" style="background: #2563eb; padding: 0.5rem 1.25rem; font-weight: 700;">
+                💾 บันทึกรหัสผ่านใหม่
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANE 2: TEACHING TEAM & TRAINEES -->
+        <div id="user-pane-teachers" class="user-mgmt-pane" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="margin: 0; font-size: 0.98rem; font-weight: 700; color: #0f172a;">รายชื่อทีมครูผู้สอนและนักศึกษาฝึกสอน</h4>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                สามารถเพิ่มครูร่วมสอน หรือครูฝึกสอน เพื่อให้มีบัญชีล็อกอินและสลับการปฏิบัติการสอนในคาบได้
+              </div>
+            </div>
+            <button id="btn-toggle-add-teacher" class="btn-nav-action primary" style="background: #10b981; border-color: #10b981; font-weight: 700;" onclick="App.toggleAddTeacherForm()">
+              ➕ เพิ่มครูร่วมสอน / ครูฝึกสอน
+            </button>
+          </div>
+
+          <!-- Add / Edit Teacher Inline Form -->
+          <div id="add-teacher-form-box" style="display: none; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 1.15rem; margin-bottom: 1.25rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="font-weight: 700; font-size: 0.92rem; color: #1e3a8a; margin-bottom: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+              <span>📝 แบบฟอร์มเพิ่มครูร่วมสอน / นักศึกษาฝึกสอน</span>
+              <button style="border: none; background: transparent; cursor: pointer; color: #64748b;" onclick="App.toggleAddTeacherForm(false)">✕ ปิด</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div>
+                <label class="form-label">ชื่อ-นามสกุลครู:</label>
+                <input type="text" id="new-teacher-name" class="form-input" placeholder="เช่น นายสมชาย ใจดี">
+              </div>
+              <div>
+                <label class="form-label">บทบาท / ตำแหน่ง:</label>
+                <select id="new-teacher-role" class="form-select">
+                  <option value="ครูนักศึกษาฝึกสอน">🎓 ครูนักศึกษาฝึกสอน (ฝึกประสบการณ์วิชาชีพ)</option>
+                  <option value="ครูร่วมสอน">🤝 ครูร่วมสอน (Co-Teacher)</option>
+                  <option value="ครูผู้ช่วย">🧑‍🏫 ครูผู้ช่วย / วิทยากรพิเศษ</option>
+                  <option value="ครูประจำวิชา">📘 ครูประจำวิชา</option>
+                </select>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.85rem;">
+              <div>
+                <label class="form-label">สังกัด / มหาวิทยาลัย:</label>
+                <input type="text" id="new-teacher-institution" class="form-input" placeholder="เช่น มหาวิทยาลัยพะเยา" value="มหาวิทยาลัยพะเยา">
+              </div>
+              <div>
+                <label class="form-label">อีเมลหรือ Username ล็อกอิน:</label>
+                <input type="text" id="new-teacher-email" class="form-input" placeholder="เช่น trainee1@ppk.ac.th">
+              </div>
+              <div>
+                <label class="form-label">รหัสผ่าน / PIN เริ่มต้น:</label>
+                <input type="text" id="new-teacher-secret" class="form-input" placeholder="เช่น 1234" value="1234">
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+              <button class="btn-nav-action" onclick="App.toggleAddTeacherForm(false)">ยกเลิก</button>
+              <button class="btn-nav-action primary" onclick="App.handleSaveNewTeacher()">💾 บันทึกข้อมูลครู</button>
+            </div>
+          </div>
+
+          <!-- Teachers Cards Container -->
+          <div id="user-mgmt-teachers-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Dynamically Rendered by App.renderTeachersTab() -->
+          </div>
+        </div>
+
+        <!-- PANE 3: STUDENT PIN RESET -->
+        <div id="user-pane-students" class="user-mgmt-pane" style="display: none;">
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🔑</span> จัดการและรีเซ็ตรหัส PIN นักเรียน
+            </h4>
+            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">
+              สำหรับอำนวยความสะดวกเมื่อนักเรียนลืมรหัส PIN ประจำตัว หรือเริ่มต้นภาคเรียนใหม่
+            </p>
+
+            <div style="display: grid; grid-template-columns: 120px 1fr auto; gap: 0.75rem; align-items: end; margin-bottom: 1.25rem;">
+              <div>
+                <label class="form-label">เลือกห้องเรียน:</label>
+                <select id="user-pin-reset-class" class="form-select" onchange="App.onUserPinClassChange(this.value)">
+                  <!-- Injected dynamically -->
+                </select>
+              </div>
+              <div>
+                <label class="form-label">เลือกนักเรียน:</label>
+                <select id="user-pin-reset-student" class="form-select">
+                  <!-- Injected dynamically -->
+                </select>
+              </div>
+              <button class="btn-nav-action" style="background: #fff1f2; color: #e11d48; border-color: #fecdd3; font-weight: 700; height: 38px;" onclick="App.handleUserResetStudentPin()">
+                🔄 รีเซ็ต PIN เป็นค่าเริ่มต้น
+              </button>
+            </div>
+
+            <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 0.75rem 1rem; border-radius: 0 8px 8px 0; font-size: 0.8rem; color: #475569;">
+              ℹ️ <strong>หมายเหตุ:</strong> เมื่อรีเซ็ต PIN แล้ว นักเรียนจะสามารถเข้าสู่ระบบด้วยเลขประจำตัวนักเรียน 5 หลักตามปกติ และระบบจะให้นักเรียนกำหนด PIN 6 หลักใหม่อีกครั้ง
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="background: #ffffff; justify-content: flex-end;">
+        <button class="btn-nav-action primary" onclick="App.closeUserManagementModal()">ปิดหน้าต่าง</button>
       </div>
     </div>
   </div>
+
+  <!-- Fallback Alias for Instructor Modal -->
+  <div id="modal-instructor" style="display: none;"></div>
 
   <!-- MODAL 3: Weekly Timetable Modal (10 Periods) -->
   <div id="modal-timetable" class="modal-overlay">
@@ -2116,40 +2275,18 @@
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 2px dashed #e2e8f0;">
-          <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
-            <span>🔐</span> บัญชีเข้าสู่ระบบของครูผู้สอน (Teacher Credentials)
-          </h4>
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
-            <div>
-              <label class="form-label">อีเมลครูผู้สอนสำหรับล็อกอิน:</label>
-              <input type="email" id="setting-teacher-email" class="form-input" placeholder="เช่น krumum.piano@gmail.com">
+        <div style="margin-top: 1.5rem; padding: 1.15rem; background: #eef2ff; border: 1.5px solid #c7d2fe; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <div style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem; display: flex; align-items: center; gap: 0.35rem;">
+              <span>👤</span> การจัดการบัญชีผู้ดูแล & ทีมผู้สอน
             </div>
-            <div>
-              <label class="form-label">รหัสผ่าน / PIN ของครู:</label>
-              <input type="text" id="setting-teacher-secret" class="form-input" placeholder="เช่น ppk1234">
+            <div style="font-size: 0.8rem; color: #4338ca; margin-top: 2px;">
+              ต้องการเปลี่ยนรหัสผ่านแอดมิน, เพิ่มครูฝึกสอน/ครูร่วมสอน หรือรีเซ็ต PIN นักเรียน?
             </div>
           </div>
-          <div style="font-size: 0.78rem; color: #64748b;">
-            * สามารถกำหนดเป็นรหัสผ่านตัวอักษร หรือรหัส PIN ตัวเลขตามที่ครูสะดวก
-          </div>
-        </div>
-
-        <div style="margin-top: 1.25rem; padding: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h4 style="font-size: 0.92rem; font-weight: 700; color: #334155; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.35rem;">
-            <span>🔑</span> เครื่องมือรีเซ็ตรหัส PIN 6 หลักของนักเรียน (กรณีนักเรียนลืม)
-          </h4>
-          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <select id="setting-pin-reset-class" class="form-select" style="max-width: 110px;" onchange="App.onPinResetClassChange(this.value)">
-              <!-- classes -->
-            </select>
-            <select id="setting-pin-reset-student" class="form-select" style="flex: 1; min-width: 180px;">
-              <!-- students -->
-            </select>
-            <button class="btn-nav-action" style="background: #fff1f2; color: #e11d48; border-color: #fecdd3; font-weight: 600;" onclick="App.handleResetStudentPinClick()">
-              รีเซ็ต PIN นักเรียน
-            </button>
-          </div>
+          <button class="btn-nav-action primary" style="background: #4338ca; border-color: #4338ca; font-weight: 700;" onclick="App.closeSettingsModal(); App.openUserManagementModal('admin');">
+            เปิดหน้าต่างจัดการผู้ใช้ ➔
+          </button>
         </div>
       </div>
 

@@ -16,7 +16,8 @@ const STORAGE_KEYS = {
   ACTIVE_ROLE: 'ppk_active_user_role',
   AUTH_CURRENT_USER: 'ppk_auth_current_user',
   STUDENT_ACCOUNTS: 'ppk_student_accounts',
-  TEACHER_ACCOUNT: 'ppk_teacher_account'
+  TEACHER_ACCOUNT: 'ppk_teacher_account',
+  TEACHERS_LIST: 'ppk_teachers_list'
 };
 
 const DEFAULT_TEACHER_ACCOUNT = {
@@ -1184,9 +1185,212 @@ const Store = {
       updatedAt: new Date().toISOString()
     };
     if (this.save(STORAGE_KEYS.TEACHER_ACCOUNT, updated)) {
+      try {
+        const teachers = this.getTeachersList();
+        const adminIdx = teachers.findIndex(t => t.isAdmin || t.id === 'admin_primary');
+        if (adminIdx !== -1) {
+          teachers[adminIdx].email = updated.email;
+          teachers[adminIdx].name = updated.name;
+          if (rawSecret) {
+            teachers[adminIdx].secret = rawSecret;
+            teachers[adminIdx].secretHash = secretHash;
+          }
+          this.saveTeachersList(teachers);
+        }
+      } catch (e) {}
       return updated;
     }
     return null;
+  },
+
+  changeAdminPassword(newSecret) {
+    if (!newSecret || !String(newSecret).trim()) {
+      return { success: false, message: 'กรุณาระบุรหัสผ่านใหม่' };
+    }
+    const cleanSecret = String(newSecret).trim();
+    const adminAcc = this.getTeacherAccount();
+    const updated = this.saveTeacherAccount({
+      ...adminAcc,
+      secret: cleanSecret
+    });
+    if (updated) {
+      return { success: true, message: 'เปลี่ยนรหัสผ่านแอดมินเรียบร้อยแล้ว' };
+    }
+    return { success: false, message: 'ไม่สามารถบันทึกรหัสผ่านใหม่ได้' };
+  },
+
+  // --- Teaching Team & Co-Teachers (ครูร่วมสอน & ครูฝึกสอน) ---
+  getTeachersList() {
+    let list = this.load(STORAGE_KEYS.TEACHERS_LIST, null);
+    const adminAcc = this.getTeacherAccount();
+    const currentInst = this.getInstructor();
+
+    if (!list || !Array.isArray(list) || list.length === 0) {
+      list = [
+        {
+          id: 'admin_primary',
+          name: adminAcc.name || currentInst.name || 'นายพงศธร โพธิแก้ว',
+          email: adminAcc.email || 'krumum.piano@gmail.com',
+          role: 'ครูประจำวิชา (แอดมิน)',
+          roleCategory: 'mentor',
+          isAdmin: true,
+          secret: adminAcc.secret || 'ppk1234',
+          secretHash: adminAcc.secretHash || this.hashSecret(adminAcc.secret || 'ppk1234', 'teacher'),
+          institution: 'โรงเรียนพะเยาพิทยาคม',
+          activeTeaching: true,
+          note: 'ครูผู้สอนหลัก / ผู้ดูแลระบบ'
+        },
+        {
+          id: 'trainee_default',
+          name: 'คุณครูฝึกสอน',
+          email: 'trainee@ppk.ac.th',
+          role: 'ครูนักศึกษาฝึกสอน',
+          roleCategory: 'trainee',
+          isAdmin: false,
+          secret: '1234',
+          secretHash: this.hashSecret('1234', 'teacher'),
+          institution: 'มหาวิทยาลัยพะเยา',
+          activeTeaching: false,
+          note: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู'
+        }
+      ];
+      this.saveTeachersList(list);
+    } else {
+      const adminItem = list.find(t => t.isAdmin || t.id === 'admin_primary');
+      if (adminItem) {
+        let changed = false;
+        if (adminAcc.email && adminItem.email !== adminAcc.email) {
+          adminItem.email = adminAcc.email;
+          changed = true;
+        }
+        if (adminAcc.name && adminItem.name !== adminAcc.name) {
+          adminItem.name = adminAcc.name;
+          changed = true;
+        }
+        if (adminAcc.secret && adminItem.secret !== adminAcc.secret) {
+          adminItem.secret = adminAcc.secret;
+          adminItem.secretHash = adminAcc.secretHash || this.hashSecret(adminAcc.secret, 'teacher');
+          changed = true;
+        }
+        if (changed) this.saveTeachersList(list);
+      }
+    }
+    return list;
+  },
+
+  saveTeachersList(list) {
+    return this.save(STORAGE_KEYS.TEACHERS_LIST, list);
+  },
+
+  addTeacher(data) {
+    const list = this.getTeachersList();
+    const cleanName = (data.name || '').trim();
+    if (!cleanName) return { success: false, message: 'กรุณาระบุชื่อ-นามสกุลครูผู้สอน' };
+
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    if (cleanEmail && list.some(t => t.email && t.email.toLowerCase() === cleanEmail)) {
+      return { success: false, message: 'อีเมลหรือชื่อผู้ใช้นี้มีในระบบแล้ว' };
+    }
+
+    const cleanSecret = (data.secret || '1234').trim();
+    const newTeacher = {
+      id: 'teacher_' + Date.now(),
+      name: cleanName,
+      email: cleanEmail || ('teacher_' + Date.now().toString().slice(-4) + '@ppk.ac.th'),
+      role: data.role || 'ครูนักศึกษาฝึกสอน',
+      roleCategory: data.roleCategory || (data.role && data.role.includes('ฝึกสอน') ? 'trainee' : 'co_teacher'),
+      isAdmin: false,
+      secret: cleanSecret,
+      secretHash: this.hashSecret(cleanSecret, 'teacher'),
+      institution: (data.institution || 'โรงเรียนพะเยาพิทยาคม').trim(),
+      activeTeaching: !!data.activeTeaching,
+      note: (data.note || '').trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    if (newTeacher.activeTeaching) {
+      list.forEach(t => t.activeTeaching = false);
+      this.setInstructor(newTeacher.role, newTeacher.name);
+    }
+
+    list.push(newTeacher);
+    this.saveTeachersList(list);
+    return { success: true, teacher: newTeacher };
+  },
+
+  updateTeacher(id, updateData) {
+    const list = this.getTeachersList();
+    const idx = list.findIndex(t => t.id === id);
+    if (idx === -1) return { success: false, message: 'ไม่พบข้อมูลครูผู้สอน' };
+
+    const current = list[idx];
+    const rawSecret = updateData.secret !== undefined ? String(updateData.secret).trim() : '';
+    let secretHash = current.secretHash;
+    if (rawSecret && rawSecret !== current.secret) {
+      secretHash = this.hashSecret(rawSecret, 'teacher');
+    }
+
+    const updated = {
+      ...current,
+      ...updateData,
+      secret: rawSecret || current.secret,
+      secretHash: secretHash,
+      updatedAt: new Date().toISOString()
+    };
+
+    list[idx] = updated;
+
+    if (updated.activeTeaching) {
+      list.forEach((t, i) => { if (i !== idx) t.activeTeaching = false; });
+      this.setInstructor(updated.role, updated.name);
+    }
+
+    if (updated.isAdmin || updated.id === 'admin_primary') {
+      const adminAcc = this.getTeacherAccount();
+      this.save(STORAGE_KEYS.TEACHER_ACCOUNT, {
+        ...adminAcc,
+        name: updated.name,
+        email: updated.email,
+        secret: updated.secret,
+        secretHash: updated.secretHash,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    this.saveTeachersList(list);
+    return { success: true, teacher: updated };
+  },
+
+  deleteTeacher(id) {
+    const list = this.getTeachersList();
+    const target = list.find(t => t.id === id);
+    if (!target) return { success: false, message: 'ไม่พบข้อมูลครูผู้สอน' };
+    if (target.isAdmin || target.id === 'admin_primary') {
+      return { success: false, message: 'ไม่สามารถลบบัญชีผู้ดูแลระบบหลัก (Admin) ได้' };
+    }
+
+    const filtered = list.filter(t => t.id !== id);
+    if (target.activeTeaching) {
+      const admin = filtered.find(t => t.isAdmin) || filtered[0];
+      if (admin) {
+        admin.activeTeaching = true;
+        this.setInstructor(admin.role, admin.name);
+      }
+    }
+
+    this.saveTeachersList(filtered);
+    return { success: true };
+  },
+
+  setActiveTeacher(id) {
+    const list = this.getTeachersList();
+    const target = list.find(t => t.id === id);
+    if (!target) return { success: false, message: 'ไม่พบครูผู้สอนที่เลือก' };
+
+    list.forEach(t => t.activeTeaching = (t.id === id));
+    this.saveTeachersList(list);
+    this.setInstructor(target.role, target.name);
+    return { success: true, teacher: target };
   },
 
   verifyTeacherLogin(email, secret) {
@@ -1195,19 +1399,48 @@ const Store = {
       return { success: false, message: rate.message };
     }
 
-    const acc = this.getTeacherAccount();
-    const inputEmail = (email || '').trim().toLowerCase();
-    const targetEmail = (acc.email || '').trim().toLowerCase();
+    const teachers = this.getTeachersList();
+    const inputKey = (email || '').trim().toLowerCase();
     const inputSecret = (secret || '').trim();
     const inputHash = this.hashSecret(inputSecret, 'teacher');
-    const targetHash = acc.secretHash || this.hashSecret(String(acc.secret || '').trim(), 'teacher');
 
-    if (inputEmail === targetEmail && (inputHash === targetHash || inputSecret === String(acc.secret).trim())) {
+    const match = teachers.find(t => {
+      const targetEmail = (t.email || '').trim().toLowerCase();
+      const targetName = (t.name || '').trim().toLowerCase();
+      const targetId = (t.id || '').trim().toLowerCase();
+      const isIdentifierMatch = (inputKey === targetEmail || inputKey === targetName || inputKey === targetId);
+      if (!isIdentifierMatch) return false;
+
+      const targetHash = t.secretHash || this.hashSecret(String(t.secret || '').trim(), 'teacher');
+      return (inputHash === targetHash || inputSecret === String(t.secret).trim());
+    });
+
+    if (match) {
+      this.recordLoginAttempt('teacher_login', true);
+      this.setActiveTeacher(match.id);
+      const user = {
+        role: 'teacher',
+        email: match.email,
+        name: match.name,
+        teacherId: match.id,
+        teacherRole: match.role,
+        isAdmin: !!match.isAdmin,
+        loggedInAt: new Date().toISOString()
+      };
+      this.setCurrentUser(user);
+      return { success: true, user };
+    }
+
+    const acc = this.getTeacherAccount();
+    const targetEmail = (acc.email || '').trim().toLowerCase();
+    const targetHash = acc.secretHash || this.hashSecret(String(acc.secret || '').trim(), 'teacher');
+    if (inputKey === targetEmail && (inputHash === targetHash || inputSecret === String(acc.secret).trim())) {
       this.recordLoginAttempt('teacher_login', true);
       const user = {
         role: 'teacher',
         email: acc.email,
         name: acc.name,
+        isAdmin: true,
         loggedInAt: new Date().toISOString()
       };
       this.setCurrentUser(user);
@@ -1215,7 +1448,7 @@ const Store = {
     }
 
     this.recordLoginAttempt('teacher_login', false);
-    return { success: false, message: 'อีเมลหรือรหัสผ่าน/PIN ของครูไม่ถูกต้อง' };
+    return { success: false, message: 'อีเมล/ชื่อผู้ใช้ หรือรหัสผ่าน/PIN ของครูไม่ถูกต้อง' };
   },
 
   getAllStudentAccounts() {
