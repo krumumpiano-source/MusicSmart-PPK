@@ -28,7 +28,7 @@ const FeldmanCriticism = {
     }
 
     this.activePeriod = period || 17;
-    this.activeStudentId = studentId || '35994';
+    this.activeStudentId = studentId || (typeof Store !== 'undefined' && Store.getCurrentUser() && Store.getCurrentUser().studentId) || '';
 
     modal.classList.add('active');
     this.loadFormData();

@@ -21,38 +21,7 @@ const STORAGE_KEYS = {
   SCHEDULE_ASSIGNMENTS: 'ppk_schedule_assignments'
 };
 
-const DEFAULT_SCHEDULE_ASSIGNMENTS = {
-  "อังคาร-5": {
-    day: "อังคาร",
-    periodNo: 5,
-    className: "ม.1/1",
-    teacherId: "teacher_kouocking",
-    teacherName: "นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)",
-    assignRole: "trainee",
-    mentorName: "นายพงศธร โพธิแก้ว",
-    mentorAdvice: "เน้นการสร้างปฏิสัมพันธ์เชิงบวกและให้กำลังใจนักเรียนในการเทียบเสียงคาลิมบ้า 17 คีย์ ตรวจสอบ Dead Tines คีย์กลาง (C4-E4) ให้เด็กทุกคนอย่างทั่วถึง",
-    teachingMethod: "T-PACE (Trigger -> Practice) ร่วมกับการสาธิตแบบช้าๆ และให้นักเรียนจับคู่ช่วยกันฟังเสียง (Peer Tuning)",
-    focusPoints: "การใช้ไมโครโฟนและน้ำเสียงกระตุ้นความสนใจ, การควบคุมเวลา 50 นาทีไม่ให้ยืดเยื้อ, การเดินตรวจรายแถว",
-    traineeFeedback: "",
-    updatedAt: "2026-10-20T08:30:00.000Z",
-    updatedBy: "นายพงศธร โพธิแก้ว"
-  },
-  "พฤหัสบดี-6": {
-    day: "พฤหัสบดี",
-    periodNo: 6,
-    className: "ม.1/5",
-    teacherId: "teacher_kouocking",
-    teacherName: "นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)",
-    assignRole: "co-teach",
-    mentorName: "นายพงศธร โพธิแก้ว",
-    mentorAdvice: "ร่วมสอน: ครูพี่เลี้ยงนำเข้าสู่บทเรียนโน้ตสากล 10 นาที จากนั้นให้นักศึกษาฝึกสอนนำสาธิตการเคาะจังหวะโน้ตตัวดำและตัวขาวบนโต๊ะเรียน",
-    teachingMethod: "Co-teaching (Station Teaching) สลับการบรรยายและฝึกปฏิบัติเป็นกลุ่มย่อย",
-    focusPoints: "การสังเกตท่าทางและบุคลิกภาพความเป็นครู, การให้สัญญาณมือเริ่มและหยุดเคาะจังหวะ",
-    traineeFeedback: "",
-    updatedAt: "2026-10-20T08:30:00.000Z",
-    updatedBy: "นายพงศธร โพธิแก้ว"
-  }
-};
+const DEFAULT_SCHEDULE_ASSIGNMENTS = {};
 
 const DEFAULT_TEACHER_ACCOUNT = {
   email: 'krumum.piano@gmail.com',
@@ -837,8 +806,23 @@ const Store = {
   getScheduleAssignments() {
     let assignments = this.load(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, null);
     if (!assignments || typeof assignments !== 'object') {
-      assignments = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE_ASSIGNMENTS));
+      assignments = {};
       this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+    } else {
+      let cleaned = false;
+      for (const key of Object.keys(assignments)) {
+        const item = assignments[key];
+        if (item && item.mentorAdvice && (
+          item.mentorAdvice.includes('ตรวจสอบ Dead Tines คีย์กลาง') ||
+          item.mentorAdvice.includes('ร่วมสอน: ครูพี่เลี้ยงนำเข้าสู่บทเรียนโน้ตสากล 10 นาที')
+        )) {
+          delete assignments[key];
+          cleaned = true;
+        }
+      }
+      if (cleaned) {
+        this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+      }
     }
     return assignments;
   },

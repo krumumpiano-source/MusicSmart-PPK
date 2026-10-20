@@ -136,7 +136,7 @@ const QuizEngine = {
     if (!studentId && typeof App !== 'undefined') {
       studentId = App.state.studentId;
     }
-    studentId = studentId || '35994';
+    studentId = studentId || (typeof Store !== 'undefined' && Store.getCurrentUser() && Store.getCurrentUser().studentId) || '';
 
     const unitData = QUIZZES_DATA.units.find(u => u.unit_no === parseInt(unitNo, 10));
     if (!unitData) {
