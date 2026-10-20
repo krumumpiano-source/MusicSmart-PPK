@@ -313,25 +313,78 @@ const Store = {
     return list;
   },
 
-  // --- Lessons Data (with O(1) Composite Key Index) ---
-  getLesson(grade, period) {
-    if (typeof LESSONS_DATA === 'undefined' || !LESSONS_DATA[grade]) return null;
-    if (!this._lessonIndex) {
-      this._lessonIndex = new Map();
-      for (const g of Object.keys(LESSONS_DATA)) {
-        (LESSONS_DATA[g] || []).forEach(l => {
-          this._lessonIndex.set(`${g}_${l.period}`, l);
-        });
+  // --- Lessons Data with Overlay Customization Layer ---
+  getCustomLessons(grade = 'M1') {
+    const all = this.load('ppk_custom_lessons', {}) || {};
+    return all[grade] || {};
+  },
+
+  saveCustomLesson(grade, period, customData) {
+    const all = this.load('ppk_custom_lessons', {}) || {};
+    if (!all[grade]) all[grade] = {};
+    const p = Number(period);
+    all[grade][p] = {
+      ...(all[grade][p] || {}),
+      ...customData,
+      updatedAt: new Date().toISOString(),
+      isCustomized: true
+    };
+    this.save('ppk_custom_lessons', all);
+    if (this._lessonIndex) this._lessonIndex.clear();
+
+    // Dual-Save hook to Google Sheets
+    if (typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncCurriculumLesson === 'function') {
+      try {
+        GoogleSheetSync.syncCurriculumLesson(grade, p, all[grade][p]);
+      } catch (e) {
+        console.warn('Sync custom lesson error:', e);
       }
     }
-    return this._lessonIndex.get(`${grade}_${Number(period)}`) || null;
+
+    return this.getLesson(grade, p);
+  },
+
+  resetCustomLesson(grade, period) {
+    const all = this.load('ppk_custom_lessons', {}) || {};
+    const p = Number(period);
+    if (all[grade] && all[grade][p]) {
+      delete all[grade][p];
+      this.save('ppk_custom_lessons', all);
+      if (this._lessonIndex) this._lessonIndex.clear();
+      return true;
+    }
+    return false;
+  },
+
+  resetAllCustomLessons() {
+    this.save('ppk_custom_lessons', {});
+    if (this._lessonIndex) this._lessonIndex.clear();
+    return true;
+  },
+
+  getLesson(grade, period) {
+    if (typeof LESSONS_DATA === 'undefined' || !LESSONS_DATA[grade]) return null;
+    const p = Number(period);
+    const base = (LESSONS_DATA[grade] || []).find(l => Number(l.period) === p);
+    if (!base) return null;
+
+    const custom = this.getCustomLessons(grade)[p];
+    if (!custom) return base;
+
+    return {
+      ...base,
+      ...custom,
+      kpa: { ...(base.kpa || {}), ...(custom.kpa || {}) },
+      steps: custom.steps || base.steps,
+      media: custom.media || base.media,
+      assessment: { ...(base.assessment || {}), ...(custom.assessment || {}) },
+      isCustomized: true
+    };
   },
 
   getAllLessons(grade = 'M1') {
-    if (typeof LESSONS_DATA !== 'undefined' && LESSONS_DATA[grade]) {
-      return LESSONS_DATA[grade];
-    }
-    return [];
+    if (typeof LESSONS_DATA === 'undefined' || !LESSONS_DATA[grade]) return [];
+    return (LESSONS_DATA[grade] || []).map(l => this.getLesson(grade, l.period));
   },
 
   // --- Class Progress Tracking ---

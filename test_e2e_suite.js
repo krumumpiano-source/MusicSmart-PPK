@@ -337,6 +337,42 @@ GoogleSheetSync.saveConfig({ webAppUrl: '', syncCount: 0 });
 assert(GoogleSheetSync.getOutbox().length === 0, 'GoogleSheetSync outbox cleanly purged after test');
 
 // ----------------------------------------------------
+// 8.5 Test Customizable Curriculum & Custom Lesson Store API
+// ----------------------------------------------------
+console.log('\n[Phase 7.5] Testing Customizable Curriculum & Custom Lesson Store API...');
+
+const testCustomLesson = {
+  topic: 'บทเรียนทดสอบการปรับแต่งพิเศษ (Unit Test)',
+  unit_name: 'หน่วยทดสอบพิเศษ',
+  kpa: { k: 'ทดสอบความรู้ K พิเศษ', p: 'ทดสอบทักษะ P พิเศษ', a: 'ทดสอบเจตคติ A พิเศษ' },
+  duration_min: 55,
+  steps: [
+    { phase: 'ขั้นนำเข้าสู่บทเรียน', duration: 10, desc: 'นำเข้าสู่บทเรียนแบบทดสอบ' },
+    { phase: 'ขั้นสอน', duration: 25, desc: 'สอนเนื้อหา' },
+    { phase: 'ขั้นปฏิบัติ', duration: 15, desc: 'ปฏิบัติ' },
+    { phase: 'ขั้นสรุป', duration: 5, desc: 'สรุปผล' }
+  ],
+  media: [
+    { title: 'คลิปตัวอย่างการทดสอบ', type: 'video', url: 'https://youtube.com/watch?v=test' }
+  ],
+  mentor_tips: 'คำแนะนำการนิเทศทดสอบ'
+};
+
+Store.saveCustomLesson('M1', 1, testCustomLesson);
+const mergedLesson = Store.getLesson('M1', 1);
+assert(mergedLesson && mergedLesson.topic === 'บทเรียนทดสอบการปรับแต่งพิเศษ (Unit Test)', 'Store.saveCustomLesson overrides topic');
+assert(mergedLesson.isCustomized === true, 'Store.getLesson marks customized lesson with isCustomized=true');
+assert(mergedLesson.period === 1, 'Preserves original period number');
+assert(mergedLesson.steps && mergedLesson.steps.length === 4, 'Custom lesson steps replaced correctly');
+assert(mergedLesson.media && mergedLesson.media.length === 1, 'Custom lesson media replaced correctly');
+
+// Test Reset Single Lesson
+Store.resetCustomLesson('M1', 1);
+const restoredLesson = Store.getLesson('M1', 1);
+assert(restoredLesson && !restoredLesson.isCustomized, 'Store.resetCustomLesson restores official base lesson');
+assert(restoredLesson.topic !== 'บทเรียนทดสอบการปรับแต่งพิเศษ (Unit Test)', 'Restored lesson topic matches school standard');
+
+// ----------------------------------------------------
 // 9. Test Live HTTP Server & Index.html DOM Verification
 // ----------------------------------------------------
 console.log('\n[Phase 8] Testing Live HTTP Server & End-to-End HTML Delivery...');
