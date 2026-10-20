@@ -421,6 +421,11 @@
 
       <!-- TAB 1: Lesson Plan View -->
       <div id="tab-content-lesson">
+        <!-- Mentoring Guidance & Trainee Teaching Banner (shown when assigned or notes exist) -->
+        <div id="cockpit-mentoring-guidance-banner" style="display: none;" class="mentoring-guidance-card">
+          <!-- Injected dynamically by App.renderCockpitMentoringBanner() -->
+        </div>
+
         <div class="lesson-plan-card">
           <h3 id="lesson-topic" style="font-size: 1.2rem; font-weight: 700; color: var(--ppk-navy-dark); margin-bottom: 0.75rem;">
             หัวข้อบทเรียน
@@ -1872,7 +1877,10 @@
             </div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn-nav-action" style="background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; font-weight: 700;" onclick="App.openTeachingAssignmentModal()" title="มอบหมายคาบสอนให้กับนักศึกษาฝึกสอน และบันทึกคำแนะนำนิเทศการสอน">
+            🎓 มอบหมาย นศ.ฝึกสอน & นิเทศการสอน
+          </button>
           <button class="btn-nav-action" onclick="App.resetToOfficialTimetable()" title="คืนค่าตารางสอนทางการตามเอกสาร 2/2569">
             🔄 คืนค่าตารางทางการ
           </button>
@@ -1886,9 +1894,20 @@
         </div>
       </div>
       <div class="modal-body" id="timetable-modal-body">
-        <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; align-items: center;">
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.55rem 0.85rem; margin-bottom: 0.65rem; display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; align-items: center;">
           <span style="color: #92400e;"><strong>ช่วงพักเบรก:</strong> หลังคาบ 2 พัก 20 นาที (10.00 - 10.20 น.) • หลังคาบ 4 พัก 20 นาที (12.00 - 12.20 น.) • หลังคาบ 7 พัก 10 นาที (14.50 - 15.00 น.)</span>
           <span style="color: var(--ppk-navy);"><strong>ห้องเรียน:</strong> ทุกคาบสอนจัดการเรียนรู้อยู่ที่ห้อง <strong>อส.5</strong> (อาคารศิลปะ 5)</span>
+        </div>
+
+        <!-- Mentoring & Teaching Assignment Strip -->
+        <div id="timetable-mentoring-summary-strip" style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); padding: 0.5rem 0.85rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; font-size: 0.82rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <span style="font-weight: 700; color: #92400e;">💡 การมอบหมายสอน & นิเทศครูพี่เลี้ยง:</span>
+            <span id="tt-stat-mentor-count" style="color: #1e3a8a; font-weight: 600;">👨‍🏫 ครูประจำวิชาสอนหลัก</span>
+            <span id="tt-stat-trainee-count" style="background: #fef3c7; color: #b45309; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">🎓 มอบหมาย นศ.ฝึกสอน</span>
+            <span id="tt-stat-coteach-count" style="background: #e0e7ff; color: #3730a3; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">👥 ร่วมสอน</span>
+          </div>
+          <span style="font-size: 0.75rem; color: #78350f;">(💡 คลิกที่ช่องคาบสอนในตาราง เพื่อมอบหมายหรือใส่คำแนะนำ/วิธีสอนได้ทันที)</span>
         </div>
 
         <div style="overflow-x: auto;" id="timetable-table-container">
@@ -1905,6 +1924,151 @@
       <div class="modal-footer">
         <button class="btn-nav-action" onclick="App.closeTimetableModal()">ปิดหน้าต่าง</button>
         <button class="btn-nav-action primary" onclick="App.saveTimetableFromEditor()" id="btn-save-timetable">บันทึกตารางสอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Teaching Assignment & Mentor Pedagogical Guidance -->
+  <div id="modal-teaching-assignment" class="modal-overlay">
+    <div class="modal-card" style="max-width: 820px; width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #eff6ff 0%, #fdf2f8 100%);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="font-size: 1.8rem; background: #ffffff; border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+            📋
+          </div>
+          <div>
+            <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; color: #1e3a8a;">มอบหมายคาบสอน & คำแนะนำนิเทศจากครูพี่เลี้ยง</h3>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              ระบบประสานงานวิชาชีพครู • ครูประจำวิชา (ครูพี่เลี้ยง) & นักศึกษาฝึกประสบการณ์วิชาชีพ
+            </div>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="App.closeTeachingAssignmentModal()">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem; max-height: 75vh; overflow-y: auto;">
+        <!-- Slot Selector Bar -->
+        <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <label style="font-weight: 700; font-size: 0.85rem; color: var(--ppk-navy-dark);">เลือกคาบสอน:</label>
+            <select id="assign-select-day" class="form-select" style="width: 120px; font-weight: 600;" onchange="App.onAssignmentSlotChanged()">
+              <option value="จันทร์">วันจันทร์</option>
+              <option value="อังคาร">วันอังคาร</option>
+              <option value="พุธ">วันพุธ</option>
+              <option value="พฤหัสบดี">วันพฤหัสบดี</option>
+              <option value="ศุกร์">วันศุกร์</option>
+            </select>
+            <select id="assign-select-period" class="form-select" style="width: 110px; font-weight: 600;" onchange="App.onAssignmentSlotChanged()">
+              <!-- Period 1 - 10 options -->
+            </select>
+            <span id="assign-slot-meta-badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; font-size: 0.82rem; padding: 3px 10px; border-radius: 6px;">
+              ห้อง ม.1/1 • คาบ 5
+            </span>
+          </div>
+          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px;" onclick="App.jumpToAssignedCockpit()">
+            🚀 ไปยังห้องเรียน Cockpit
+          </button>
+        </div>
+
+        <!-- Section 1: การมอบหมายผู้สอน (Teacher Assignment) -->
+        <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+            <span>👨‍🏫</span> 1. การมอบหมายผู้สอนประจำคาบ
+          </h4>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+            <div>
+              <label for="assign-teacher-id" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                ครูผู้สอน / นศ.ฝึกสอน:
+              </label>
+              <select id="assign-teacher-id" class="form-select" style="width: 100%; font-weight: 600;">
+                <!-- Populated dynamically from Store.getTeachersList() -->
+              </select>
+            </div>
+
+            <div>
+              <label for="assign-role-type" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                รูปแบบการจัดการเรียนรู้:
+              </label>
+              <select id="assign-role-type" class="form-select" style="width: 100%; font-weight: 600;">
+                <option value="trainee">🎓 นศ.ฝึกสอน ปฏิบัติการสอนเดี่ยว (ครูพี่เลี้ยงสังเกตการณ์)</option>
+                <option value="co-teach">👥 ร่วมสอน (Co-teaching) ครูพี่เลี้ยงนำ - นศ.ฝึกสอนช่วยสาธิต/กลุ่ม</option>
+                <option value="mentor">👨‍🏫 ครูประจำวิชา (ครูพี่เลี้ยง) สอนหลัก</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: คำแนะนำและวิธีการสอนจากครูพี่เลี้ยง (Pedagogical Advice & Teaching Method) -->
+        <div style="background: #fdfaf6; border: 1px solid #fed7aa; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 0.75rem;">
+            <h4 style="margin: 0; font-size: 0.95rem; color: #9a3412; display: flex; align-items: center; gap: 0.4rem;">
+              <span>💡</span> 2. คำแนะนำและวิธีการสอนจากครูพี่เลี้ยง (สำหรับส่งต่อให้ นศ.ฝึกสอน)
+            </h4>
+            <span style="font-size: 0.72rem; color: #c2410c; background: #ffedd5; padding: 2px 7px; border-radius: 4px; font-weight: 700;">
+              ครูพี่เลี้ยง: นายพงศธร โพธิแก้ว
+            </span>
+          </div>
+
+          <!-- Advice Textarea -->
+          <div style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.35rem;">
+              <label for="assign-mentor-advice" style="font-size: 0.82rem; font-weight: 700; color: #7c2d12;">
+                คำแนะนำสำคัญ & จิตวิทยาชั้นเรียน (Mentor Advice):
+              </label>
+              <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                <button type="button" class="btn-preset-chip" onclick="App.appendAdvicePreset('เน้นการจับคู่เทียบเสียงคาลิมบ้า (Peer Tuning) และเดินตรวจเสียงบอดคีย์ C4-E4 ให้ทั่วถึง')">+ เสียงบอด/เทียบเสียง</button>
+                <button type="button" class="btn-preset-chip" onclick="App.appendAdvicePreset('ใช้การเสริมแรงทางบวก ชื่นชมนักเรียนที่กล้าเคาะจังหวะ ให้กำลังใจเด็กที่ไม่เคยเล่นดนตรี')">+ เสริมแรงบวก</button>
+                <button type="button" class="btn-preset-chip" onclick="App.appendAdvicePreset('ควบคุมเวลาแต่ละช่วงให้กระชับ ไม่ให้ช่วงบรรยายเกิน 10 นาที เน้นให้นักเรียนลงมือปฏิบัติ')">+ คุมเวลา 50 นาที</button>
+              </div>
+            </div>
+            <textarea id="assign-mentor-advice" class="form-input" rows="3" style="width: 100%; font-size: 0.85rem;" placeholder="ระบุคำแนะนำ ข้อควรระวัง หรือจุดเน้นสำหรับ นศ.ฝึกสอน ในคาบนี้..."></textarea>
+          </div>
+
+          <!-- Teaching Method & Steps Textarea -->
+          <div style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.35rem;">
+              <label for="assign-teaching-method" style="font-size: 0.82rem; font-weight: 700; color: #7c2d12;">
+                วิธีการและขั้นตอนการสอนที่แนะนำ (Pedagogical Strategy & Steps):
+              </label>
+              <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                <button type="button" class="btn-preset-chip" onclick="App.appendMethodPreset('T-PACE 4 ขั้น: (1) Trigger กระตุ้นหู 5 นาที -> (2) Practice ซ้อมเดี่ยว/คู่ 20 นาที -> (3) Assess ประเมินรูบริก 15 นาที -> (4) Consolidate สรุปสะท้อนคิด 10 นาที')">+ ขั้นตอน T-PACE</button>
+                <button type="button" class="btn-preset-chip" onclick="App.appendMethodPreset('สาธิตช้าๆ (Slow-Motion Modeling) ให้นักเรียนเลียนแบบทีละห้องเพลง แล้วจึงรวมท่อน')">+ สาธิตช้าๆ Modeling</button>
+                <button type="button" class="btn-preset-chip" onclick="App.appendMethodPreset('เพื่อนช่วยเพื่อน (Peer Coaching) ให้นักเรียนที่สอบผ่านแล้วจับคู่ช่วยเพื่อนที่ยังติดขัด')">+ เพื่อนช่วยเพื่อน</button>
+              </div>
+            </div>
+            <textarea id="assign-teaching-method" class="form-input" rows="3" style="width: 100%; font-size: 0.85rem;" placeholder="ระบุเทคนิคการสอน หรือขั้นตอนการจัดกิจกรรม 50 นาที..."></textarea>
+          </div>
+
+          <!-- Observation & Focus Points -->
+          <div>
+            <label for="assign-focus-points" style="display: block; font-size: 0.82rem; font-weight: 700; color: #7c2d12; margin-bottom: 0.35rem;">
+              จุดเน้นการสังเกต & เกณฑ์การนิเทศ (Observation Focus Points):
+            </label>
+            <input type="text" id="assign-focus-points" class="form-input" style="width: 100%; font-size: 0.85rem;" placeholder="เช่น การควบคุมน้ำเสียง/ไมโครโฟน, การใช้สื่อ Virtual Kalimba, การบันทึกเวลาเรียน">
+          </div>
+        </div>
+
+        <!-- Section 3: บันทึกสะท้อนคิดหลังสอนของ นศ.ฝึกสอน (Trainee Reflection & Feedback) -->
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
+          <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #166534; display: flex; align-items: center; gap: 0.4rem;">
+            <span>📝</span> 3. บันทึกสะท้อนคิดหลังสอนของ นศ.ฝึกสอน (ส่งกลับถึงครูพี่เลี้ยง)
+          </h4>
+          <textarea id="assign-trainee-feedback" class="form-input" rows="2" style="width: 100%; font-size: 0.85rem;" placeholder="นศ.ฝึกสอน สามารถพิมพ์บันทึกสิ่งที่ทำได้ดี ปัญหาที่พบ หรือขอคำแนะนำเพิ่มเติมจากครูพี่เลี้ยงได้ที่นี่..."></textarea>
+          <div style="font-size: 0.72rem; color: #15803d; margin-top: 3px;">
+            * เมื่อ นศ.ฝึกสอน บันทึกข้อความ ครูพี่เลี้ยงจะมองเห็นและสามารถตอบกลับข้อเสนอแนะได้ทันที
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn-nav-action" style="color: #dc2626; border-color: #fecaca; background: #fef2f2;" onclick="App.deleteCurrentAssignment()">
+          🗑️ ยกเลิกการมอบหมายคาบนี้
+        </button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn-nav-action" onclick="App.closeTeachingAssignmentModal()">ปิด</button>
+          <button class="btn-nav-action primary" onclick="App.saveCurrentAssignment()">💾 บันทึกการมอบหมาย & คำแนะนำ</button>
+        </div>
       </div>
     </div>
   </div>

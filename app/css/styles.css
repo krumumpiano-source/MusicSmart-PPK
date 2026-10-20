@@ -1585,6 +1585,75 @@ body.modal-open {
   line-height: 1.3;
 }
 
+/* Trainee & Mentoring Schedule Enhancements */
+.tt-badge-trainee {
+  display: inline-block;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+.tt-badge-coteach {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+.tt-cell-box.has-trainee {
+  background: #fffbeb;
+  border-radius: 6px;
+  padding: 3px 2px;
+  border: 1px dashed #f59e0b;
+}
+
+.tt-cell-box.has-coteach {
+  background: #f5f3ff;
+  border-radius: 6px;
+  padding: 3px 2px;
+  border: 1px dashed #8b5cf6;
+}
+
+.btn-preset-chip {
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset-chip:hover {
+  background: #fdba74;
+  color: #7c2d12;
+  transform: translateY(-1px);
+}
+
+.mentoring-guidance-card {
+  background: linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%);
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
 /* ==========================================================================
    Student Portal (Role-based Student View)
    ========================================================================== */

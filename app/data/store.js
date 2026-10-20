@@ -17,7 +17,41 @@ const STORAGE_KEYS = {
   AUTH_CURRENT_USER: 'ppk_auth_current_user',
   STUDENT_ACCOUNTS: 'ppk_student_accounts',
   TEACHER_ACCOUNT: 'ppk_teacher_account',
-  TEACHERS_LIST: 'ppk_teachers_list'
+  TEACHERS_LIST: 'ppk_teachers_list',
+  SCHEDULE_ASSIGNMENTS: 'ppk_schedule_assignments'
+};
+
+const DEFAULT_SCHEDULE_ASSIGNMENTS = {
+  "อังคาร-5": {
+    day: "อังคาร",
+    periodNo: 5,
+    className: "ม.1/1",
+    teacherId: "teacher_kouocking",
+    teacherName: "นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)",
+    assignRole: "trainee",
+    mentorName: "นายพงศธร โพธิแก้ว",
+    mentorAdvice: "เน้นการสร้างปฏิสัมพันธ์เชิงบวกและให้กำลังใจนักเรียนในการเทียบเสียงคาลิมบ้า 17 คีย์ ตรวจสอบ Dead Tines คีย์กลาง (C4-E4) ให้เด็กทุกคนอย่างทั่วถึง",
+    teachingMethod: "T-PACE (Trigger -> Practice) ร่วมกับการสาธิตแบบช้าๆ และให้นักเรียนจับคู่ช่วยกันฟังเสียง (Peer Tuning)",
+    focusPoints: "การใช้ไมโครโฟนและน้ำเสียงกระตุ้นความสนใจ, การควบคุมเวลา 50 นาทีไม่ให้ยืดเยื้อ, การเดินตรวจรายแถว",
+    traineeFeedback: "",
+    updatedAt: "2026-10-20T08:30:00.000Z",
+    updatedBy: "นายพงศธร โพธิแก้ว"
+  },
+  "พฤหัสบดี-6": {
+    day: "พฤหัสบดี",
+    periodNo: 6,
+    className: "ม.1/5",
+    teacherId: "teacher_kouocking",
+    teacherName: "นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)",
+    assignRole: "co-teach",
+    mentorName: "นายพงศธร โพธิแก้ว",
+    mentorAdvice: "ร่วมสอน: ครูพี่เลี้ยงนำเข้าสู่บทเรียนโน้ตสากล 10 นาที จากนั้นให้นักศึกษาฝึกสอนนำสาธิตการเคาะจังหวะโน้ตตัวดำและตัวขาวบนโต๊ะเรียน",
+    teachingMethod: "Co-teaching (Station Teaching) สลับการบรรยายและฝึกปฏิบัติเป็นกลุ่มย่อย",
+    focusPoints: "การสังเกตท่าทางและบุคลิกภาพความเป็นครู, การให้สัญญาณมือเริ่มและหยุดเคาะจังหวะ",
+    traineeFeedback: "",
+    updatedAt: "2026-10-20T08:30:00.000Z",
+    updatedBy: "นายพงศธร โพธิแก้ว"
+  }
 };
 
 const DEFAULT_TEACHER_ACCOUNT = {
@@ -799,10 +833,66 @@ const Store = {
     return days[dayIdx] || "จันทร์";
   },
 
+  // --- Timetable Assignments & Trainee Mentoring ---
+  getScheduleAssignments() {
+    let assignments = this.load(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, null);
+    if (!assignments || typeof assignments !== 'object') {
+      assignments = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE_ASSIGNMENTS));
+      this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+    }
+    return assignments;
+  },
+
+  getScheduleAssignment(day, periodNo) {
+    const assignments = this.getScheduleAssignments();
+    const key = `${day}-${periodNo}`;
+    return assignments[key] || null;
+  },
+
+  saveScheduleAssignment(day, periodNo, data) {
+    const assignments = this.getScheduleAssignments();
+    const key = `${day}-${periodNo}`;
+    const existing = assignments[key] || {};
+    assignments[key] = {
+      ...existing,
+      ...data,
+      day: day,
+      periodNo: parseInt(periodNo, 10),
+      updatedAt: new Date().toISOString()
+    };
+    this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+    return assignments[key];
+  },
+
+  deleteScheduleAssignment(day, periodNo) {
+    const assignments = this.getScheduleAssignments();
+    const key = `${day}-${periodNo}`;
+    if (assignments[key]) {
+      delete assignments[key];
+      this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+      return true;
+    }
+    return false;
+  },
+
+  getTraineeTeachingSummary() {
+    const assignments = this.getScheduleAssignments();
+    const list = Object.values(assignments);
+    const traineeSlots = list.filter(a => a.assignRole === 'trainee');
+    const coTeachSlots = list.filter(a => a.assignRole === 'co-teach');
+    return {
+      totalAssigned: list.length,
+      traineeCount: traineeSlots.length,
+      coTeachCount: coTeachSlots.length,
+      slots: list
+    };
+  },
+
   getTodayClasses() {
     const tt = this.getTimetable();
     const todayName = this.getTodayDayName();
     const daySchedule = tt.schedule[todayName] || tt.schedule[todayName.replace('บดี', 'ฯ')] || {};
+    const assignments = this.getScheduleAssignments();
     const result = [];
 
     tt.periods.forEach(p => {
@@ -815,6 +905,9 @@ const Store = {
         else if (cls.startsWith('ม.1/')) subjCode = 'ศ21102';
         else if (cls.startsWith('ม.2/')) subjCode = 'ศ22102';
 
+        const assignKey = `${todayName}-${p.no}`;
+        const assignment = assignments[assignKey] || null;
+
         result.push({
           periodNo: p.no,
           time: p.time,
@@ -822,7 +915,8 @@ const Store = {
           subjCode,
           isLunch,
           isActivity,
-          room: cls.startsWith('ม.') ? 'อส.5' : ''
+          room: cls.startsWith('ม.') ? 'อส.5' : '',
+          assignment: assignment
         });
       }
     });
@@ -854,6 +948,7 @@ const Store = {
       sessions: this.getAllSessions(),
       submissions: this.getAllSubmissions(),
       timetable: this.getTimetable(),
+      scheduleAssignments: this.getScheduleAssignments(),
       holidays: this.getHolidayLogs(),
       extendedAssessments: this.collectExtendedAssessmentData()
     };
@@ -869,6 +964,7 @@ const Store = {
       if (payload.sessions) this.save(STORAGE_KEYS.SESSIONS, payload.sessions);
       if (payload.submissions) this.save(STORAGE_KEYS.SUBMISSIONS, payload.submissions);
       if (payload.timetable) this.save(STORAGE_KEYS.TIMETABLE, payload.timetable);
+      if (payload.scheduleAssignments) this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, payload.scheduleAssignments);
       if (payload.holidays) this.save(STORAGE_KEYS.HOLIDAYS, payload.holidays);
       if (payload.studentStatus) this.save(STORAGE_KEYS.STUDENT_STATUS, payload.studentStatus);
       if (payload.studentAccounts) this.save(STORAGE_KEYS.STUDENT_ACCOUNTS, payload.studentAccounts);
@@ -961,17 +1057,33 @@ const Store = {
           const targetP = Math.min(20, Math.max(1, lastP + 1));
           const sessKey = this.getSessionKey(c.className, targetP);
           const isDone = !!sessions[sessKey];
+          const isTrainee = c.assignment && c.assignment.assignRole === 'trainee';
+          const isCoTeach = c.assignment && c.assignment.assignRole === 'co-teach';
+          let titleText = `สอนวันนี้ คาบ ${c.periodNo} (${c.time})`;
+          let badgeText = isDone ? 'บันทึกแล้ว' : 'รอสอน';
+          let badgeClass = isDone ? 'badge-success' : 'badge-primary';
+
+          if (isTrainee) {
+            titleText = `🎓 นิเทศ นศ.ฝึกสอน คาบ ${c.periodNo} (${c.time})`;
+            badgeText = isDone ? 'นิเทศแล้ว' : 'รอนิเทศ';
+            badgeClass = isDone ? 'badge-success' : 'badge-warning';
+          } else if (isCoTeach) {
+            titleText = `👥 ร่วมสอน (Co-teach) คาบ ${c.periodNo} (${c.time})`;
+            badgeText = isDone ? 'บันทึกแล้ว' : 'รอร่วมสอน';
+            badgeClass = isDone ? 'badge-success' : 'badge-info';
+          }
+
           todos.push({
             id: `today-${c.className}-${c.periodNo}`,
             type: 'today_class',
-            title: `สอนวันนี้ คาบ ${c.periodNo} (${c.time})`,
-            subtitle: `ห้อง ${c.className} • ${c.subjCode} (เนื้อหาคาบที่ ${targetP})`,
+            title: titleText,
+            subtitle: `ห้อง ${c.className} • ${c.subjCode} (เนื้อหาคาบที่ ${targetP})${c.assignment ? ' • ' + (c.assignment.teacherName || '') : ''}`,
             className: c.className,
             period: targetP,
             isDone: isDone,
-            badge: isDone ? 'บันทึกแล้ว' : 'รอสอน',
-            badgeClass: isDone ? 'badge-success' : 'badge-primary',
-            actionText: isDone ? 'ดูบันทึก' : 'เข้าสอน'
+            badge: badgeText,
+            badgeClass: badgeClass,
+            actionText: isDone ? 'ดูบันทึก' : (isTrainee ? 'เข้านิเทศ' : 'เข้าสอน')
           });
         }
       });
@@ -1521,6 +1633,7 @@ const Store = {
         name: match.name,
         teacherId: match.id,
         teacherRole: match.role,
+        roleCategory: match.roleCategory || (match.isAdmin ? 'mentor' : 'trainee'),
         isAdmin: !!match.isAdmin,
         loggedInAt: new Date().toISOString()
       };
@@ -1537,6 +1650,9 @@ const Store = {
         role: 'teacher',
         email: acc.email,
         name: acc.name,
+        teacherId: 'admin_primary',
+        teacherRole: 'ครูประจำวิชา (แอดมิน)',
+        roleCategory: 'mentor',
         isAdmin: true,
         loggedInAt: new Date().toISOString()
       };

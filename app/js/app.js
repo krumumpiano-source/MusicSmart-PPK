@@ -910,10 +910,29 @@ const App = {
           <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">ภาระงาน / กิจกรรม</div>
         `;
       } else {
+        let assignInfo = '';
+        if (slot.assignment) {
+          if (slot.assignment.assignRole === 'trainee') {
+            assignInfo = `
+              <div style="font-size: 0.72rem; color: #b45309; font-weight: 700; margin-top: 3px; display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #fde68a; padding-top: 2px;">
+                <span>🎓 นศ.ฝึกสอน</span>
+                <span onclick="event.stopPropagation(); App.openTeachingAssignmentModal('${todayData.dayName}', ${slot.periodNo});" style="text-decoration: underline; color: #9a3412; cursor: pointer; font-weight: 600;">💡 คำแนะนำ</span>
+              </div>
+            `;
+          } else if (slot.assignment.assignRole === 'co-teach') {
+            assignInfo = `
+              <div style="font-size: 0.72rem; color: #3730a3; font-weight: 700; margin-top: 3px; display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #c7d2fe; padding-top: 2px;">
+                <span>👥 ร่วมสอน</span>
+                <span onclick="event.stopPropagation(); App.openTeachingAssignmentModal('${todayData.dayName}', ${slot.periodNo});" style="text-decoration: underline; color: #3730a3; cursor: pointer; font-weight: 600;">💡 คำแนะนำ</span>
+              </div>
+            `;
+          }
+        }
         pill.innerHTML = `
           <div class="today-slot-time">คาบที่ ${slot.periodNo} (${slot.time})</div>
           <div class="today-slot-class">${this.escapeHtml(slot.className)} <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">(${slot.subjCode || 'ดนตรีสากล'})</span></div>
           <div style="font-size: 0.72rem; color: var(--ppk-navy); font-weight: 600; margin-top: 2px;">ห้อง ${slot.room || 'อส.5'}</div>
+          ${assignInfo}
         `;
         pill.onclick = () => {
           const prog = Store.getClassProgress(slot.className);
@@ -2232,6 +2251,7 @@ const App = {
 
   // --- Tab 1: Lesson Plan ---
   renderLessonTab() {
+    this.renderCockpitMentoringBanner();
     const lesson = Store.getLesson(this.state.grade, this.state.selectedPeriod);
     if (!lesson) {
       document.getElementById('lesson-topic').textContent = `บทเรียนคาบที่ ${this.state.selectedPeriod}`;
@@ -3151,6 +3171,29 @@ const App = {
     const m2Classes = Store.getAllClasses('M2').filter(c => c !== 'ม.2/14');
     const activities = ['จริยะ', 'กก.ล.', 'กก.บ.', 'ประชุม PLC'];
 
+    // Mentoring & Assignment Statistics
+    const assignments = Store.getScheduleAssignments();
+    const summary = Store.getTraineeTeachingSummary();
+    const statMentorEl = document.getElementById('tt-stat-mentor-count');
+    const statTraineeEl = document.getElementById('tt-stat-trainee-count');
+    const statCoTeachEl = document.getElementById('tt-stat-coteach-count');
+
+    let totalTeachingSlots = 0;
+    days.forEach(d => {
+      const daySlots = tt.schedule[d.key] || tt.schedule[d.label] || {};
+      tt.periods.forEach(p => {
+        const c = daySlots[p.no];
+        if (c && !['พักกลางวัน', 'พักเที่ยง', 'จริยะ', 'กก.ล.', 'กก.บ.', 'ประชุม PLC'].includes(c)) {
+          totalTeachingSlots++;
+        }
+      });
+    });
+
+    const mentorSlotsCount = Math.max(0, totalTeachingSlots - summary.traineeCount);
+    if (statMentorEl) statMentorEl.textContent = `👨‍🏫 ครูประจำวิชาสอนหลัก: ${mentorSlotsCount} คาบ`;
+    if (statTraineeEl) statTraineeEl.textContent = `🎓 มอบหมาย นศ.ฝึกสอน: ${summary.traineeCount} คาบ`;
+    if (statCoTeachEl) statCoTeachEl.textContent = `👥 ร่วมสอน (Co-teach): ${summary.coTeachCount} คาบ`;
+
     // Table Header (Row 1: Period Numbers, Row 2: Times)
     let thead = '<thead>';
     thead += '<tr><th style="min-width: 80px; vertical-align: middle;">คาบที่</th>';
@@ -3178,6 +3221,20 @@ const App = {
         const currentVal = daySlots[p.no] || '';
         const isLunch = currentVal === 'พักกลางวัน' || currentVal === 'พักเที่ยง';
         const isActivity = activities.includes(currentVal);
+        const assignKey = `${d.key}-${p.no}`;
+        const assignment = assignments[assignKey];
+
+        let traineeBadge = '';
+        let cellClassExtra = '';
+        if (assignment) {
+          if (assignment.assignRole === 'trainee') {
+            traineeBadge = `<div class="tt-badge-trainee" title="มอบหมายให้ นศ.ฝึกสอน (${this.escapeHtml(assignment.teacherName)})">🎓 นศ.ฝึกสอน</div>`;
+            cellClassExtra = 'has-trainee';
+          } else if (assignment.assignRole === 'co-teach') {
+            traineeBadge = `<div class="tt-badge-coteach" title="ร่วมสอน (Co-teach) กับครูพี่เลี้ยง">👥 ร่วมสอน</div>`;
+            cellClassExtra = 'has-coteach';
+          }
+        }
 
         if (isOfficial) {
           // Official Document Re-creation View
@@ -3197,10 +3254,11 @@ const App = {
               shortClass = currentVal.replace('ม.', '');
             }
             cellContent = `
-              <div class="tt-cell-box" style="cursor: pointer;" onclick="App.enterCockpit('${currentVal}', 1); App.closeTimetableModal();" title="แตะเพื่อเข้าห้องเรียน ${currentVal}">
+              <div class="tt-cell-box ${cellClassExtra}" style="cursor: pointer; position: relative;" onclick="App.onTimetableCellClick('${d.key}', ${p.no}, '${currentVal}')" title="แตะเพื่อเลือก: มอบหมาย นศ.ฝึกสอน/คำแนะนำนิเทศ หรือเข้าห้องเรียน">
                 <div class="tt-subj">${subj}</div>
                 <div class="tt-class">${shortClass}</div>
                 <div class="tt-room">อส.5</div>
+                ${traineeBadge}
               </div>
             `;
           }
@@ -3234,7 +3292,13 @@ const App = {
           selectHtml += `</optgroup>`;
 
           selectHtml += `</select>`;
-          tbody += `<td class="${isDivider ? 'break-divider-col' : ''}">${selectHtml}</td>`;
+
+          let assignBtn = '';
+          if (currentVal && !isLunch && !isActivity) {
+            assignBtn = `<button type="button" class="btn-preset-chip" style="font-size: 0.65rem; margin-top: 3px; display: block; width: 100%; text-align: center;" onclick="App.openTeachingAssignmentModal('${d.key}', ${p.no})">🎓 มอบหมาย</button>`;
+          }
+
+          tbody += `<td class="${isDivider ? 'break-divider-col' : ''}">${selectHtml}${assignBtn}</td>`;
         }
       });
       tbody += `</tr>`;
@@ -3250,6 +3314,27 @@ const App = {
     }
 
     document.getElementById('modal-timetable').classList.add('active');
+  },
+
+  onTimetableCellClick(day, periodNo, className) {
+    if (!className || className === 'พักเที่ยง' || className === 'พักกลางวัน') return;
+    const assignment = Store.getScheduleAssignment(day, periodNo);
+    const teacherName = assignment ? assignment.teacherName : 'ครูประจำวิชา (นายพงศธร)';
+    const roleText = assignment ? (assignment.assignRole === 'trainee' ? '🎓 นศ.ฝึกสอน' : '👥 ร่วมสอน') : '👨‍🏫 ครูประจำวิชา';
+
+    const action = confirm(
+      `📅 วัน${day} คาบที่ ${periodNo} (ห้อง ${className})\n` +
+      `ผู้สอน: ${teacherName} [${roleText}]\n\n` +
+      `• กด [ ตกลง (OK) ] เพื่อ "มอบหมายคาบสอน & บันทึกคำแนะนำนิเทศจากครูพี่เลี้ยง"\n` +
+      `• กด [ ยกเลิก (Cancel) ] เพื่อ "เข้าสู่ห้องเรียน Cockpit ทันที"`
+    );
+
+    if (action) {
+      App.openTeachingAssignmentModal(day, periodNo);
+    } else {
+      App.closeTimetableModal();
+      App.enterCockpit(className, 1);
+    }
   },
 
   toggleTimetableMode() {
@@ -3308,6 +3393,264 @@ const App = {
     this.openTimetableModal('official');
     this.renderTodaySchedule();
     alert('✅ บันทึกตารางสอนประจำสัปดาห์เรียบร้อยแล้ว');
+  },
+
+  // --- Timetable Teaching Assignment & Trainee Mentoring Controller ---
+  openTeachingAssignmentModal(defaultDay = null, defaultPeriod = null) {
+    const daySelect = document.getElementById('assign-select-day');
+    const periodSelect = document.getElementById('assign-select-period');
+    const teacherSelect = document.getElementById('assign-teacher-id');
+    const modal = document.getElementById('modal-teaching-assignment');
+    if (!modal) return;
+
+    // 1. Populate period select (1 - 10)
+    if (periodSelect) {
+      periodSelect.innerHTML = '';
+      for (let p = 1; p <= 10; p++) {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = `คาบที่ ${p}`;
+        periodSelect.appendChild(opt);
+      }
+    }
+
+    // 2. Populate teacher select
+    if (teacherSelect) {
+      teacherSelect.innerHTML = '';
+      const teachers = Store.getTeachersList();
+      teachers.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.name} (${t.role || 'ผู้สอน'})`;
+        teacherSelect.appendChild(opt);
+      });
+    }
+
+    // 3. Set default day and period
+    const tt = Store.getTimetable();
+    const todayName = Store.getTodayDayName();
+    const targetDay = defaultDay || (tt.schedule[todayName] ? todayName : 'อังคาร');
+    const targetPeriod = defaultPeriod || 5;
+
+    if (daySelect) daySelect.value = targetDay;
+    if (periodSelect) periodSelect.value = targetPeriod;
+
+    this.onAssignmentSlotChanged();
+    modal.classList.add('active');
+  },
+
+  onAssignmentSlotChanged() {
+    const day = document.getElementById('assign-select-day')?.value || 'อังคาร';
+    const periodNo = parseInt(document.getElementById('assign-select-period')?.value || '5', 10);
+    const tt = Store.getTimetable();
+    const periods = tt.periods || DEFAULT_TIMETABLE_PERIODS;
+    const periodMeta = periods.find(p => p.no === periodNo) || { time: '' };
+    const daySlots = tt.schedule[day] || {};
+    const className = daySlots[periodNo] || '';
+
+    const badge = document.getElementById('assign-slot-meta-badge');
+    if (badge) {
+      if (className) {
+        badge.textContent = `ห้อง ${className} • คาบ ${periodNo} (${periodMeta.time})`;
+        badge.style.background = '#e0f2fe';
+        badge.style.color = '#0369a1';
+      } else {
+        badge.textContent = `(คาบว่างไม่มีชั้นเรียน) • คาบ ${periodNo} (${periodMeta.time})`;
+        badge.style.background = '#f1f5f9';
+        badge.style.color = '#64748b';
+      }
+    }
+
+    const assignment = Store.getScheduleAssignment(day, periodNo);
+    const teacherSelect = document.getElementById('assign-teacher-id');
+    const roleSelect = document.getElementById('assign-role-type');
+    const adviceInput = document.getElementById('assign-mentor-advice');
+    const methodInput = document.getElementById('assign-teaching-method');
+    const focusInput = document.getElementById('assign-focus-points');
+    const feedbackInput = document.getElementById('assign-trainee-feedback');
+
+    if (assignment) {
+      if (teacherSelect) teacherSelect.value = assignment.teacherId || 'teacher_kouocking';
+      if (roleSelect) roleSelect.value = assignment.assignRole || 'trainee';
+      if (adviceInput) adviceInput.value = assignment.mentorAdvice || '';
+      if (methodInput) methodInput.value = assignment.teachingMethod || '';
+      if (focusInput) focusInput.value = assignment.focusPoints || '';
+      if (feedbackInput) feedbackInput.value = assignment.traineeFeedback || '';
+    } else {
+      // Default suggestion for trainee
+      const teachers = Store.getTeachersList();
+      const trainee = teachers.find(t => t.roleCategory === 'trainee') || teachers[1] || teachers[0];
+      if (teacherSelect && trainee) teacherSelect.value = trainee.id;
+      if (roleSelect) roleSelect.value = 'trainee';
+      if (adviceInput) adviceInput.value = '';
+      if (methodInput) methodInput.value = '';
+      if (focusInput) focusInput.value = '';
+      if (feedbackInput) feedbackInput.value = '';
+    }
+  },
+
+  appendAdvicePreset(text) {
+    const el = document.getElementById('assign-mentor-advice');
+    if (!el) return;
+    if (el.value.trim().length > 0) {
+      el.value = el.value.trim() + '\n• ' + text;
+    } else {
+      el.value = '• ' + text;
+    }
+  },
+
+  appendMethodPreset(text) {
+    const el = document.getElementById('assign-teaching-method');
+    if (!el) return;
+    if (el.value.trim().length > 0) {
+      el.value = el.value.trim() + '\n• ' + text;
+    } else {
+      el.value = '• ' + text;
+    }
+  },
+
+  saveCurrentAssignment() {
+    const day = document.getElementById('assign-select-day')?.value;
+    const periodNo = parseInt(document.getElementById('assign-select-period')?.value, 10);
+    const teacherId = document.getElementById('assign-teacher-id')?.value;
+    const assignRole = document.getElementById('assign-role-type')?.value;
+    const mentorAdvice = (document.getElementById('assign-mentor-advice')?.value || '').trim();
+    const teachingMethod = (document.getElementById('assign-teaching-method')?.value || '').trim();
+    const focusPoints = (document.getElementById('assign-focus-points')?.value || '').trim();
+    const traineeFeedback = (document.getElementById('assign-trainee-feedback')?.value || '').trim();
+
+    const tt = Store.getTimetable();
+    const className = tt.schedule[day]?.[periodNo] || '';
+
+    const teachers = Store.getTeachersList();
+    const teacher = teachers.find(t => t.id === teacherId) || { name: 'คุณครู' };
+    const currentInst = Store.getInstructor();
+
+    Store.saveScheduleAssignment(day, periodNo, {
+      className,
+      teacherId,
+      teacherName: teacher.name,
+      assignRole,
+      mentorName: currentInst.name || 'นายพงศธร โพธิแก้ว',
+      mentorAdvice,
+      teachingMethod,
+      focusPoints,
+      traineeFeedback
+    });
+
+    this.closeTeachingAssignmentModal();
+    if (document.getElementById('modal-timetable')?.classList.contains('active')) {
+      this.openTimetableModal(this.state.timetableMode || 'official');
+    }
+    this.renderTodaySchedule();
+    this.renderCockpitMentoringBanner();
+    alert(`✅ บันทึกการมอบหมายคาบสอนและคำแนะนำนิเทศเรียบร้อยแล้ว!\n\nวัน${day} คาบที่ ${periodNo} (${className || 'คาบสอน'})\nผู้สอน: ${teacher.name}\nคำแนะนำ: ${mentorAdvice ? 'ระบุเรียบร้อย' : 'ตามมาตรฐาน'}`);
+  },
+
+  deleteCurrentAssignment() {
+    const day = document.getElementById('assign-select-day')?.value;
+    const periodNo = parseInt(document.getElementById('assign-select-period')?.value, 10);
+    if (confirm(`ต้องการยกเลิกการมอบหมายคาบ วัน${day} คาบที่ ${periodNo} หรือไม่?`)) {
+      Store.deleteScheduleAssignment(day, periodNo);
+      this.closeTeachingAssignmentModal();
+      if (document.getElementById('modal-timetable')?.classList.contains('active')) {
+        this.openTimetableModal(this.state.timetableMode || 'official');
+      }
+      this.renderTodaySchedule();
+      this.renderCockpitMentoringBanner();
+      alert('🗑️ ยกเลิกการมอบหมายคาบนี้เรียบร้อยแล้ว');
+    }
+  },
+
+  jumpToAssignedCockpit() {
+    const day = document.getElementById('assign-select-day')?.value;
+    const periodNo = parseInt(document.getElementById('assign-select-period')?.value, 10);
+    const tt = Store.getTimetable();
+    const className = tt.schedule[day]?.[periodNo];
+    if (className && className.startsWith('ม.')) {
+      this.closeTeachingAssignmentModal();
+      this.closeTimetableModal();
+      this.enterCockpit(className, 1);
+    } else {
+      alert('คาบนี้ไม่มีชั้นเรียนที่จัดการเรียนรู้ (เป็นคาบว่างหรือกิจกรรม)');
+    }
+  },
+
+  closeTeachingAssignmentModal() {
+    const modal = document.getElementById('modal-teaching-assignment');
+    if (modal) modal.classList.remove('active');
+  },
+
+  renderCockpitMentoringBanner() {
+    const banner = document.getElementById('cockpit-mentoring-guidance-banner');
+    if (!banner) return;
+
+    const className = this.state.selectedClass;
+    const periodNo = this.state.selectedPeriod;
+
+    // Search assignments for this class
+    const assignments = Store.getScheduleAssignments();
+    let matchedAssignment = null;
+
+    for (const [key, assign] of Object.entries(assignments)) {
+      if (assign.className === className) {
+        matchedAssignment = assign;
+        break;
+      }
+    }
+
+    if (!matchedAssignment) {
+      banner.style.display = 'none';
+      return;
+    }
+
+    const isTrainee = matchedAssignment.assignRole === 'trainee';
+    const isCoTeach = matchedAssignment.assignRole === 'co-teach';
+    const roleBadge = isTrainee ?
+      `<span style="background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;">🎓 นศ.ฝึกสอน ปฏิบัติการสอน</span>` :
+      (isCoTeach ?
+        `<span style="background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;">👥 ร่วมสอน (Co-teaching)</span>` :
+        `<span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;">👨‍🏫 ครูประจำวิชา</span>`
+      );
+
+    banner.style.display = 'block';
+    banner.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 1.1rem;">💡</span>
+          <strong style="color: #9a3412; font-size: 0.95rem;">คำแนะนำ & วิธีการสอนจากครูพี่เลี้ยง (สำหรับคาบนี้)</strong>
+          ${roleBadge}
+          <span style="font-size: 0.8rem; color: #78350f;">ผู้สอน: <strong>${this.escapeHtml(matchedAssignment.teacherName || 'คุณครู')}</strong></span>
+        </div>
+        <button class="btn-nav-action" style="font-size: 0.75rem; padding: 3px 8px; background: #fff7ed; border-color: #fdba74; color: #9a3412;" onclick="App.openTeachingAssignmentModal('${matchedAssignment.day}', ${matchedAssignment.periodNo})">
+          ✏️ ปรับปรุงคำแนะนำนิเทศ
+        </button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; font-size: 0.84rem;">
+        <div style="background: rgba(255,255,255,0.85); border: 1px solid #fed7aa; border-radius: 6px; padding: 0.65rem 0.85rem;">
+          <div style="font-weight: 700; color: #7c2d12; margin-bottom: 3px;">📌 คำแนะนำสำคัญ & จิตวิทยาชั้นเรียน:</div>
+          <div style="color: #431407; line-height: 1.4;">${this.escapeHtml(matchedAssignment.mentorAdvice || 'ให้คำแนะนำตามบริบทของคาบ')}</div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.85); border: 1px solid #fed7aa; border-radius: 6px; padding: 0.65rem 0.85rem;">
+          <div style="font-weight: 700; color: #7c2d12; margin-bottom: 3px;">🎯 วิธีการ & ขั้นตอนการสอนที่แนะนำ:</div>
+          <div style="color: #431407; line-height: 1.4;">${this.escapeHtml(matchedAssignment.teachingMethod || 'ตามขั้นตอนแผนการสอน T-PACE')}</div>
+        </div>
+      </div>
+
+      ${matchedAssignment.focusPoints ? `
+        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #92400e;">
+          <strong>🔍 จุดเน้นการสังเกต/นิเทศ:</strong> ${this.escapeHtml(matchedAssignment.focusPoints)}
+        </div>
+      ` : ''}
+
+      ${matchedAssignment.traineeFeedback ? `
+        <div style="margin-top: 0.5rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #166534;">
+          <strong>📝 สะท้อนคิดจาก นศ.ฝึกสอน:</strong> ${this.escapeHtml(matchedAssignment.traineeFeedback)}
+        </div>
+      ` : ''}
+    `;
   },
 
   // --- Make-up Assessment Dialog ---

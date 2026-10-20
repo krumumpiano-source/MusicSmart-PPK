@@ -162,6 +162,29 @@ assert(loginCorrect.success === true && loginCorrect.user.role === 'student', 'S
 const loginWrong = Store.verifyStudentLogin('35994', '999999');
 assert(loginWrong.success === false, 'Store.verifyStudentLogin rejects incorrect PIN');
 
+// Test Timetable Assignment & Mentor Pedagogical Advice
+const assignments = Store.getScheduleAssignments();
+assert(assignments && typeof assignments === 'object', 'Store.getScheduleAssignments returns assignments map');
+assert(assignments['อังคาร-5'] && assignments['อังคาร-5'].assignRole === 'trainee', 'Default assignment for Tuesday period 5 assigned to trainee');
+assert(assignments['อังคาร-5'].mentorAdvice && assignments['อังคาร-5'].mentorAdvice.length > 10, 'Assignment contains mentor pedagogical advice');
+assert(assignments['อังคาร-5'].teachingMethod && assignments['อังคาร-5'].teachingMethod.includes('T-PACE'), 'Assignment contains teaching method recommendations');
+
+Store.saveScheduleAssignment('พุธ', 3, {
+  className: 'ม.1/6',
+  teacherId: 'teacher_kouocking',
+  teacherName: 'นักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)',
+  assignRole: 'trainee',
+  mentorName: 'นายพงศธร โพธิแก้ว',
+  mentorAdvice: 'สังเกตการฟังสำเนียงคาลิมบ้าและฝึกนับจังหวะ 1-2-3-4',
+  teachingMethod: 'T-PACE ขั้น 2 Practice',
+  focusPoints: 'การตรวจ Dead Tines'
+});
+const savedWed = Store.getScheduleAssignment('พุธ', 3);
+assert(savedWed && savedWed.className === 'ม.1/6' && savedWed.mentorAdvice.includes('สำเนียงคาลิมบ้า'), 'Store.saveScheduleAssignment saved trainee assignment with mentor advice');
+
+const traineeSummary = Store.getTraineeTeachingSummary();
+assert(traineeSummary && traineeSummary.traineeCount >= 2, 'Store.getTraineeTeachingSummary correctly aggregates trainee slots');
+
 // ----------------------------------------------------
 // 4. Test Feldman Criticism Module
 // ----------------------------------------------------
@@ -280,6 +303,11 @@ function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('btn-copy-student-link'), 'HTML contains Teacher Copy Student Link Button (#btn-copy-student-link)');
   assert(htmlData.includes('student-pwa-banner'), 'HTML contains Student Portal PWA Banner (#student-pwa-banner)');
   assert(!htmlData.includes('value="ppk1234"'), 'HTML does NOT leak default teacher password in secret input value');
+  assert(htmlData.includes('modal-teaching-assignment'), 'HTML contains Teaching Assignment & Mentoring Guidance Modal (#modal-teaching-assignment)');
+  assert(htmlData.includes('assign-mentor-advice'), 'HTML contains Mentor Advice input (#assign-mentor-advice)');
+  assert(htmlData.includes('assign-teaching-method'), 'HTML contains Teaching Method input (#assign-teaching-method)');
+  assert(htmlData.includes('timetable-mentoring-summary-strip'), 'HTML contains Timetable Mentoring Summary Strip');
+  assert(htmlData.includes('cockpit-mentoring-guidance-banner'), 'HTML contains Cockpit Mentoring Guidance Banner');
 
   console.log('\n' + '='.repeat(70));
   console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);
