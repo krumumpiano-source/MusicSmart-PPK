@@ -10,11 +10,11 @@ const GoogleSheetSync = {
   },
 
   DEFAULT_CONFIG: {
-    webAppUrl: '',
+    webAppUrl: 'https://script.google.com/macros/s/AKfycbzkB7cW_xmhXtTOLRwVURiFiza3_DBKGLRpw-geqyGjn-tQ3zX8L5tr-NcKVhS2A_UYGA/exec',
     autoSync: true,
     lastSyncAt: null,
     syncCount: 0,
-    syncStatus: 'unconfigured' // 'unconfigured' | 'synced' | 'pending' | 'syncing' | 'error'
+    syncStatus: 'synced' // 'unconfigured' | 'synced' | 'pending' | 'syncing' | 'error'
   },
 
   isFlushing: false,
@@ -37,7 +37,12 @@ const GoogleSheetSync = {
     try {
       const raw = localStorage.getItem(this.STORAGE_KEYS.CONFIG);
       if (!raw) return { ...this.DEFAULT_CONFIG };
-      return { ...this.DEFAULT_CONFIG, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      return {
+        ...this.DEFAULT_CONFIG,
+        ...parsed,
+        webAppUrl: parsed.webAppUrl || this.DEFAULT_CONFIG.webAppUrl
+      };
     } catch (e) {
       return { ...this.DEFAULT_CONFIG };
     }
