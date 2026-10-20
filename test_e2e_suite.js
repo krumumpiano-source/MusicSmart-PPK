@@ -328,8 +328,17 @@ const enqQuiz = GoogleSheetSync.syncQuizResult({
 });
 assert(enqQuiz && enqQuiz.type === 'quiz_result', 'Quiz Result successfully enqueued for Google Sheets sync');
 
+const enqCurriculum = GoogleSheetSync.syncCurriculumLesson('M1', 1, {
+  topic: 'ทดสอบซิงค์แผนการสอน',
+  unitName: 'หน่วยทดสอบ',
+  kpa: { k: 'K1', p: 'P1', a: 'A1' },
+  durationMin: 50,
+  steps: [{ phase: 'ขั้นนำ', duration: 10, desc: 'นำเข้าสู่บทเรียน' }]
+});
+assert(enqCurriculum && enqCurriculum.type === 'curriculum_lesson', 'Custom Lesson plan successfully enqueued for Google Sheets sync');
+
 const outboxItems = GoogleSheetSync.getOutbox();
-assert(outboxItems.length >= 3, `GoogleSheetSync Outbox queued ${outboxItems.length} items for serverless sync`);
+assert(outboxItems.length >= 4, `GoogleSheetSync Outbox queued ${outboxItems.length} items for serverless sync`);
 
 // Clean up test outbox and test config so tests leave zero trace
 GoogleSheetSync.saveOutbox([]);

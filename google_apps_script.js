@@ -292,7 +292,25 @@ function processSyncItem(ss, item) {
       data.pre !== undefined ? data.pre : "",
       data.post !== undefined ? data.post : "",
       data.formative !== undefined ? data.formative : "",
-      data.gain !== undefined ? data.gain : ""
+  // --------------------------------------------------------------------------
+  // H. แผนการสอนและหลักสูตรที่ครูปรับแต่ง (Customized Curriculum & Lesson Plans)
+  // --------------------------------------------------------------------------
+  if (type === 'curriculum_lesson') {
+    var sheet = getOrCreateSheet(ss, "แผนการสอน_Curriculum", [
+      "วันเวลาที่แก้ไข", "ระดับชั้น", "คาบที่", "ชื่อหน่วยการเรียนรู้", "หัวข้อบทเรียน",
+      "จุดประสงค์ KPA", "เวลาสอน (นาที)", "ขั้นตอน 5 ขั้น T-PACE", "จำนวนสื่อการสอน", "ผู้แก้ไข/ครูผู้สอน"
+    ]);
+    sheet.appendRow([
+      timestamp,
+      data.grade || "",
+      data.period || "",
+      data.unitName || data.unit_name || "",
+      data.topic || "",
+      data.kpaSummary || "",
+      data.durationMin || data.duration_min || 50,
+      data.stepsSummary || "",
+      data.mediaCount !== undefined ? data.mediaCount : "",
+      data.updatedBy || ""
     ]);
     return { type: type, success: true };
   }

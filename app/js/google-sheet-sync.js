@@ -283,6 +283,29 @@ const GoogleSheetSync = {
   },
 
   /**
+   * ซิงค์แผนการสอนและหลักสูตรที่ครูปรับแต่งเข้าสู่ Google Sheet (แท็บ แผนการสอน_Curriculum)
+   */
+  syncCurriculumLesson(grade, period, lessonData) {
+    const instructor = typeof Store !== 'undefined' ? Store.getInstructor() : {};
+    const kpa = lessonData.kpa || {};
+    const steps = lessonData.steps || [];
+    const stepsSummary = steps.map(s => `[${s.phase || ''} (${s.duration || s.time_min || 10}น.)] ${s.desc || ''}`).join('\n');
+
+    return this.enqueue('curriculum_lesson', {
+      grade,
+      period: Number(period),
+      topic: lessonData.topic || '',
+      unitName: lessonData.unit_name || lessonData.unitName || '',
+      kpaSummary: `K: ${kpa.k || '-'} | P: ${kpa.p || '-'} | A: ${kpa.a || '-'}`,
+      durationMin: Number(lessonData.duration_min || lessonData.durationMin || 50),
+      stepsSummary: stepsSummary,
+      mediaCount: Array.isArray(lessonData.media) ? lessonData.media.length : 0,
+      updatedBy: instructor.name || 'คุณครูผู้สอน',
+      timestamp: new Date().toISOString()
+    });
+  },
+
+  /**
    * ซิงค์คะแนนวิจัยชั้นเรียน CAR (Pre-test / Post-test)
    */
   syncResearch(className, studentId, pre, post, formative) {
@@ -344,6 +367,20 @@ const GoogleSheetSync = {
         enqueuedTotal++;
       }
     });
+
+    // 4. All Custom Lessons (Curriculum updates)
+    if (typeof Store !== 'undefined' && Store.getCustomLessons) {
+      ['M1', 'M2'].forEach(grade => {
+        const customLessons = Store.getCustomLessons(grade) || {};
+        Object.keys(customLessons).forEach(p => {
+          const l = customLessons[p];
+          if (l) {
+            this.syncCurriculumLesson(grade, p, l);
+            enqueuedTotal++;
+          }
+        });
+      });
+    }
 
     // Flush outbox and wait for transmission
     await this.flushOutbox();
