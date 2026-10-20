@@ -44,8 +44,8 @@
           </p>
         </div>
 
-        <!-- Role-Based Navigation Switcher -->
-        <div class="role-selector-pill" id="role-selector-pill">
+        <!-- Role-Based Navigation Switcher (Shown ONLY for verified teachers) -->
+        <div class="role-selector-pill" id="role-selector-pill" style="display: none;">
           <button id="btn-role-teacher" class="role-pill-btn active" onclick="App.switchRole('teacher')">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
             ครูผู้สอน
@@ -637,18 +637,18 @@
           <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
               <h2 id="student-portal-name" style="font-size: 1.25rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
-                เด็กชายกานต์พงศ์ พร้อมมูล (สกาย)
+                กำลังโหลดข้อมูลนักเรียน...
               </h2>
               <span id="student-portal-status-badge" class="badge-success">สถานะปกติ</span>
             </div>
             <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
-              รหัสนักเรียน: <strong id="student-portal-id">35994</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">ม.1/1</strong> เลขที่ <strong id="student-portal-no">1</strong> • รายวิชา: <strong id="student-portal-subject">ศ21102 ดนตรีสากล 1</strong>
+              รหัสนักเรียน: <strong id="student-portal-id">-</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">-</strong> เลขที่ <strong id="student-portal-no">-</strong> • รายวิชา: <strong id="student-portal-subject">ศ21102 ดนตรีสากล 1</strong>
             </div>
           </div>
         </div>
 
-        <!-- Student Switcher (for demo or student selection) -->
-        <div class="student-profile-right" id="student-switcher-container">
+        <!-- Student Switcher (Hidden in student mode for strict privacy) -->
+        <div class="student-profile-right" id="student-switcher-container" style="display: none !important;">
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <label for="select-student-class" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">ห้อง:</label>
             <select id="select-student-class" class="form-select" style="width: 105px; padding: 0.35rem 0.5rem;" onchange="App.onStudentClassChange(this.value)">

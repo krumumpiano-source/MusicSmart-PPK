@@ -17,9 +17,9 @@ const App = {
     timerRunning: false,
     currentEditingStudentId: null,
     currentEditingStudentClass: null,
-    role: 'teacher',
-    studentClass: 'ม.1/1',
-    studentId: '35994',
+    role: 'student',
+    studentClass: null,
+    studentId: null,
     studentPeriod: 1,
     academicTab: 'wk3',
     academicDocId: null,
@@ -37,14 +37,18 @@ const App = {
     const urlParams = new URLSearchParams(window.location.search);
     const isStudentLink = urlParams.has('student') || urlParams.get('role') === 'student';
 
-    const currentUser = Store.getCurrentUser ? Store.getCurrentUser() : null;
+    let currentUser = Store.getCurrentUser ? Store.getCurrentUser() : null;
 
-    if (!currentUser) {
-      this.state.role = 'student';
-    } else if (isStudentLink && currentUser.role !== 'teacher') {
+    // CRITICAL FIX: If opening student link, NEVER use teacher session!
+    if (isStudentLink && currentUser && currentUser.role === 'teacher') {
+      Store.logout();
+      currentUser = null;
+    }
+
+    if (!currentUser || currentUser.role !== 'teacher') {
       this.state.role = 'student';
     } else {
-      this.state.role = currentUser.role;
+      this.state.role = 'teacher';
     }
 
     this.applyAppSettings();
@@ -52,7 +56,13 @@ const App = {
     this.updateSemesterBadge();
     this.updateInstructorBadge();
     this.populateExportClassSelect();
-    this.initStudentPortal();
+
+    if (currentUser && currentUser.role === 'student') {
+      this.state.studentId = currentUser.studentId;
+      this.state.studentClass = currentUser.studentClass;
+      this.initStudentPortal();
+    }
+
     if (typeof Tuner !== 'undefined' && Tuner.init) Tuner.init();
     if (typeof AudioTools !== 'undefined' && AudioTools.renderBeatDots) AudioTools.renderBeatDots();
     if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.init) VirtualKalimba.init();
@@ -167,6 +177,8 @@ const App = {
 
     if (!user) {
       // 1. NON-AUTHENTICATED STATE: Strict privacy lockdown
+      this.state.studentId = null;
+      this.state.studentClass = null;
       if (viewDashboard) viewDashboard.style.display = 'none';
       if (viewCockpit) viewCockpit.style.display = 'none';
       if (viewStudent) viewStudent.style.display = 'none';
@@ -192,7 +204,7 @@ const App = {
         authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `👨‍🏫 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'คุณครู')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(${this.escapeHtml(user.email || 'ครูผู้สอน')})</span>`;
       }
-      if (studentSwitcher) studentSwitcher.style.display = 'block';
+      if (studentSwitcher) studentSwitcher.style.display = 'none';
       if (teacherActions) teacherActions.style.display = 'flex';
       if (studentActions) studentActions.style.display = 'none';
       if (headerMiddle) headerMiddle.style.display = 'flex';
@@ -610,6 +622,8 @@ const App = {
     if (confirm(`ต้องการออกจากระบบ (${name}) หรือไม่?`)) {
       Store.logout();
       this.state.role = 'student';
+      this.state.studentId = null;
+      this.state.studentClass = null;
       const studentIdInput = document.getElementById('auth-student-id');
       const studentPinInput = document.getElementById('auth-student-pin');
       const studentNewPin = document.getElementById('auth-student-new-pin');
@@ -919,6 +933,23 @@ const App = {
         this.openTeacherLoginModal();
         return;
       }
+    } else if (role === 'student') {
+      if (!user || user.role !== 'student') {
+        if (user && user.role === 'teacher') {
+          if (confirm('คุณครูต้องการสลับไปยังหน้านักเรียนเพื่อทดสอบระบบใช่หรือไม่?\n\n(ระบบจะออกจากบัญชีครูเพื่อเข้าสู่หน้าจอนักเรียน โดยนักเรียนจะต้องกรอกเลขประจำตัว 5 หลักและรหัส PIN)')) {
+            Store.logout();
+            this.state.studentId = null;
+            this.state.studentClass = null;
+            this.checkAuth();
+          }
+          return;
+        } else {
+          this.switchAuthTab('student');
+          const authModal = document.getElementById('modal-auth-login');
+          if (authModal) authModal.classList.add('active');
+          return;
+        }
+      }
     }
 
     this.state.role = role;
@@ -929,6 +960,8 @@ const App = {
     const headerMiddle = document.getElementById('header-middle-teacher');
     const teacherActions = document.getElementById('teacher-actions-group');
     const studentActions = document.getElementById('student-actions-group');
+    const roleSelector = document.getElementById('role-selector-pill');
+    const studentSwitcher = document.getElementById('student-switcher-container');
     const viewDashboard = document.getElementById('view-dashboard');
     const viewCockpit = document.getElementById('view-cockpit');
     const viewStudent = document.getElementById('view-student');
@@ -938,6 +971,8 @@ const App = {
       if (btnStudent) btnStudent.classList.add('active');
       if (headerMiddle) headerMiddle.style.display = 'none';
       if (teacherActions) teacherActions.style.display = 'none';
+      if (roleSelector) roleSelector.style.display = 'none';
+      if (studentSwitcher) studentSwitcher.style.display = 'none';
       if (studentActions) studentActions.style.display = 'flex';
 
       if (viewDashboard) viewDashboard.style.display = 'none';
@@ -950,6 +985,8 @@ const App = {
       if (btnStudent) btnStudent.classList.remove('active');
       if (headerMiddle) headerMiddle.style.display = 'flex';
       if (teacherActions) teacherActions.style.display = 'flex';
+      if (roleSelector) roleSelector.style.display = 'flex';
+      if (studentSwitcher) studentSwitcher.style.display = 'none';
       if (studentActions) studentActions.style.display = 'none';
 
       if (viewStudent) viewStudent.style.display = 'none';
@@ -1076,13 +1113,27 @@ const App = {
   },
 
   renderStudentPortal() {
-    const className = this.state.studentClass;
-    const studentId = this.state.studentId;
-    const students = Store.getStudents(className);
-    const student = students.find(s => s.student_id === studentId) || students[0];
-    if (!student) return;
+    const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
+    if (!user || user.role !== 'student') {
+      const viewStudent = document.getElementById('view-student');
+      if (viewStudent) viewStudent.style.display = 'none';
+      this.checkAuth();
+      return;
+    }
 
+    const studentId = user.studentId || this.state.studentId;
+    const student = Store.getStudentById ? Store.getStudentById(studentId) : null;
+    if (!student) {
+      console.warn('Student account not found in roster:', studentId);
+      return;
+    }
+
+    const className = student.class;
     this.state.studentId = student.student_id;
+    this.state.studentClass = student.class;
+
+    const studentSwitcher = document.getElementById('student-switcher-container');
+    if (studentSwitcher) studentSwitcher.style.display = 'none';
 
     // 1. Update Student Profile Bar
     const nameEl = document.getElementById('student-portal-name');

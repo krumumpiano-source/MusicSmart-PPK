@@ -1162,6 +1162,7 @@ const Store = {
   },
 
   logout() {
+    this.remove(STORAGE_KEYS.ACTIVE_ROLE);
     return this.remove(STORAGE_KEYS.AUTH_CURRENT_USER);
   },
 
