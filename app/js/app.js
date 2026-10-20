@@ -32,20 +32,39 @@ const App = {
       this.deferredPwaPrompt = e;
       console.log('MusicSmart: PWA install prompt captured and ready.');
     });
-    this.state.role = Store.getActiveRole();
+
+    // Check URL parameters for explicit student portal link (e.g. ?role=student or ?student=1)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isStudentLink = urlParams.has('student') || urlParams.get('role') === 'student';
+
+    const currentUser = Store.getCurrentUser ? Store.getCurrentUser() : null;
+
+    if (!currentUser) {
+      this.state.role = 'student';
+    } else if (isStudentLink && currentUser.role !== 'teacher') {
+      this.state.role = 'student';
+    } else {
+      this.state.role = currentUser.role;
+    }
+
     this.applyAppSettings();
     this.renderCourseTabs();
     this.updateSemesterBadge();
     this.updateInstructorBadge();
-    this.renderTodaySchedule();
-    this.renderTeacherTodoList();
-    this.renderDashboard();
     this.populateExportClassSelect();
     this.initStudentPortal();
     if (typeof Tuner !== 'undefined' && Tuner.init) Tuner.init();
     if (typeof AudioTools !== 'undefined' && AudioTools.renderBeatDots) AudioTools.renderBeatDots();
     if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.init) VirtualKalimba.init();
-    this.checkAuth();
+
+    // Check authentication and lock down unauthorized access
+    const isAuth = this.checkAuth();
+    if (isAuth && currentUser && currentUser.role === 'teacher') {
+      this.renderTodaySchedule();
+      this.renderTeacherTodoList();
+      this.renderDashboard();
+    }
+
     this.initModalManager();
   },
 
@@ -89,6 +108,10 @@ const App = {
 
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
+          // SECURITY GUARD: Never close auth modal if user is not authenticated!
+          if (modal.id === 'modal-auth-login' && !Store.getCurrentUser()) {
+            return;
+          }
           const closeBtn = modal.querySelector('.btn-close-modal, .modal-close-btn');
           if (closeBtn) {
             closeBtn.click();
@@ -111,6 +134,10 @@ const App = {
         const activeModals = Array.from(document.querySelectorAll('.modal-overlay.active'));
         if (activeModals.length > 0) {
           const topModal = activeModals[activeModals.length - 1];
+          // SECURITY GUARD: Never close auth modal on Escape if not authenticated!
+          if (topModal && topModal.id === 'modal-auth-login' && !Store.getCurrentUser()) {
+            return;
+          }
           const closeBtn = topModal.querySelector('.btn-close-modal, .modal-close-btn');
           if (closeBtn) {
             closeBtn.click();
@@ -128,36 +155,62 @@ const App = {
     const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
     const authModal = document.getElementById('modal-auth-login');
     const authUserBadge = document.getElementById('auth-user-badge');
+    const authUserBar = document.getElementById('auth-user-bar');
     const studentSwitcher = document.getElementById('student-switcher-container');
     const teacherActions = document.getElementById('teacher-actions-group');
+    const studentActions = document.getElementById('student-actions-group');
     const headerMiddle = document.getElementById('header-middle-teacher');
+    const roleSelector = document.getElementById('role-selector-pill');
+    const viewDashboard = document.getElementById('view-dashboard');
+    const viewCockpit = document.getElementById('view-cockpit');
+    const viewStudent = document.getElementById('view-student');
 
     if (!user) {
+      // 1. NON-AUTHENTICATED STATE: Strict privacy lockdown
+      if (viewDashboard) viewDashboard.style.display = 'none';
+      if (viewCockpit) viewCockpit.style.display = 'none';
+      if (viewStudent) viewStudent.style.display = 'none';
+      if (studentSwitcher) studentSwitcher.style.display = 'none';
+      if (teacherActions) teacherActions.style.display = 'none';
+      if (studentActions) studentActions.style.display = 'none';
+      if (headerMiddle) headerMiddle.style.display = 'none';
+      if (roleSelector) roleSelector.style.display = 'none';
+      if (authUserBadge) authUserBadge.style.display = 'none';
+      if (authUserBar) authUserBar.style.display = 'none';
+
+      // Always show Login Modal locked to student tab
       if (authModal) authModal.classList.add('active');
-      if (authUserBadge) authUserBadge.textContent = 'ยังไม่ได้เข้าสู่ระบบ';
       this.switchAuthTab('student');
       return false;
     }
 
+    if (authUserBar) authUserBar.style.display = 'flex';
     if (authModal) authModal.classList.remove('active');
 
     if (user.role === 'teacher') {
       if (authUserBadge) {
+        authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `👨‍🏫 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'คุณครู')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(${this.escapeHtml(user.email || 'ครูผู้สอน')})</span>`;
       }
       if (studentSwitcher) studentSwitcher.style.display = 'block';
       if (teacherActions) teacherActions.style.display = 'flex';
+      if (studentActions) studentActions.style.display = 'none';
       if (headerMiddle) headerMiddle.style.display = 'flex';
+      if (roleSelector) roleSelector.style.display = 'flex';
       this.switchRole('teacher', false);
     } else if (user.role === 'student') {
       this.state.studentId = user.studentId;
       this.state.studentClass = user.studentClass;
       if (authUserBadge) {
+        authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `🎓 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name)}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${this.escapeHtml(user.studentClass)} เลขที่ ${user.no}</span>`;
       }
+      // CRITICAL PRIVACY: Hide teacher actions, teacher courses, student switcher, and role switcher for students!
       if (studentSwitcher) studentSwitcher.style.display = 'none';
       if (teacherActions) teacherActions.style.display = 'none';
+      if (studentActions) studentActions.style.display = 'flex';
       if (headerMiddle) headerMiddle.style.display = 'none';
+      if (roleSelector) roleSelector.style.display = 'none';
       this.switchRole('student', false);
     }
     return true;
@@ -206,9 +259,16 @@ const App = {
     const previewBox = document.getElementById('auth-student-preview-box');
     const previewName = document.getElementById('auth-student-preview-name');
     const previewMeta = document.getElementById('auth-student-preview-meta');
+    const pinTag = document.getElementById('auth-student-pin-status-tag');
     const modeLogin = document.getElementById('auth-student-mode-login');
     const modeRegister = document.getElementById('auth-student-mode-register');
     const indicator = document.getElementById('auth-student-id-indicator');
+    const errorBox = document.getElementById('auth-student-id-error');
+
+    if (errorBox) {
+      errorBox.style.display = 'none';
+      errorBox.textContent = '';
+    }
 
     if (cleanId.length === 5) {
       const studentInfo = Store.getStudentById(cleanId);
@@ -222,14 +282,40 @@ const App = {
         if (previewMeta) previewMeta.textContent = `ห้อง ${studentInfo.class} • เลขที่ ${studentInfo.no} • รหัส: ${studentInfo.student_id}`;
 
         const acc = Store.getStudentAccount(cleanId);
-        if (acc) {
+        if (acc && (acc.pinHash || acc.pin)) {
+          // Case A: Existing Student with registered PIN
+          if (pinTag) {
+            pinTag.textContent = '🔒 ตั้ง PIN แล้ว';
+            pinTag.style.background = '#dcfce7';
+            pinTag.style.color = '#15803d';
+          }
           if (modeLogin) modeLogin.style.display = 'block';
           if (modeRegister) modeRegister.style.display = 'none';
           setTimeout(() => document.getElementById('auth-student-pin')?.focus(), 150);
         } else {
+          // Case B: First-time student -> FORCE PIN SETUP!
+          if (pinTag) {
+            pinTag.textContent = '✨ เข้าใช้งานครั้งแรก (ยังไม่ตั้ง PIN)';
+            pinTag.style.background = '#fef3c7';
+            pinTag.style.color = '#92400e';
+          }
           if (modeLogin) modeLogin.style.display = 'none';
           if (modeRegister) modeRegister.style.display = 'block';
           setTimeout(() => document.getElementById('auth-student-new-pin')?.focus(), 150);
+        }
+        return;
+      } else {
+        // 5 digits entered BUT NOT FOUND in student roster!
+        if (indicator) {
+          indicator.textContent = '❌';
+          indicator.style.display = 'block';
+        }
+        if (previewBox) previewBox.style.display = 'none';
+        if (modeLogin) modeLogin.style.display = 'none';
+        if (modeRegister) modeRegister.style.display = 'none';
+        if (errorBox) {
+          errorBox.style.display = 'block';
+          errorBox.innerHTML = `⚠️ ไม่พบเลขประจำตัว <strong>${this.escapeHtml(cleanId)}</strong> ในระบบโรงเรียนพะเยาพิทยาคม<br><span style="font-size:0.78rem; font-weight:normal; opacity:0.9;">กรุณาตรวจสอบเลขประจำตัว 5 หลัก หรือแจ้งคุณครูผู้สอนเพื่อลงทะเบียน</span>`;
         }
         return;
       }
@@ -246,20 +332,37 @@ const App = {
     const pin = (document.getElementById('auth-student-pin')?.value || '').trim();
 
     if (!studentId || studentId.length !== 5) {
-      alert('กรุณากรอกรหัสนักเรียน 5 หลักให้ถูกต้อง');
+      alert('กรุณากรอกเลขประจำตัวนักเรียน 5 หลักให้ถูกต้อง');
+      document.getElementById('auth-student-id')?.focus();
       return;
     }
     if (!pin) {
       alert('กรุณากรอกรหัส PIN 6 หลัก');
+      document.getElementById('auth-student-pin')?.focus();
       return;
     }
 
     const res = Store.verifyStudentLogin(studentId, pin);
     if (res.success) {
       this.checkAuth();
-      alert(`🎉 ยินดีต้อนรับ ${res.user.name} เข้าสู่ระบบ MusicSmart`);
+      // If not running as standalone app, guide to install app!
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (!isStandalone) {
+        this.openStudentPwaPromptModal(res.user, false);
+      } else {
+        alert(`🎉 ยินดีต้อนรับ ${res.user.name} เข้าสู่ระบบ MusicSmart`);
+      }
     } else {
-      alert(res.message);
+      if (res.needsRegistration) {
+        alert(res.message);
+        const modeLogin = document.getElementById('auth-student-mode-login');
+        const modeRegister = document.getElementById('auth-student-mode-register');
+        if (modeLogin) modeLogin.style.display = 'none';
+        if (modeRegister) modeRegister.style.display = 'block';
+        document.getElementById('auth-student-new-pin')?.focus();
+      } else {
+        alert(res.message);
+      }
     }
   },
 
@@ -269,24 +372,86 @@ const App = {
     const confirmPin = (document.getElementById('auth-student-confirm-pin')?.value || '').trim();
 
     if (!studentId || studentId.length !== 5) {
-      alert('กรุณากรอกรหัสนักเรียน 5 หลักให้ถูกต้อง');
+      alert('กรุณากรอกเลขประจำตัวนักเรียน 5 หลักให้ถูกต้อง');
+      document.getElementById('auth-student-id')?.focus();
       return;
     }
     if (!/^\d{6}$/.test(newPin)) {
-      alert('กรุณาตั้งรหัส PIN เป็นตัวเลข 6 หลัก (0-9)');
+      alert('กรุณาตั้งรหัส PIN เป็นตัวเลข 6 หลัก (0-9) เท่านั้น');
+      document.getElementById('auth-student-new-pin')?.focus();
       return;
     }
     if (newPin !== confirmPin) {
       alert('รหัส PIN ทั้งสองช่องไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
+      document.getElementById('auth-student-confirm-pin')?.focus();
       return;
     }
 
     const res = Store.registerStudentPin(studentId, newPin);
     if (res.success) {
       this.checkAuth();
-      alert(`🎉 ตั้งรหัส PIN 6 หลักสำเร็จแล้ว!\nยินดีต้อนรับ ${res.user.name} เข้าสู่บทเรียนดนตรี`);
+      // Prompt/force PWA App Install immediately!
+      this.openStudentPwaPromptModal(res.user, true);
     } else {
       alert(res.message);
+    }
+  },
+
+  openStudentPwaPromptModal(user, isFirstTime = false) {
+    const modal = document.getElementById('modal-student-pwa-prompt');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('pwa-prompt-student-title');
+    if (titleEl && user) {
+      titleEl.textContent = isFirstTime 
+        ? `🎉 ตั้งรหัส PIN สำเร็จแล้ว! ยินดีต้อนรับ ${user.name}`
+        : `👋 ยินดีต้อนรับ ${user.name}`;
+    }
+
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const nativeBox = document.getElementById('pwa-prompt-native');
+    const iosBox = document.getElementById('pwa-prompt-ios');
+
+    if (isIos) {
+      if (nativeBox) nativeBox.style.display = 'none';
+      if (iosBox) iosBox.style.display = 'block';
+    } else {
+      if (nativeBox) nativeBox.style.display = 'block';
+      if (iosBox) iosBox.style.display = 'none';
+    }
+
+    modal.classList.add('active');
+  },
+
+  closeStudentPwaPromptModal() {
+    const modal = document.getElementById('modal-student-pwa-prompt');
+    if (modal) modal.classList.remove('active');
+  },
+
+  copyStudentShareLink() {
+    const origin = window.location.origin;
+    let path = window.location.pathname;
+    let url = `${origin}${path}?role=student`;
+    if (!origin || origin === 'null') {
+      url = window.location.href.split('?')[0] + '?role=student';
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        alert(`📋 คัดลอกลิงก์สำหรับส่งให้นักเรียนเรียบร้อยแล้ว!\n\n${url}\n\nเมื่อนักเรียนเปิดลิงก์นี้ ระบบจะแสดงหน้าล็อกอินให้นักเรียนกรอกเลขประจำตัว 5 หลัก และบังคับตั้งรหัส PIN พร้อมติดตั้งแอพทันที โดยไม่เห็นข้อมูลของครูครับ`);
+      }).catch(() => {
+        prompt('กรุณาคัดลอกลิงก์สำหรับส่งให้นักเรียนด้านล่างนี้ครับ:', url);
+      });
+    } else {
+      prompt('กรุณาคัดลอกลิงก์สำหรับส่งให้นักเรียนด้านล่างนี้ครับ:', url);
+    }
+  },
+
+  openTeacherLoginModal() {
+    const authModal = document.getElementById('modal-auth-login');
+    if (authModal) {
+      authModal.classList.add('active');
+      this.switchAuthTab('teacher');
     }
   },
 
@@ -310,10 +475,7 @@ const App = {
       if (defaultHintEl) defaultHintEl.style.display = 'block';
       if (secretInput) {
         secretInput.disabled = false;
-        secretInput.placeholder = 'กรอกรหัสผ่านหรือ PIN';
-        if (!secretInput.value && email === 'krumum.piano@gmail.com') {
-          secretInput.value = 'ppk1234';
-        }
+        secretInput.placeholder = 'กรอกรหัสผ่านหรือ PIN ครู';
       }
     }
   },
@@ -447,6 +609,7 @@ const App = {
     const name = user ? user.name : 'ผู้ใช้งาน';
     if (confirm(`ต้องการออกจากระบบ (${name}) หรือไม่?`)) {
       Store.logout();
+      this.state.role = 'student';
       const studentIdInput = document.getElementById('auth-student-id');
       const studentPinInput = document.getElementById('auth-student-pin');
       const studentNewPin = document.getElementById('auth-student-new-pin');
@@ -522,7 +685,7 @@ const App = {
   },
 
   populatePinResetControls() {
-    const classSel = document.getElementById('setting-pin-reset-class');
+    const classSel = document.getElementById('setting-pin-reset-class') || document.getElementById('user-pin-reset-class');
     if (!classSel) return;
     const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];
     classSel.innerHTML = '';
@@ -536,7 +699,7 @@ const App = {
   },
 
   onPinResetClassChange(className) {
-    const studentSel = document.getElementById('setting-pin-reset-student');
+    const studentSel = document.getElementById('setting-pin-reset-student') || document.getElementById('user-pin-reset-student');
     if (!studentSel) return;
     const students = Store.getStudents(className);
     studentSel.innerHTML = '';
@@ -551,7 +714,7 @@ const App = {
   },
 
   handleResetStudentPinClick() {
-    const studentSel = document.getElementById('setting-pin-reset-student');
+    const studentSel = document.getElementById('setting-pin-reset-student') || document.getElementById('user-pin-reset-student');
     const studentId = studentSel ? studentSel.value : null;
     if (!studentId) {
       alert('กรุณาเลือกนักเรียนที่ต้องการรีเซ็ต PIN');
@@ -562,7 +725,7 @@ const App = {
     if (confirm(`ยืนยันการรีเซ็ตรหัส PIN ของ ${name} (รหัส ${studentId}) หรือไม่?\nเมื่อรีเซ็ตแล้ว นักเรียนจะสามารถเข้าสู่ระบบและตั้ง PIN 6 หลักใหม่ได้ด้วยตนเอง`)) {
       const res = Store.resetStudentPin(studentId);
       alert(res.message);
-      const classSel = document.getElementById('setting-pin-reset-class');
+      const classSel = document.getElementById('setting-pin-reset-class') || document.getElementById('user-pin-reset-class');
       if (classSel) this.onPinResetClassChange(classSel.value);
     }
   },
@@ -749,6 +912,15 @@ const App = {
 
   // --- Role Switcher (Teacher vs Student View) ---
   switchRole(role, save = true) {
+    const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
+    if (role === 'teacher') {
+      if (!user || user.role !== 'teacher') {
+        alert('🔒 พื้นที่เฉพาะสำหรับคุณครูผู้สอน กรุณาเข้าสู่ระบบด้วยบัญชีครู');
+        this.openTeacherLoginModal();
+        return;
+      }
+    }
+
     this.state.role = role;
     if (save) Store.setActiveRole(role);
 
@@ -832,7 +1004,7 @@ const App = {
         if (item.type === 'today_class' || item.type === 'makeup_score') {
           App.enterCockpit(item.className, item.period);
           if (item.type === 'makeup_score') {
-            App.switchTab('evaluation');
+            App.switchTab('assessment');
           }
         } else if (item.type === 'reflection_missing') {
           App.enterCockpit(item.className, item.period);
@@ -1149,45 +1321,7 @@ const App = {
     if (titleEl) titleEl.textContent = lesson?.topic || `เนื้อหาการเรียนรู้ คาบที่ ${this.state.studentPeriod}`;
 
     if (lessonTextEl) {
-      if (lesson) {
-        let html = `
-          <div style="margin-bottom: 1rem;">
-            <strong style="color: var(--ppk-navy);">หน่วยการเรียนรู้ที่ ${lesson.unit_no}:</strong> ${this.escapeHtml(lesson.unit_name)}
-          </div>
-          <div style="background: var(--bg-subtle); padding: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem;">
-            <div style="font-weight: 600; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">จุดประสงค์การเรียนรู้ (K-P-A):</div>
-            <ul style="padding-left: 1.25rem; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6;">
-              <li><strong>ความรู้ (K):</strong> ${this.escapeHtml(lesson.kpa?.k || '-')}</li>
-              <li><strong>ทักษะกระบวนการ (P):</strong> ${this.escapeHtml(lesson.kpa?.p || '-')}</li>
-              <li><strong>คุณลักษณะอันพึงประสงค์ (A):</strong> ${this.escapeHtml(lesson.kpa?.a || '-')}</li>
-            </ul>
-          </div>
-        `;
-
-        if (lesson.steps && lesson.steps.length > 0) {
-          html += `<div style="font-weight: 600; color: var(--ppk-navy-dark); margin-bottom: 0.5rem;">กิจกรรมการเรียนรู้:</div>`;
-          lesson.steps.forEach(st => {
-            html += `
-              <div style="margin-bottom: 0.65rem; padding-left: 0.5rem; border-left: 3px solid var(--ppk-blue);">
-                <div style="font-weight: 600; font-size: 0.88rem; color: var(--ppk-navy);">${this.escapeHtml(st.phase)}</div>
-                <div style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 2px;">${this.escapeHtml(st.desc)}</div>
-              </div>
-            `;
-          });
-        }
-
-        if (lesson.mentor_tips) {
-          html += `
-            <div style="margin-top: 1rem; padding: 0.75rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm); font-size: 0.85rem; color: #92400e;">
-              ${this.escapeHtml(lesson.mentor_tips)}
-            </div>
-          `;
-        }
-
-        lessonTextEl.innerHTML = html;
-      } else {
-        lessonTextEl.innerHTML = `<p style="color: var(--text-muted);">กำลังจัดเตรียมแผนการเรียนรู้สำหรับคาบนี้</p>`;
-      }
+      lessonTextEl.innerHTML = this.buildStudentStudyGuideHTML(gradeKey, this.state.studentPeriod, lesson);
     }
 
     if (promptEl) {
@@ -1318,6 +1452,247 @@ const App = {
     alert(`🎉 ส่งงานประจำคาบที่ ${this.state.studentPeriod} เรียบร้อยแล้วครับ!`);
     this.renderStudentPortal();
   },
+
+  buildStudentStudyGuideHTML(gradeKey, period, lesson) {
+    if (!lesson) {
+      return `<p style="color: var(--text-muted);">กำลังจัดเตรียมแผนการเรียนรู้สำหรับคาบนี้</p>`;
+    }
+
+    const p = parseInt(period, 10);
+    const isM1 = (gradeKey === 'M1');
+
+    let html = `
+      <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <span style="background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px;">
+            หน่วยที่ ${lesson.unit_no}: ${this.escapeHtml(lesson.unit_name)}
+          </span>
+          <h3 style="margin: 0.4rem 0 0.2rem 0; font-size: 1.15rem; color: #1e3a8a; font-weight: 800;">
+            ${this.escapeHtml(lesson.topic)}
+          </h3>
+        </div>
+        <button class="btn-nav-action" style="font-size: 0.8rem; background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()">
+          🎼 สื่อโน้ตสากล & ผังคาลิมบ้า
+        </button>
+      </div>
+
+      <!-- K-P-A Goals -->
+      <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1.25rem;">
+        <div style="font-weight: 700; color: #1e3a8a; font-size: 0.88rem; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem;">
+          <span>🎯</span> เป้าหมายการเรียนรู้ในคาบนี้:
+        </div>
+        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.86rem; color: #334155; line-height: 1.6;">
+          <li><strong>ด้านความรู้ (K):</strong> ${this.escapeHtml(lesson.kpa?.k || '-')}</li>
+          <li><strong>ด้านทักษะปฏิบัติ (P):</strong> ${this.escapeHtml(lesson.kpa?.p || '-')}</li>
+          <li><strong>ด้านคุณลักษณะ (A):</strong> ${this.escapeHtml(lesson.kpa?.a || '-')}</li>
+        </ul>
+      </div>
+    `;
+
+    // --- Dynamic Period-Specific Interactive Learning Content ---
+    if (p === 1) {
+      // Period 1: Orientation
+      html += `
+        <div style="background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
+          <h4 style="margin: 0 0 0.5rem 0; color: #1e40af; font-size: 0.98rem; font-weight: 800; display: flex; align-items: center; gap: 0.4rem;">
+            <span>📢</span> ข้อมูลปฐมนิเทศรายวิชาและเกณฑ์คะแนน 100 คะแนนเต็ม
+          </h4>
+          <div style="font-size: 0.86rem; color: #334155; line-height: 1.6; margin-bottom: 0.75rem;">
+            ยินดีต้อนรับสู่รายวิชาดนตรี ในภาคเรียนนี้จัดการเรียนรู้ 20 คาบ โดยใช้แอปพลิเคชัน <strong>MusicSmart</strong> ควบคู่การปฏิบัติเครื่องดนตรีคาลิมบ้า 17 คีย์
+          </div>
+
+          <!-- Score Table -->
+          <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-bottom: 0.85rem;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: center;">
+              <thead style="background: #1e3a8a; color: #ffffff;">
+                <tr>
+                  <th style="padding: 6px;">หมวดการประเมิน</th>
+                  <th style="padding: 6px;">สัดส่วน</th>
+                  <th style="padding: 6px;">รายละเอียดคะแนน</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">1. คะแนนเก็บระหว่างภาคเรียน</td>
+                  <td style="padding: 6px; font-weight: 700; color: #2563eb;">80 คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">ความรู้ K (30) + ปฏิบัติ P (30) + จิตพิสัย A (20)</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">2. สอบวัดผลกลางภาค (คาบที่ 11)</td>
+                  <td style="padding: 6px; font-weight: 700; color: #d97706;">10 คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">สอบทักษะปฏิบัติเดี่ยว/กลุ่ม 8 คะแนน + ข้อสอบทฤษฎี 2 คะแนน</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">3. สอบวัดผลปลายภาค (คาบที่ 19-20)</td>
+                  <td style="padding: 6px; font-weight: 700; color: #16a34a;">10 คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">สอบปฏิบัติรวมวง 8 คะแนน + ข้อสอบทฤษฎี 2 คะแนน</td>
+                </tr>
+                <tr style="background: #f1f5f9; font-weight: 800; color: #0f172a;">
+                  <td style="padding: 6px; text-align: left;">รวมทั้งสิ้น</td>
+                  <td style="padding: 6px; color: #1e40af;">100 คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">เกณฑ์เวลาเรียนต้องไม่น้อยกว่า 80% (16 จาก 20 คาบ)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Rules -->
+          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 0.75rem; font-size: 0.82rem; color: #92400e;">
+            <strong>🔒 กฎและข้อตกลง 4 ข้อสำคัญในห้องปฏิบัติการดนตรี:</strong>
+            <ol style="margin: 0.35rem 0 0 0; padding-left: 1.25rem; line-height: 1.5;">
+              <li>ถือเครื่องคาลิมบ้าด้วยสองมือเสมอ และวางบนผ้ารองเครื่องประจำโต๊ะ ไม่วางซ้อนกัน</li>
+              <li>ห้ามดึง ดัด หรืองัดลิ่มเสียงเหล็กเด็ดขาด (หากเสียงเพี้ยนให้ใช้ค้อนจูนเสียงเคาะเบาๆ)</li>
+              <li>เมื่อได้ยินสัญญาณเคาะ Woodblock 3 จังหวะ ให้หยุดดีดทันทีและสบตาคุณครู</li>
+              <li>ตรวจเช็ค ทำความสะอาด และเก็บเครื่องดนตรีลงในซองกันกระแทกก่อนออกจากห้องเรียน</li>
+            </ol>
+          </div>
+        </div>
+      `;
+    } else if (isM1 && p >= 2 && p <= 5) {
+      // M.1 Periods 2-5: Basic Kalimba & Standard Staff Notation
+      html += `
+        <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-weight: 800; color: #1e3a8a; font-size: 0.96rem;">
+              🎼 สื่อฝึกอ่านโน้ตสากลในกุญแจซอล (C4 - C5) & ผังลิ่มเสียง 17 คีย์
+            </div>
+            <span style="font-size: 0.78rem; color: #64748b;">(แตะที่ตัวโน้ตเพื่อฟังเสียงจริง)</span>
+          </div>
+
+          <!-- Interactive Note Chips for Students -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+            ${[
+              { note: 'C4', num: '1', th: 'โด', pos: 'เส้นน้อยล่าง' },
+              { note: 'D4', num: '2', th: 'เร', pos: 'ใต้เส้นที่ 1' },
+              { note: 'E4', num: '3', th: 'มี', pos: 'คาบเส้นที่ 1' },
+              { note: 'F4', num: '4', th: 'ฟา', pos: 'ช่องที่ 1' },
+              { note: 'G4', num: '5', th: 'ซอล', pos: 'คาบเส้นที่ 2' },
+              { note: 'A4', num: '6', th: 'ลา', pos: 'ช่องที่ 2' },
+              { note: 'B4', num: '7', th: 'ที', pos: 'คาบเส้นที่ 3' },
+              { note: 'C5', num: '1̇', th: 'โดสูง', pos: 'ช่องที่ 3' }
+            ].map(item => `
+              <div onclick="App.playAidsNote('${item.note}')" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 0.5rem 0.25rem; text-align: center; cursor: pointer; transition: transform 0.15s ease;" onmouseover="this.style.background='#eff6ff'; this.style.borderColor='#38bdf8';" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';">
+                <div style="font-weight: 800; font-size: 1.05rem; color: #1e3a8a;">${item.note}</div>
+                <div style="font-size: 0.85rem; font-weight: 700; color: #0284c7;">(${item.num} ${item.th})</div>
+                <div style="font-size: 0.68rem; color: #64748b; margin-top: 2px;">${item.pos}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Key Tips -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.82rem;">
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 0.65rem;">
+              <strong style="color: #1d4ed8;">👍 ท่าทางการจับและดีด:</strong><br>
+              ผ่อนคลายข้อมือ สองมือโอบประคองตัวเครื่องด้านข้าง ใช้ปลายนิ้วโป้งสะกิดลิ่มเสียงทำมุม <strong>45 องศา</strong> ห้ามใช้เล็บจิกตรงๆ
+            </div>
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0.65rem;">
+              <strong style="color: #15803d;">🎹 ลิ่มเสียงคาลิมบ้า 17 คีย์:</strong><br>
+              ลิ่มกลางยาวที่สุดคือ <strong>C4 (1)</strong> จากนั้นโน้ตจะไล่ระดับเสียงสลับ <strong>ซ้าย-ขวา-ซ้าย-ขวา</strong> ออกไปสองข้าง
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (isM1 && p >= 6 && p <= 8) {
+      // M.1 Song Practice (Mary & Twinkle)
+      html += `
+        <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-weight: 800; color: #1e3a8a; font-size: 0.96rem;">
+              🐑 โน้ตเพลงฝึกซ้อมเดี่ยว: เพลงหนูมาลี (Mary Had a Little Lamb)
+            </div>
+            <button class="btn-nav-action primary" style="font-size: 0.78rem; padding: 4px 10px;" onclick="VirtualKalimba.openModal()">
+              ▶ ซ้อมในห้องซ้อมจำลอง (Virtual Kalimba)
+            </button>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.85rem; font-family: monospace; font-size: 0.9rem; line-height: 1.7; overflow-x: auto;">
+            <div><strong>[ท่อน 1]</strong> | 3 &nbsp;2 &nbsp;1 &nbsp;2 | 3 &nbsp;3 &nbsp;3 &nbsp;- | 2 &nbsp;2 &nbsp;2 &nbsp;- | 3 &nbsp;5 &nbsp;5 &nbsp;- |</div>
+            <div style="color: #64748b;">เนื้อร้อง: | หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ลูก แมว เหมียว | ลูก แมว เหมียว |</div>
+            <div style="margin-top: 0.5rem;"><strong>[ท่อน 2]</strong> | 3 &nbsp;2 &nbsp;1 &nbsp;2 | 3 &nbsp;3 &nbsp;3 &nbsp;3 | 2 &nbsp;2 &nbsp;3 &nbsp;2 | 1 &nbsp;- &nbsp;- &nbsp;- |</div>
+            <div style="color: #64748b;">เนื้อร้อง: | หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ขน มัน ดู คล้าย | สำ &nbsp;ลี &nbsp;- &nbsp;- |</div>
+          </div>
+        </div>
+      `;
+    } else if (!isM1 && p >= 5 && p <= 6) {
+      // M.2 Canon / Round (Row Your Boat)
+      html += `
+        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%); border: 1.5px solid #86efac; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="font-weight: 800; color: #166534; font-size: 0.96rem;">
+              🚣‍♂️ บทเพลงวนรอบ Canon / Round: Row, Row, Row Your Boat (ม.2)
+            </div>
+            <button class="btn-nav-action primary" style="font-size: 0.78rem; padding: 4px 10px;" onclick="VirtualKalimba.openModal()">
+              ▶ ซ้อมใน Virtual Kalimba
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.65rem; margin-bottom: 0.85rem; font-size: 0.8rem;">
+            <div style="background: #dcfce7; border: 1px solid #86efac; border-radius: 6px; padding: 0.55rem;">
+              <strong style="color: #15803d;">🟢 กลุ่ม A (กลุ่มนำ):</strong> เริ่มบรรเลงตั้งแต่ห้องที่ 1 ห้ามเร่งจังหวะ
+            </div>
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 0.55rem;">
+              <strong style="color: #1d4ed8;">🔵 กลุ่ม B (กลุ่มตาม):</strong> เริ่มเล่นห้อง 1 เมื่อกลุ่ม A เข้าสู่ห้องที่ 3
+            </div>
+            <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 0.55rem;">
+              <strong style="color: #b45309;">🟡 กลุ่ม C (Ostinato):</strong> ดีดโน้ต C4 (1) คลอจังหวะเบสต่อเนื่อง
+            </div>
+          </div>
+
+          <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.85rem; font-family: monospace; font-size: 0.88rem; line-height: 1.7; overflow-x: auto;">
+            <div>ห้อง 1-2 (กลุ่ม A เริ่ม): | <strong>1</strong> . <strong>1</strong> . | <strong>1</strong> <strong>2</strong> <strong>3</strong> . | &nbsp; Row row row your boat</div>
+            <div>ห้อง 3-4 (<span style="color:#2563eb; font-weight:700;">🔔 กลุ่ม B เข้า</span>): | <strong>3</strong> <strong>2</strong> <strong>3</strong> <strong>4</strong> | <strong>5</strong> . . . | &nbsp; Gently down the stream</div>
+            <div>ห้อง 5-6: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <strong>1̇</strong><strong>1̇</strong><strong>1̇</strong> <strong>5</strong><strong>5</strong><strong>5</strong> | <strong>3</strong><strong>3</strong><strong>3</strong> <strong>1</strong><strong>1</strong><strong>1</strong> | &nbsp; Merrily merrily merrily merrily</div>
+            <div>ห้อง 7-8: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <strong>5</strong> <strong>4</strong> <strong>3</strong> <strong>2</strong> | <strong>1</strong> . . . | &nbsp; Life is but a dream</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // --- Active Learning Student Activities ---
+    if (lesson.steps && lesson.steps.length > 0) {
+      html += `
+        <div style="font-weight: 700; color: #1e3a8a; font-size: 0.92rem; margin-bottom: 0.65rem;">
+          📋 ลำดับกิจกรรมการเรียนรู้ของนักเรียนในคาบนี้ (เปิดดูบนหน้าจอของคุณ):
+        </div>
+      `;
+      lesson.steps.forEach((st, idx) => {
+        html += `
+          <div style="margin-bottom: 0.65rem; padding: 0.65rem 0.85rem; background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; border-radius: 6px;">
+            <div style="font-weight: 700; font-size: 0.88rem; color: #0369a1; display: flex; justify-content: space-between;">
+              <span>${idx + 1}. ${this.escapeHtml(st.phase)}</span>
+              <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">${st.duration} นาที</span>
+            </div>
+            <div style="font-size: 0.85rem; color: #334155; margin-top: 4px; line-height: 1.5;">
+              ${this.escapeHtml(st.desc)}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // --- Action Bar for Student ---
+    html += `
+      <div style="margin-top: 1.25rem; padding: 0.85rem; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <span style="font-size: 0.82rem; color: #475569; font-weight: 600;">
+          💡 เครื่องมือพร้อมเรียนประจำคาบ:
+        </span>
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px;" onclick="Tuner.openModal()">
+            🎸 เครื่องตั้งเสียง (Tuner)
+          </button>
+          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #eff6ff; color: #1d4ed8;" onclick="VirtualKalimba.openModal()">
+            🎵 ซ้อมคาลิมบ้าจำลอง
+          </button>
+          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #fef08a; color: #854d0e;" onclick="App.openMusicAidsModal()">
+            🎼 สื่อโน้ตสากล
+          </button>
+        </div>
+      </div>
+    `;
+
+    return html;
+  },
+
   updateInstructorBadge() {
     const inst = Store.getInstructor();
     const roleEl = document.getElementById('badge-instructor-role');
@@ -1766,6 +2141,7 @@ const App = {
 
   // --- Cockpit Tabs ---
   switchTab(tabName) {
+    if (tabName === 'evaluation') tabName = 'assessment';
     this.state.activeTab = tabName;
 
     const btnLesson = document.getElementById('tab-btn-lesson');

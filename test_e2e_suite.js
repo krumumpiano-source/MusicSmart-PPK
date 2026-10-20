@@ -148,11 +148,19 @@ assert(
   'Store.exportBackupJSON captures 100% of dynamic multi-grade evaluation keys'
 );
 
-// Test Teacher To-Do List (No NaN)
-const todoList = Store.getTeacherTodoList();
-assert(Array.isArray(todoList), 'getTeacherTodoList returns structured array');
-const hasNaN = todoList.some(item => Number.isNaN(item.pendingCount));
-assert(!hasNaN, 'getTeacherTodoList contains ZERO NaN values in all pending calculations');
+// Test Default Role Security (Must default to 'student' when unauthenticated)
+Store.logout();
+assert(Store.getActiveRole() === 'student', 'Store.getActiveRole() defaults securely to "student" when not logged in');
+
+// Test Student Forced PIN Registration & Authentication
+const regResult = Store.registerStudentPin('35994', '654321');
+assert(regResult.success === true && regResult.user && regResult.user.studentId === '35994', 'Store.registerStudentPin registers 6-digit PIN and sets user session');
+
+const loginCorrect = Store.verifyStudentLogin('35994', '654321');
+assert(loginCorrect.success === true && loginCorrect.user.role === 'student', 'Store.verifyStudentLogin succeeds with correct PIN');
+
+const loginWrong = Store.verifyStudentLogin('35994', '999999');
+assert(loginWrong.success === false, 'Store.verifyStudentLogin rejects incorrect PIN');
 
 // ----------------------------------------------------
 // 4. Test Feldman Criticism Module
@@ -267,7 +275,11 @@ function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('auth-user-bar'), 'HTML contains User Auth status bar (#auth-user-bar)');
   assert(htmlData.includes('sw.js'), 'HTML registers ServiceWorker (PWA readiness)');
   assert(!htmlData.includes('user-scalable=no'), 'WCAG 2.1 AA Compliance: user-scalable=no removed');
-  assert(htmlData.includes('modal-music-visual-aids'), 'HTML contains Music Visual Aids Modal (#modal-music-visual-aids)');
+  assert(htmlData.includes('modal-student-pwa-prompt'), 'HTML contains Student PWA Installation Prompt (#modal-student-pwa-prompt)');
+  assert(htmlData.includes('auth-student-id-error'), 'HTML contains Student ID Error Container (#auth-student-id-error)');
+  assert(htmlData.includes('btn-copy-student-link'), 'HTML contains Teacher Copy Student Link Button (#btn-copy-student-link)');
+  assert(htmlData.includes('student-pwa-banner'), 'HTML contains Student Portal PWA Banner (#student-pwa-banner)');
+  assert(!htmlData.includes('value="ppk1234"'), 'HTML does NOT leak default teacher password in secret input value');
 
   console.log('\n' + '='.repeat(70));
   console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);

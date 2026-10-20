@@ -73,6 +73,11 @@
       <div class="header-actions">
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btn-copy-student-link" class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700;" onclick="App.copyStudentShareLink()" title="คัดลอกลิงก์ส่งให้นักเรียนเพื่อเข้าสู่ระบบและติดตั้งแอปทันที">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            <span class="hide-on-tablet">ลิงก์ส่งนักเรียน</span>
+          </button>
+
           <div id="instructor-chip" class="teacher-chip" onclick="App.openUserManagementModal('teachers')" title="คลิกเพื่อจัดการบัญชีผู้ดูแล และสลับผู้สอน (ครูประจำวิชา / ครูฝึกสอน)">
             <span id="badge-instructor-role" class="teacher-role-tag">ครูประจำวิชา</span>
             <span id="badge-instructor-name" class="teacher-name-label">คุณครูพงศธร โพธิแก้ว</span>
@@ -216,8 +221,17 @@
         </div>
 
         <!-- Student Actions Group -->
-        <div id="student-actions-group" style="display: none; align-items: center; gap: 0.65rem;">
-          <!-- In student mode, student actions are handled here -->
+        <div id="student-actions-group" style="display: none; align-items: center; gap: 0.5rem;">
+          <button id="btn-student-pwa-install" class="btn-nav-action" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd; font-weight: 700;" onclick="App.triggerPwaInstall()" title="ติดตั้งแอปพลิเคชัน MusicSmart ลงในอุปกรณ์">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+            <span>📲 ติดตั้งแอป</span>
+          </button>
+          <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมดนตรี คาลิมบ้า 17 คีย์">
+            <span>🎹 คาลิมบ้า</span>
+          </button>
+          <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Tuner.openModal()" title="เครื่องตั้งสาย Tuner">
+            <span>🎙️ ตั้งสาย</span>
+          </button>
         </div>
 
         <!-- Current Auth User & Subtle Logout Action (Decluttered Header) -->
@@ -595,6 +609,25 @@
 
     <!-- VIEW 3: Student Portal (มุมมองนักเรียน) -->
     <section id="view-student" style="display: none;">
+      <!-- Student PWA Install Prompt Banner (Persistent & Responsive) -->
+      <div id="student-pwa-banner" style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%); color: #ffffff; padding: 0.85rem 1.25rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span style="font-size: 1.6rem;">📲</span>
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem;">ติดตั้งแอป MusicSmart บนอุปกรณ์ของคุณ</div>
+            <div style="font-size: 0.8rem; opacity: 0.9; margin-top: 1px;">เปิดเรียนได้เต็มจอ เล่นคาลิมบ้าและส่งงานได้สะดวก โดยไม่ต้องเปิดผ่านเบราว์เซอร์</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+          <button class="btn-nav-action" style="background: #ffffff; color: #0284c7; border: none; font-weight: 700; padding: 0.45rem 0.85rem; border-radius: 8px; font-size: 0.88rem; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" onclick="App.triggerPwaInstall()">
+            ติดตั้งทันที
+          </button>
+          <button style="background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 1.1rem; padding: 0.2rem 0.4rem;" onclick="document.getElementById('student-pwa-banner').style.display='none'" title="ปิด">
+            ✕
+          </button>
+        </div>
+      </div>
+
       <!-- Student Header & Profile Bar -->
       <div class="student-profile-bar">
         <div class="student-profile-left">
@@ -836,7 +869,7 @@
        ========================================================================== -->
 
   <!-- AUTH MODAL: Login & PIN Registration Gateway -->
-  <div id="modal-auth-login" class="modal-overlay" style="backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.78); z-index: 99999;">
+  <div id="modal-auth-login" class="modal-overlay" style="backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.82); z-index: 99999;">
     <div class="modal-card" style="max-width: 500px; width: 94vw; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45); overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15); padding: 0;">
       
       <!-- Auth Modal Header Banner -->
@@ -873,21 +906,26 @@
               รหัสประจำตัวนักเรียน (5 หลัก):
             </label>
             <div style="position: relative;">
-              <input type="text" id="auth-student-id" class="form-input" placeholder="เช่น 35994" maxlength="5" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 2px; padding: 0.65rem 0.85rem;" oninput="App.onAuthStudentIdInput(this.value)">
+              <input type="text" id="auth-student-id" class="form-input" placeholder="เช่น 35994" maxlength="5" inputmode="numeric" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 2px; padding: 0.65rem 0.85rem;" oninput="App.onAuthStudentIdInput(this.value)">
               <span id="auth-student-id-indicator" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 1.1rem; display: none;"></span>
             </div>
+            <div id="auth-student-id-error" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 8px; padding: 0.75rem 0.9rem; font-size: 0.85rem; font-weight: 600; margin-top: 0.5rem; line-height: 1.4;">
+            </div>
             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * กรอกรหัสนักเรียน 5 หลักตามที่โรงเรียนกำหนด
+              * กรอกรหัสนักเรียน 5 หลักตามที่ลงทะเบียนไว้ในระบบโรงเรียนพะเยาพิทยาคม
             </div>
           </div>
 
           <!-- Student Lookup Live Preview Box -->
-          <div id="auth-student-preview-box" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.85rem; margin-bottom: 1.15rem;">
-            <div style="font-size: 0.8rem; color: #166534; font-weight: 600;">✅ พบข้อมูลนักเรียนในระบบ:</div>
-            <div id="auth-student-preview-name" style="font-size: 1.05rem; font-weight: 700; color: #14532d; margin-top: 2px;">
+          <div id="auth-student-preview-box" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.15rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-size: 0.8rem; color: #166534; font-weight: 700;">✅ ตรวจสอบพบข้อมูลในระบบ:</div>
+              <span id="auth-student-pin-status-tag" style="font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; font-weight: 700;"></span>
+            </div>
+            <div id="auth-student-preview-name" style="font-size: 1.05rem; font-weight: 800; color: #14532d; margin-top: 3px;">
               -
             </div>
-            <div id="auth-student-preview-meta" style="font-size: 0.82rem; color: #15803d; margin-top: 2px;">
+            <div id="auth-student-preview-meta" style="font-size: 0.84rem; color: #15803d; margin-top: 2px;">
               -
             </div>
           </div>
@@ -900,41 +938,41 @@
               </label>
               <input type="password" id="auth-student-pin" class="form-input" placeholder="••••••" maxlength="6" inputmode="numeric" style="font-size: 1.25rem; font-weight: 800; letter-spacing: 6px; text-align: center; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleStudentLogin()">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
-                <span style="font-size: 0.78rem; color: #64748b;">กรอกรหัส PIN 6 หลักของท่าน</span>
-                <a href="javascript:void(0)" onclick="alert('กรณีลืมรหัส PIN: กรุณาแจ้งคุณครูประจำวิชาเพื่อขอรีเซ็ตรหัส PIN ได้ทันทีครับ')" style="font-size: 0.78rem; color: #0284c7; text-decoration: underline;">ลืมรหัส PIN?</a>
+                <span style="font-size: 0.78rem; color: #64748b;">กรอกรหัส PIN 6 หลักของคุณ</span>
+                <a href="javascript:void(0)" onclick="alert('กรณีลืมรหัส PIN: กรุณาแจ้งคุณครูผู้สอนเพื่อขอรีเซ็ตรหัส PIN ได้ทันทีครับ')" style="font-size: 0.78rem; color: #0284c7; text-decoration: underline;">ลืมรหัส PIN?</a>
               </div>
             </div>
 
-            <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center;" onclick="App.handleStudentLogin()">
+            <button class="btn-nav-action primary" style="width: 100%; padding: 0.85rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #0284c7; border: none; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);" onclick="App.handleStudentLogin()">
               🚀 เข้าสู่ระบบบทเรียนดนตรี
             </button>
           </div>
 
-          <!-- Case B: First-Time Student (Set 6-digit PIN by yourself) -->
-          <div id="auth-student-mode-register" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-            <div style="font-size: 0.9rem; font-weight: 700; color: #92400e; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.35rem;">
-              <span>✨</span> เข้าใช้งานครั้งแรก: ตั้งรหัส PIN 6 หลักด้วยตนเอง
+          <!-- Case B: First-Time Student (Forced 6-digit PIN Setup & App Install) -->
+          <div id="auth-student-mode-register" style="display: none; background: #fffbeb; border: 2px solid #f59e0b; border-radius: 12px; padding: 1.15rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);">
+            <div style="font-size: 0.95rem; font-weight: 800; color: #92400e; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 1.2rem;">✨</span> เข้าใช้งานครั้งแรก: บังคับตั้งรหัส PIN 6 หลัก
             </div>
-            <p style="font-size: 0.8rem; color: #b45309; line-height: 1.5; margin-bottom: 0.85rem;">
-              กรุณาตั้งรหัสผ่าน PIN ตัวเลข 6 หลักที่คุณจำได้ง่าย (เช่น วันเดือนปีเกิด) เพื่อใช้ล็อกอินเข้าเรียนในครั้งต่อไป
+            <p style="font-size: 0.82rem; color: #b45309; line-height: 1.5; margin: 0 0 0.85rem 0;">
+              กรุณาตั้งรหัสผ่าน PIN ตัวเลข 6 หลักที่คุณจำได้ง่าย (เช่น วันเดือนปีเกิด) เพื่อความปลอดภัยในการบันทึกคะแนนและส่งงานดนตรี
             </p>
 
             <div class="form-group" style="margin-bottom: 0.75rem;">
-              <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #78350f;">
-                ตั้งรหัส PIN 6 หลักใหม่:
+              <label class="form-label" style="font-size: 0.86rem; font-weight: 700; color: #78350f;">
+                ตั้งรหัส PIN 6 หลักใหม่ (ตัวเลข 0-9):
               </label>
-              <input type="password" id="auth-student-new-pin" class="form-input" placeholder="ตัวเลข 6 หลัก" maxlength="6" inputmode="numeric" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 4px; text-align: center;">
+              <input type="password" id="auth-student-new-pin" class="form-input" placeholder="ตัวเลข 6 หลัก" maxlength="6" inputmode="numeric" style="font-size: 1.2rem; font-weight: 800; letter-spacing: 5px; text-align: center; border-color: #fcd34d;">
             </div>
 
             <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: #78350f;">
+              <label class="form-label" style="font-size: 0.86rem; font-weight: 700; color: #78350f;">
                 ยืนยันรหัส PIN 6 หลักอีกครั้ง:
               </label>
-              <input type="password" id="auth-student-confirm-pin" class="form-input" placeholder="กรอกซ้ำอีกครั้ง" maxlength="6" inputmode="numeric" style="font-size: 1.15rem; font-weight: 700; letter-spacing: 4px; text-align: center;" onkeydown="if(event.key==='Enter') App.handleStudentRegisterPin()">
+              <input type="password" id="auth-student-confirm-pin" class="form-input" placeholder="กรอกซ้ำอีกครั้ง" maxlength="6" inputmode="numeric" style="font-size: 1.2rem; font-weight: 800; letter-spacing: 5px; text-align: center; border-color: #fcd34d;" onkeydown="if(event.key==='Enter') App.handleStudentRegisterPin()">
             </div>
 
-            <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #d97706; border-color: #b45309;" onclick="App.handleStudentRegisterPin()">
-              💾 บันทึก PIN และเริ่มเรียนทันที
+            <button class="btn-nav-action primary" style="width: 100%; padding: 0.85rem; font-size: 1.02rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #d97706; border-color: #b45309; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);" onclick="App.handleStudentRegisterPin()">
+              💾 บันทึก PIN & พร้อมติดตั้งแอปเข้าเรียนทันที
             </button>
           </div>
         </div>
@@ -945,7 +983,7 @@
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
               อีเมลครูผู้สอน (Teacher Email):
             </label>
-            <input type="email" id="auth-teacher-email" class="form-input" placeholder="krumum.piano@gmail.com หรือ kouocking@gmail.com" value="krumum.piano@gmail.com" style="font-size: 1rem; padding: 0.65rem 0.85rem;" oninput="App.onTeacherEmailInput(this.value)">
+            <input type="email" id="auth-teacher-email" class="form-input" placeholder="ระบุอีเมลครูผู้สอน เช่น krumum.piano@gmail.com" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" oninput="App.onTeacherEmailInput(this.value)">
             <div id="auth-teacher-first-time-hint" style="display: none; margin-top: 6px; padding: 0.5rem 0.75rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 0.82rem; color: #065f46; font-weight: 600;">
               ✨ ยินดีต้อนรับนักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)<br>
               <span style="font-size: 0.76rem; font-weight: 400; color: #047857;">• เข้าสู่ระบบครั้งแรก<strong>ไม่ต้องใส่รหัสผ่าน</strong> สามารถกดปุ่มเข้าสู่ระบบด้านล่างได้ทันที</span>
@@ -959,9 +997,9 @@
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
               รหัสผ่าน (Password) หรือ รหัส PIN ครู:
             </label>
-            <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN" value="ppk1234" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
+            <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN ครู" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * รหัสเริ่มต้นแอดมินคือ <code>ppk1234</code> (ครูฝึกสอนครั้งแรกไม่ต้องใส่รหัส)
+              * กรอกรหัสผ่านประจำตัวครูผู้สอนเพื่อความปลอดภัยของข้อมูล
             </div>
           </div>
 
@@ -975,6 +1013,59 @@
       <!-- Auth Footer -->
       <div style="background: #f8fafc; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.76rem; color: #64748b;">
         ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE • โรงเรียนพะเยาพิทยาคม
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Student PWA Installation Prompt (พร้อมติดตั้งแอพทันที) -->
+  <div id="modal-student-pwa-prompt" class="modal-overlay" style="backdrop-filter: blur(8px); background: rgba(15, 23, 42, 0.85); z-index: 100005;">
+    <div class="modal-card" style="max-width: 480px; width: 92vw; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15); padding: 0;">
+      <div style="background: linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%); padding: 1.5rem; color: #ffffff; text-align: center;">
+        <div style="width: 58px; height: 58px; background: rgba(255,255,255,0.2); border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 0.5rem; backdrop-filter: blur(4px);">
+          📲
+        </div>
+        <h3 id="pwa-prompt-student-title" style="margin: 0; font-size: 1.35rem; font-weight: 800;">ติดตั้งแอป MusicSmart</h3>
+        <div style="font-size: 0.85rem; opacity: 0.95; margin-top: 4px;">
+          เพิ่มลงในหน้าจอโทรศัพท์/แท็บเล็ตของคุณเพื่อการเรียนรู้ที่สะดวกที่สุด
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem 1.5rem; background: #ffffff;">
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="font-size: 1.25rem;">⚡</span>
+            <div style="font-size: 0.88rem; color: #334155;"><strong>เปิดเรียนได้ทันที:</strong> แตะไอคอนบนหน้าจอมือถือ ไม่ต้องคอยพิมพ์หรือเปิดหาลิงก์ในแชท</div>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="font-size: 1.25rem;">🎹</span>
+            <div style="font-size: 0.88rem; color: #334155;"><strong>ใช้งานเต็มจอ 100%:</strong> ซ้อมคาลิมบ้า เครื่องตั้งเสียง Tuner และดูโน้ตได้โดยไม่มีแถบเบราว์เซอร์บัง</div>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="font-size: 1.25rem;">🔒</span>
+            <div style="font-size: 0.88rem; color: #334155;"><strong>ล็อกอินค้างไว้:</strong> เข้าใช้งานต่อได้ตลอดภาคเรียน ระบบจำตัวตนอัตโนมัติ</div>
+          </div>
+        </div>
+
+        <!-- Dynamic Prompt: Android/Chrome vs iOS/Safari -->
+        <div id="pwa-prompt-native" style="display: block;">
+          <button class="btn-nav-action primary" style="width: 100%; padding: 0.85rem; font-size: 1.05rem; font-weight: 700; border-radius: 10px; justify-content: center; background: #0284c7; border: none; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);" onclick="App.triggerPwaInstall()">
+            📲 ติดตั้งแอปพลิเคชันลงเครื่องทันที
+          </button>
+        </div>
+
+        <div id="pwa-prompt-ios" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; margin-bottom: 0.5rem;">
+          <div style="font-size: 0.88rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🍎</span> สำหรับ iPhone / iPad (Safari):
+          </div>
+          <ol style="margin: 0; padding-left: 1.2rem; font-size: 0.82rem; color: #475569; line-height: 1.6;">
+            <li>แตะที่ปุ่ม <strong>แชร์ (Share 📤)</strong> ที่แถบด้านล่างของ Safari</li>
+            <li>เลื่อนลงแล้วเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen ➕)</strong></li>
+            <li>แตะ <strong>"เพิ่ม" (Add)</strong> ที่มุมขวาบนเพื่อติดตั้งเสร็จสิ้น</li>
+          </ol>
+        </div>
+
+        <button class="btn-nav-action" style="width: 100%; margin-top: 0.75rem; padding: 0.7rem; font-size: 0.92rem; font-weight: 600; border-radius: 8px; justify-content: center; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;" onclick="App.closeStudentPwaPromptModal()">
+          เข้าสู่บทเรียนดนตรี MusicSmart (เปิดในเบราว์เซอร์ต่อ) ➜
+        </button>
       </div>
     </div>
   </div>

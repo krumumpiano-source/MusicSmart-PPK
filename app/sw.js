@@ -1,5 +1,5 @@
 // MusicSmart PWA Service Worker
-const CACHE_NAME = 'musicsmart-v10';
+const CACHE_NAME = 'musicsmart-v12';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

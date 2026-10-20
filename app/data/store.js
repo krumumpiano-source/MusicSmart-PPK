@@ -922,10 +922,17 @@ const Store = {
 
   // --- Active Role Management ---
   getActiveRole() {
+    const user = this.getCurrentUser ? this.getCurrentUser() : null;
+    if (user && user.role) return user.role;
     try {
-      return localStorage.getItem(STORAGE_KEYS.ACTIVE_ROLE) || 'teacher';
+      const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_ROLE);
+      if (saved === 'teacher') {
+        if (user && user.role === 'teacher') return 'teacher';
+        return 'student';
+      }
+      return saved || 'student';
     } catch (e) {
-      return 'teacher';
+      return 'student';
     }
   },
 

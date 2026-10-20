@@ -256,8 +256,8 @@ const VirtualKalimba = {
     if (!song) return;
 
     this.tempoBpm = song.tempo || 90;
-    const tempoInput = document.getElementById('kalimba-tempo-input');
-    const tempoVal = document.getElementById('kalimba-tempo-val');
+    const tempoInput = document.getElementById('kalimba-tempo-input') || document.getElementById('kalimba-bpm-slider');
+    const tempoVal = document.getElementById('kalimba-tempo-val') || document.getElementById('kalimba-bpm-display');
     const descEl = document.getElementById('kalimba-song-desc');
     const noteRoll = document.getElementById('kalimba-song-noteroll');
 
@@ -277,11 +277,28 @@ const VirtualKalimba = {
     }
   },
 
+  onSongChange(val) {
+    return this.onSongSelectChange(val);
+  },
+
   onTempoChange(val) {
     this.tempoBpm = parseInt(val, 10) || 90;
-    const tempoVal = document.getElementById('kalimba-tempo-val');
+    const tempoVal = document.getElementById('kalimba-tempo-val') || document.getElementById('kalimba-bpm-display');
     if (tempoVal) tempoVal.textContent = `${this.tempoBpm} BPM`;
   },
+
+  setTempo(val) {
+    return this.onTempoChange(val);
+  },
+
+  togglePlay() {
+    return this.togglePlaySong();
+  },
+
+  stopPlay() {
+    return this.stopSong();
+  },
+
 
   togglePlaySong() {
     if (this.isPlayingSong) {
@@ -298,7 +315,7 @@ const VirtualKalimba = {
     this.isPlayingSong = true;
     this.currentNoteIndex = 0;
 
-    const playBtn = document.getElementById('kalimba-play-btn');
+    const playBtn = document.getElementById('kalimba-play-btn') || document.getElementById('btn-kalimba-play');
     if (playBtn) {
       playBtn.innerHTML = '⏹️ หยุดซ้อม';
       playBtn.classList.add('playing');
@@ -340,7 +357,7 @@ const VirtualKalimba = {
       clearTimeout(this.activeSongInterval);
       this.activeSongInterval = null;
     }
-    const playBtn = document.getElementById('kalimba-play-btn');
+    const playBtn = document.getElementById('kalimba-play-btn') || document.getElementById('btn-kalimba-play');
     if (playBtn) {
       playBtn.innerHTML = '▶️ ซ้อมเพลงนี้ (Play-Along)';
       playBtn.classList.remove('playing');
