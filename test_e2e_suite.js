@@ -291,9 +291,55 @@ assert(typeof wk5Html === 'string' && wk5Html.includes('วก.5'), 'Generated o
 assert(!wk5Html.includes('NaN'), 'วก.5 contains ZERO NaN values');
 
 // ----------------------------------------------------
-// 8. Test Live HTTP Server & Index.html DOM Verification
+// 8. Test Google Sheets Dual-Save & Sync Engine
 // ----------------------------------------------------
-console.log('\n[Phase 7] Testing Live HTTP Server & End-to-End HTML Delivery...');
+console.log('\n[Phase 7] Testing Google Sheets Dual-Save & Realtime Sync Engine...');
+
+const GoogleSheetSync = require('./app/js/google-sheet-sync.js');
+global.GoogleSheetSync = GoogleSheetSync;
+assert(typeof GoogleSheetSync === 'object', 'GoogleSheetSync module loaded successfully');
+
+// Test Config Persistence
+GoogleSheetSync.saveConfig({ webAppUrl: 'https://script.google.com/macros/s/test_dummy_app/exec' });
+const loadedCfg = GoogleSheetSync.getConfig();
+assert(loadedCfg.webAppUrl.includes('test_dummy_app'), 'GoogleSheetSync config saved and reloaded properly');
+
+// Test Enqueueing Dual-Save payloads
+const enqSession = GoogleSheetSync.syncSessionLog('ม.1/1', 1, {
+  instructor: { name: 'นายพงศธร โพธิแก้ว', role: 'ครูประจำวิชา' },
+  reflection: { outcomes: 'เรียนรู้โน้ต C-D-E-F-G', problems: 'บางคนนิ้วเกร็ง', solutions: 'จับคู่บัดดี้' },
+  attendance: { '35994': 'present' },
+  handoverNote: 'ซ้อมท่อน 2 ต่อ'
+});
+assert(enqSession && enqSession.type === 'session_log', 'Session Log successfully enqueued for Google Sheets sync');
+
+const enqSub = GoogleSheetSync.syncSubmission('ม.1/1', 1, '35994', {
+  submissionType: 'Feldman',
+  content: 'เสียงใส กังวาน',
+  score: 4
+});
+assert(enqSub && enqSub.type === 'submission', 'Student Submission successfully enqueued for Google Sheets sync');
+
+const enqQuiz = GoogleSheetSync.syncQuizResult({
+  unitNo: 1,
+  studentId: '35994',
+  score: 18,
+  percentage: 90
+});
+assert(enqQuiz && enqQuiz.type === 'quiz_result', 'Quiz Result successfully enqueued for Google Sheets sync');
+
+const outboxItems = GoogleSheetSync.getOutbox();
+assert(outboxItems.length >= 3, `GoogleSheetSync Outbox queued ${outboxItems.length} items for serverless sync`);
+
+// Clean up test outbox and test config so tests leave zero trace
+GoogleSheetSync.saveOutbox([]);
+GoogleSheetSync.saveConfig({ webAppUrl: '', syncCount: 0 });
+assert(GoogleSheetSync.getOutbox().length === 0, 'GoogleSheetSync outbox cleanly purged after test');
+
+// ----------------------------------------------------
+// 9. Test Live HTTP Server & Index.html DOM Verification
+// ----------------------------------------------------
+console.log('\n[Phase 8] Testing Live HTTP Server & End-to-End HTML Delivery...');
 
 function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('MusicSmart'), 'Page contains MusicSmart title');
@@ -311,6 +357,10 @@ function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('assign-teaching-method'), 'HTML contains Teaching Method input (#assign-teaching-method)');
   assert(htmlData.includes('timetable-mentoring-summary-strip'), 'HTML contains Timetable Mentoring Summary Strip');
   assert(htmlData.includes('cockpit-mentoring-guidance-banner'), 'HTML contains Cockpit Mentoring Guidance Banner');
+  assert(htmlData.includes('modal-google-sheet-sync'), 'HTML contains Google Sheets Dual-Save Modal (#modal-google-sheet-sync)');
+  assert(htmlData.includes('btn-google-sheets-pill'), 'HTML contains Google Sheets Sync Header Pill (#btn-google-sheets-pill)');
+  assert(htmlData.includes('cockpit-sync-badge'), 'HTML contains Cockpit Sync Badge (#cockpit-sync-badge)');
+  assert(htmlData.includes('google-sheet-sync.js'), 'HTML loads google-sheet-sync.js script');
 
   console.log('\n' + '='.repeat(70));
   console.log(`  E2E Test Results: \x1b[32m${passed} PASSED\x1b[0m, \x1b[31m${failed} FAILED\x1b[0m`);

@@ -66,6 +66,7 @@ const App = {
     if (typeof Tuner !== 'undefined' && Tuner.init) Tuner.init();
     if (typeof AudioTools !== 'undefined' && AudioTools.renderBeatDots) AudioTools.renderBeatDots();
     if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.init) VirtualKalimba.init();
+    if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.init) GoogleSheetSync.init();
 
     // Check authentication and lock down unauthorized access
     const isAuth = this.checkAuth();
@@ -2135,6 +2136,9 @@ const App = {
     this.loadSessionData();
     this.switchTab('lesson');
     this.checkMakeupsBanner();
+    if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.updateUIStatus) {
+      GoogleSheetSync.updateUIStatus();
+    }
   },
 
   showDashboard() {

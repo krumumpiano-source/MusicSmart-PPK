@@ -629,6 +629,34 @@ const QuizEngine = {
     } catch (e) {
       console.warn('Storage save failed:', e);
     }
+
+    if (typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncQuizResult === 'function') {
+      try {
+        let studentName = '';
+        let studentClass = '';
+        let studentNo = '';
+        if (typeof Store !== 'undefined' && Store.getStudentById) {
+          const s = Store.getStudentById(studentId);
+          if (s) {
+            studentName = `${s.prefix}${s.first_name} ${s.last_name}`;
+            studentClass = s.class || '';
+            studentNo = s.no || '';
+          }
+        }
+        GoogleSheetSync.syncQuizResult({
+          unitNo,
+          unitTitle: result.unitTitle || `หน่วยการเรียนรู้ที่ ${unitNo}`,
+          studentId,
+          studentName,
+          studentClass,
+          studentNo,
+          score: result.score,
+          totalQuestions: result.totalQuestions,
+          percentage: result.percentage,
+          timeSpentSeconds: result.timeSpentSeconds
+        });
+      } catch (err) {}
+    }
   },
 
   escapeHtml(str) {

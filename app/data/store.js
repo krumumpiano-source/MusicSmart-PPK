@@ -18,7 +18,9 @@ const STORAGE_KEYS = {
   STUDENT_ACCOUNTS: 'ppk_student_accounts',
   TEACHER_ACCOUNT: 'ppk_teacher_account',
   TEACHERS_LIST: 'ppk_teachers_list',
-  SCHEDULE_ASSIGNMENTS: 'ppk_schedule_assignments'
+  SCHEDULE_ASSIGNMENTS: 'ppk_schedule_assignments',
+  GOOGLE_SHEET_CONFIG: 'ppk_google_sheet_config',
+  SYNC_OUTBOX: 'ppk_sync_outbox'
 };
 
 const DEFAULT_SCHEDULE_ASSIGNMENTS = {};
@@ -227,7 +229,13 @@ const Store = {
       formative: pForm !== undefined ? Number(pForm) : (scores[studentId]?.formative || 0),
       updatedAt: new Date().toISOString()
     };
-    return this.saveResearchScores(className, scores);
+    const res = this.saveResearchScores(className, scores);
+    if (res && typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncResearch === 'function') {
+      try {
+        GoogleSheetSync.syncResearch(className, studentId, pPre, pPost, pForm);
+      } catch (e) {}
+    }
+    return res;
   },
 
   getCurrentSubject(className) {
@@ -397,6 +405,14 @@ const Store = {
       else all[key] = prevSessionBackup;
       this.save(STORAGE_KEYS.SESSIONS, all);
       return null;
+    }
+
+    if (typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncSessionLog === 'function') {
+      try {
+        GoogleSheetSync.syncSessionLog(className, period, all[key]);
+      } catch (e) {
+        console.warn('Dual-save to Google Sheet error:', e);
+      }
     }
 
     return all[key];
@@ -845,6 +861,11 @@ const Store = {
       updatedAt: new Date().toISOString()
     };
     this.save(STORAGE_KEYS.SCHEDULE_ASSIGNMENTS, assignments);
+    if (typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncAssignment === 'function') {
+      try {
+        GoogleSheetSync.syncAssignment(day, periodNo, assignments[key]);
+      } catch (e) {}
+    }
     return assignments[key];
   },
 
@@ -1169,6 +1190,11 @@ const Store = {
       feedback: data.feedback !== undefined ? data.feedback : (existing.feedback || '')
     };
     if (this.save(STORAGE_KEYS.SUBMISSIONS, all)) {
+      if (typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncSubmission === 'function') {
+        try {
+          GoogleSheetSync.syncSubmission(className, period, studentId, all[key]);
+        } catch (e) {}
+      }
       return all[key];
     }
     return null;
@@ -1217,6 +1243,12 @@ const Store = {
       this.save(STORAGE_KEYS.PROGRESS, allProgress);
     }
 
+    if (saved && typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncSessionLog === 'function') {
+      try {
+        GoogleSheetSync.syncSessionLog(className, period, sess);
+      } catch (e) {}
+    }
+
     return saved;
   },
 
@@ -1225,8 +1257,14 @@ const Store = {
     return this.load(`music_rubric_${studentId}_p${period}`, null);
   },
 
-  saveStudentRubric(studentId, period, rubricData) {
-    return this.save(`music_rubric_${studentId}_p${period}`, rubricData);
+  saveStudentRubric(studentId, period, rubricData, className) {
+    const res = this.save(`music_rubric_${studentId}_p${period}`, rubricData);
+    if (res && typeof GoogleSheetSync !== 'undefined' && typeof GoogleSheetSync.syncRubric === 'function') {
+      try {
+        GoogleSheetSync.syncRubric(studentId, period, rubricData, className);
+      } catch (e) {}
+    }
+    return res;
   },
 
   saveStudentQuizGrade(studentId, unitNo, score) {

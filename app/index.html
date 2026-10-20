@@ -201,6 +201,13 @@
                       <div class="tool-desc">เปลี่ยนรหัสผ่าน, เพิ่มครูฝึกสอน, รีเซ็ต PIN</div>
                     </div>
                   </button>
+                  <button class="tools-item-btn" onclick="GoogleSheetSync.openModal(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #ecfdf5; color: #059669;">📊</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ซิงค์คู่ Google Sheets (Dual-Save)</div>
+                      <div class="tool-desc">บันทึกในเครื่อง + ขึ้นคลาวด์ชีตอัตโนมัติ</div>
+                    </div>
+                  </button>
                   <button class="tools-item-btn" onclick="App.openSettingsModal(); App.closeToolsMenu();">
                     <span class="tool-icon" style="background: #f1f5f9; color: #475569;">🔧</span>
                     <div class="tool-text">
@@ -212,6 +219,11 @@
               </div>
             </div>
           </div>
+
+          <!-- Google Sheets Dual-Save Sync Pill -->
+          <button id="btn-google-sheets-pill" class="btn-nav-action" onclick="GoogleSheetSync.openModal()" title="ระบบบันทึกคู่ขนาน: ในเครื่อง (Local) + Google Sheets">
+            📊 เชื่อม Google Sheet
+          </button>
 
           <!-- Primary Export / Report Button -->
           <button class="btn-nav-action primary" onclick="App.openExportModal()" title="ส่งออกข้อมูลและบันทึกหลังสอน วก.5">
@@ -604,7 +616,9 @@
       <div class="cockpit-bottom-bar">
         <div>
           <div style="font-size: 0.78rem; color: var(--text-muted);">ระบบบันทึกข้อมูล:</div>
-          <div style="font-size: 0.88rem; font-weight: 600; color: #059669;">บันทึกในเครื่องอัตโนมัติ (Local-First)</div>
+          <div id="cockpit-sync-badge" style="font-size: 0.88rem; font-weight: 600; color: #059669; display: flex; align-items: center; gap: 0.35rem;">
+            <span>💾 บันทึกในเครื่องอัตโนมัติ (Local-First)</span>
+          </div>
         </div>
         <button class="btn-complete-period" onclick="App.openReflectionModal()">
           สรุปผลการสอนและบันทึกหลังสอน (วก.5)
@@ -3142,11 +3156,107 @@
     </div>
   </div>
 
+  <!-- MODAL: Google Sheets Dual-Save & Realtime Sync Engine -->
+  <div id="modal-google-sheet-sync" class="modal-overlay">
+    <div class="modal-card" style="max-width: 860px; width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #ecfdf5 0%, #eff6ff 100%);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="font-size: 1.8rem; background: #ffffff; border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+            📊
+          </div>
+          <div>
+            <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; color: #065f46;">ระบบบันทึกคู่ขนาน Google Sheets & Local-First</h3>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              บันทึกข้อมูลลงเครื่องทันที (ไม่หลุด/ออฟไลน์ได้) พร้อมส่งเข้า Google Sheets อัตโนมัติ
+            </div>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="GoogleSheetSync.closeModal()">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem; max-height: 75vh; overflow-y: auto;">
+        <!-- Live Status Bar -->
+        <div id="gs-sync-modal-status" style="margin-bottom: 1.25rem;">
+          <!-- Injected via GoogleSheetSync.updateUIStatus() -->
+        </div>
+
+        <!-- Web App URL Setup -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 1.15rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <label style="font-weight: 700; font-size: 0.95rem; color: #1e293b;">
+              🔗 Google Apps Script Web App URL:
+            </label>
+            <span style="font-size: 0.75rem; color: #059669; font-weight: 600;">(ใช้บัญชี Google ของครู ฟรี 100%)</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.65rem;">
+            <input type="url" id="gs-webapp-url" class="form-input" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
+            <button id="btn-gs-test" class="btn-nav-action" style="background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 600;" onclick="GoogleSheetSync.handleTestFromModal()">
+              🔍 ทดสอบเชื่อมต่อ
+            </button>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+            <div>* เมื่อเชื่อมต่อแล้ว ทุกครั้งที่กดบันทึก วก.5, ส่งงาน, ตรวจรูบริก, หรือสอบ Quiz ข้อมูลจะวิ่งเข้า Google Sheet ทันที</div>
+            <button id="btn-gs-fullsync" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 4px 10px;" onclick="GoogleSheetSync.handleFullSyncFromModal()">
+              🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)
+            </button>
+          </div>
+        </div>
+
+        <!-- 3-Step Setup Instructions with 1-Click Code Copy -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.15rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.4rem;">
+              <span>⚡</span> วิธีสร้าง Google Sheet เชื่อมต่อ (ทำครั้งเดียวใน 1 นาที):
+            </div>
+            <button class="btn-nav-action primary" style="background: #059669; border-color: #059669; font-size: 0.82rem; padding: 0.4rem 0.85rem;" onclick="GoogleSheetSync.copyAppsScriptCode()">
+              📋 คัดลอกโค้ด Google Apps Script (1-Click Copy)
+            </button>
+          </div>
+
+          <ol style="margin: 0; padding-left: 1.25rem; font-size: 0.86rem; color: #334155; line-height: 1.7;">
+            <li>เปิด <strong>Google Sheets</strong> เปล่าขึ้นมา 1 ไฟล์ใน Google Drive ของคุณครู (ตั้งชื่อเช่น <code>MusicSmart_PPK_Database</code>)</li>
+            <li>ไปที่เมนูด้านบน <strong>ส่วนขยาย (Extensions) ➔ Apps Script</strong></li>
+            <li>ลบโค้ดเดิมในนั้นออกทั้งหมด แล้ว<strong>กดปุ่มสีเขียวด้านบน "คัดลอกโค้ด Google Apps Script"</strong> นำไปวางในหน้าต่าง Apps Script แล้วกดปุ่มแผ่นดิสก์ 💾 บันทึก</li>
+            <li>กดปุ่มสีน้ำเงิน <strong>"ทำให้ใช้งานได้" (Deploy) ➔ "การทำให้ใช้งานได้ใหม่" (New deployment)</strong>
+              <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 6px; padding: 0.45rem 0.75rem; margin: 0.35rem 0; font-size: 0.82rem; color: #854d0e;">
+                ⚠️ <strong>จุดสำคัญมาก:</strong> ในช่อง <em>"ผู้มีสิทธิ์เข้าถึง" (Who has access)</em> ให้เลือกเป็น <strong>"ทุกคน" (Anyone)</strong> จากนั้นกด Deploy และคัดลอก URL เว็บแอปมาวางในช่องด้านบน
+              </div>
+            </li>
+          </ol>
+
+          <!-- Collapsible Code Preview -->
+          <details style="margin-top: 0.85rem; font-size: 0.8rem;">
+            <summary style="cursor: pointer; color: #2563eb; font-weight: 600;">ดูตัวอย่างโค้ด Google Apps Script (.gs)</summary>
+            <pre style="background: #0f172a; color: #f8fafc; padding: 0.85rem; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 0.76rem; max-height: 220px; margin-top: 0.5rem;"><code>function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.tryLock(20000);
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    processSyncItem(ss, payload);
+    return ContentService.createTextOutput(JSON.stringify({status:'success'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}</code></pre>
+          </details>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="background: #ffffff; display: flex; justify-content: space-between;">
+        <button class="btn-nav-action" onclick="GoogleSheetSync.closeModal()">ปิดหน้าต่าง</button>
+        <button class="btn-nav-action primary" onclick="GoogleSheetSync.saveSettingsFromModal()">💾 บันทึกการเชื่อมต่อ</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="data/students.js"></script>
   <script src="data/lessons.js"></script>
   <script src="data/academic_docs.js"></script>
   <script src="data/quizzes.js"></script>
+  <script src="js/google-sheet-sync.js"></script>
   <script src="data/store.js"></script>
   <script src="js/tuner.js"></script>
   <script src="js/audio-tools.js"></script>
