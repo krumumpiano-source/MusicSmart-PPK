@@ -1498,29 +1498,78 @@ const App = {
     }
   },
 
-  handleStudentSubmit() {
+  onStudentFileSelected(input) {
+    const previewEl = document.getElementById('student-file-preview');
+    if (!previewEl) return;
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      if (file.size > 20 * 1024 * 1024) {
+        alert('⚠️ ไฟล์มีขนาด ' + sizeMB + ' MB ซึ่งเกิน 20 MB\nแนะนำให้อัปโหลดลง Google Drive หรือ YouTube แล้วนำลิงก์มาวางในช่องลิงก์ด้านล่างแทนครับ');
+        input.value = '';
+        previewEl.style.display = 'none';
+        return;
+      }
+      previewEl.style.display = 'block';
+      previewEl.innerHTML = `✅ เลือกไฟล์: <strong>${this.escapeHtml(file.name)}</strong> (${sizeMB} MB) • พร้อมอัปโหลดเข้า Google Drive ครู`;
+    } else {
+      previewEl.style.display = 'none';
+    }
+  },
+
+  async handleStudentSubmit() {
     const textInput = document.getElementById('student-submission-text');
     const urlInput = document.getElementById('student-submission-url');
+    const fileInput = document.getElementById('student-submission-file');
     const content = textInput ? textInput.value.trim() : '';
     const url = urlInput ? urlInput.value.trim() : '';
+    const hasFile = fileInput && fileInput.files && fileInput.files[0];
 
-    if (!content && !url) {
-      alert('กรุณาพิมพ์คำตอบหรือใส่ลิงก์ผลงานก่อนกดส่งงานครับ');
+    if (!content && !url && !hasFile) {
+      alert('กรุณาพิมพ์คำตอบ แนบไฟล์ หรือใส่ลิงก์ผลงานก่อนกดส่งงานครับ');
       return;
     }
+
+    let fileBase64 = '';
+    let fileName = '';
+    let mimeType = '';
+    let fileSize = 0;
+
+    if (hasFile) {
+      const file = fileInput.files[0];
+      fileName = file.name;
+      mimeType = file.type || 'application/octet-stream';
+      fileSize = file.size;
+      try {
+        fileBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      } catch (err) {
+        console.warn('File read error:', err);
+      }
+    }
+
+    const subType = hasFile ? (url ? 'file_and_url' : 'file_upload') : (url ? 'mixed' : 'text');
 
     Store.saveStudentSubmission(
       this.state.studentClass,
       this.state.studentPeriod,
       this.state.studentId,
       {
-        submissionType: url ? 'mixed' : 'text',
+        submissionType: subType,
         content,
-        url
+        url,
+        fileName,
+        fileBase64,
+        mimeType,
+        fileSize
       }
     );
 
-    alert(`🎉 ส่งงานประจำคาบที่ ${this.state.studentPeriod} เรียบร้อยแล้วครับ!`);
+    alert(`🎉 ส่งงานประจำคาบที่ ${this.state.studentPeriod} เรียบร้อยแล้วครับ!\nระบบกำลังบันทึกข้อมูลและส่งเข้า Google Sheet / Google Drive ให้คุณครู`);
     this.renderStudentPortal();
   },
 
@@ -2644,7 +2693,8 @@ const App = {
           <div style="background: #f1f5f9; padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; line-height: 1.6; color: #1e293b;">
             <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">เนื้อหาที่นักเรียนส่ง:</div>
             <div style="white-space: pre-wrap;">${this.escapeHtml(sub.content || '(ไม่มีข้อความ)')}</div>
-            ${sub.url ? `<div style="margin-top: 6px;"><a href="${this.escapeHtml(sub.url)}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">🔗 เปิดลิงก์ผลงานของนักเรียน</a></div>` : ''}
+            ${sub.fileName ? `<div style="margin-top: 6px; font-size: 0.82rem; font-weight: 600; color: #0284c7;">📎 ไฟล์แนบ: ${this.escapeHtml(sub.fileName)}</div>` : ''}
+            ${sub.url ? `<div style="margin-top: 6px;"><a href="${this.escapeHtml(sub.url)}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">🔗 เปิดลิงก์ผลงาน / คลิปวิดีโอของนักเรียน</a></div>` : ''}
             <div style="font-size: 0.72rem; color: #059669; margin-top: 6px;">ส่งเมื่อ: ${this.escapeHtml(sub.submittedAt)}</div>
           </div>
         `;

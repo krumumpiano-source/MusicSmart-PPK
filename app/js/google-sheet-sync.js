@@ -208,9 +208,14 @@ const GoogleSheetSync = {
       period,
       studentId,
       studentName,
-      submissionType: subData.submissionType || 'วิจารณ์ดนตรี Feldman',
-      songTitle: subData.songTitle || subData.title || 'Kalimba 17 Keys',
+      submissionType: subData.submissionType || 'งานนักเรียน',
+      songTitle: subData.songTitle || subData.title || '',
       content: subData.content || '',
+      url: subData.url || '',
+      fileName: subData.fileName || '',
+      fileBase64: subData.fileBase64 || '',
+      mimeType: subData.mimeType || '',
+      fileSize: subData.fileSize || 0,
       score: subData.score,
       feedback: subData.feedback || subData.teacherFeedback || ''
     });
@@ -670,9 +675,33 @@ function processSyncItem(ss, item) {
   }
 
   if (type === 'submission') {
+    var fileUrl = data.url || "";
+
+    // หากมีการแนบไฟล์หรือคลิป (Base64) ให้อัปโหลดลง Google Drive ของครูอัตโนมัติ
+    if (data.fileBase64 && data.fileName) {
+      try {
+        var folderName = "MusicSmart_Student_Uploads";
+        var folders = DriveApp.getFoldersByName(folderName);
+        var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+        var base64Content = data.fileBase64.indexOf(',') > -1 
+          ? data.fileBase64.split(',')[1] 
+          : data.fileBase64;
+        var decoded = Utilities.base64Decode(base64Content);
+        var safeFileName = "[" + (data.className || "PPK") + "_" + (data.studentId || "std") + "] " + data.fileName;
+        var blob = Utilities.newBlob(decoded, data.mimeType || "application/octet-stream", safeFileName);
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        var driveLink = file.getUrl();
+        fileUrl = fileUrl ? (fileUrl + " | " + driveLink) : driveLink;
+      } catch (fErr) {
+        fileUrl = fileUrl ? (fileUrl + " (Drive: " + fErr.toString() + ")") : ("Drive: " + fErr.toString());
+      }
+    }
+
     var sheet = getOrCreateSheet(ss, "งานนักเรียน_Submissions", [
       "วันเวลาที่ส่ง", "ห้องเรียน", "คาบที่", "รหัสนักเรียน", "ชื่อ-สกุล",
-      "ประเภทงาน", "หัวข้องาน/เพลง", "เนื้อหาการส่งงาน (4 ขั้น Feldman)", "คะแนน", "ข้อเสนอแนะครู"
+      "ประเภทงาน", "หัวข้องาน/เพลง", "เนื้อหาการส่งงาน (4 ขั้น Feldman)", "ลิงก์ไฟล์แนบ/คลิป (Google Drive/URL)", "คะแนน", "ข้อเสนอแนะครู"
     ]);
     sheet.appendRow([
       timestamp,
@@ -683,10 +712,11 @@ function processSyncItem(ss, item) {
       data.submissionType || "งานนักเรียน",
       data.songTitle || data.title || "",
       data.content || "",
+      fileUrl,
       data.score !== undefined ? data.score : "",
       data.feedback || data.teacherFeedback || ""
     ]);
-    return { type: type, success: true };
+    return { type: type, success: true, fileUrl: fileUrl };
   }
 
   if (type === 'quiz_result') {
