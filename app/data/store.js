@@ -20,7 +20,7 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_TEACHER_ACCOUNT = {
-  email: 'music@ppk.ac.th',
+  email: 'krumum.piano@gmail.com',
   secretType: 'password', // 'password' or 'pin'
   secret: 'ppk1234',
   name: 'นายพงศธร โพธิแก้ว'
@@ -1162,6 +1162,9 @@ const Store = {
     const appSettings = this.getAppSettings ? this.getAppSettings() : null;
     const defaultName = (appSettings && appSettings.teacherName) || DEFAULT_TEACHER_ACCOUNT.name;
     if (parsed) {
+      if (parsed.email === 'music@ppk.ac.th') {
+        parsed.email = DEFAULT_TEACHER_ACCOUNT.email;
+      }
       return { ...DEFAULT_TEACHER_ACCOUNT, name: defaultName, ...parsed };
     }
     return { ...DEFAULT_TEACHER_ACCOUNT, name: defaultName };

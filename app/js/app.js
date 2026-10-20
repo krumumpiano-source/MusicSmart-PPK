@@ -376,7 +376,7 @@ const App = {
     setVal('setting-dept-head', settings.departmentHead);
     setVal('setting-academic-head', settings.academicHead || 'นายกฤศ วงค์เรือง');
     setVal('setting-director-name', settings.directorName);
-    setVal('setting-teacher-email', teacherAcc.email || 'music@ppk.ac.th');
+    setVal('setting-teacher-email', teacherAcc.email || 'krumum.piano@gmail.com');
     setVal('setting-teacher-secret', teacherAcc.secret || 'ppk1234');
 
     this.populatePinResetControls();
@@ -468,7 +468,7 @@ const App = {
 
     if (teacherEmail || teacherSecret) {
       Store.saveTeacherAccount({
-        email: teacherEmail || 'music@ppk.ac.th',
+        email: teacherEmail || 'krumum.piano@gmail.com',
         secret: teacherSecret || 'ppk1234',
         name: teacherName || Store.getInstructor().name
       });
