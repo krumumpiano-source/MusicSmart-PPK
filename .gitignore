@@ -11,6 +11,10 @@ __pycache__/
 .gemini/
 scratch/
 
+# Local documents with very long paths (prevent Linux checkout limits)
+เอกสารแผนการสอน/
+แผนไฟล์เก่า/
+
 # OS & Log Files
 Thumbs.db
 Desktop.ini
