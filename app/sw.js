@@ -1,5 +1,5 @@
 // MusicSmart PWA Service Worker
-const CACHE_NAME = 'musicsmart-v18';
+const CACHE_NAME = 'musicsmart-v19';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -21,7 +21,8 @@ const ASSETS_TO_CACHE = [
   './js/feldman-criticism.js',
   './js/virtual-kalimba.js',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './images/ppk_crest.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -49,24 +50,39 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only intercept GET requests with http/https scheme
+  if (!event.request || event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
   // Network first with cache fallback
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+            cache.put(event.request, responseToCache).catch(() => {});
           });
         }
         return networkResponse;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('./index.html');
-          }
+      .catch(async () => {
+        // 1. Try matching exact request or ignoring query search params
+        const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
+        if (cachedResponse) return cachedResponse;
+
+        // 2. If it is a page navigation or text/html request, return cached index.html
+        if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+          const indexCached = await caches.match('./index.html') || await caches.match('./');
+          if (indexCached) return indexCached;
+        }
+
+        // 3. Always return a valid Response object to prevent "TypeError: Failed to convert value to 'Response'"
+        return new Response('Not found (offline or missing resource)', {
+          status: 404,
+          statusText: 'Not Found',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
         });
       })
   );
