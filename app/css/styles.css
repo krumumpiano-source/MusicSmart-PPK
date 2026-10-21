@@ -3401,3 +3401,36 @@ body.modal-open {
   background: #ffffff;
 }
 
+
+/* ==========================================================================
+   Header layout: wrap cleanly into rows, never overflow horizontally
+   Row 1: brand + role toggle | actions ; Row 2: term + course tabs
+   ========================================================================== */
+.header-inner { flex-wrap: wrap; row-gap: 0.5rem; min-width: 0; }
+.brand-section { order: 1; flex-wrap: wrap; min-width: 0; }
+.header-actions { order: 2; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.header-middle { order: 3; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+#teacher-actions-group { flex-wrap: wrap; justify-content: flex-end; }
+.course-tabs-nav { flex-wrap: wrap; }
+.header-inner .btn-nav-action,
+.header-inner .course-tab-btn,
+.header-inner .role-pill-btn,
+.header-inner .semester-badge,
+.header-inner .teacher-chip,
+.header-inner .teacher-chip span { white-space: nowrap; flex: 0 0 auto; width: auto; }
+.app-header { overflow-x: clip; }
+@media (min-width: 901px) and (max-width: 1280px) {
+  #app-display-sub { display: none; }
+}
+@media (max-width: 900px) {
+  .header-actions { margin-left: 0; justify-content: flex-start; }
+  #teacher-actions-group { justify-content: flex-start; }
+}
+/* Google Sheets sync modal: inputs were squeezed to ~20px (token row nested inside URL row) */
+div:has(> #gs-webapp-url) { flex-wrap: wrap; align-items: center; }
+#gs-webapp-url { flex: 1 1 100% !important; width: 100%; min-width: 0; }
+div:has(> #gs-webapp-url) > div { flex: 1 1 100%; flex-wrap: wrap; }
+div:has(> #gs-sync-token) { flex-wrap: wrap; }
+#gs-sync-token { flex: 1 1 240px !important; min-width: 240px; }
+#btn-gs-test { white-space: nowrap; }
+@media (max-width: 480px) { #gs-sync-token { min-width: 0; flex-basis: 100% !important; } }
