@@ -45,7 +45,7 @@ const App = {
       currentUser = null;
     }
 
-    if (!currentUser || currentUser.role !== 'teacher') {
+    if (!currentUser || (currentUser.role !== 'teacher' && currentUser.role !== 'intern')) {
       this.state.role = 'student';
     } else {
       this.state.role = 'teacher';
@@ -70,7 +70,7 @@ const App = {
 
     // Check authentication and lock down unauthorized access
     const isAuth = this.checkAuth();
-    if (isAuth && currentUser && currentUser.role === 'teacher') {
+    if (isAuth && currentUser && (currentUser.role === 'teacher' || currentUser.role === 'intern')) {
       this.renderTodaySchedule();
       this.renderTeacherTodoList();
       this.renderDashboard();
@@ -202,8 +202,15 @@ const App = {
     if (authUserBar) authUserBar.style.display = 'flex';
     if (authModal) authModal.classList.remove('active');
 
-    if (user.role === 'teacher') {
-      if (authUserBadge) {
+    if (user.role === 'teacher' || user.role === 'intern') {
+      const isIntern = user.role === 'intern';
+      // นศ.ฝึกสอน: เห็นเนื้อหาครูเฉพาะห้องที่ได้รับมอบหมาย ไม่มีสิทธิ์ตั้งค่า/รหัสซิงค์/จัดการผู้ใช้
+      if (isIntern && typeof RoleGuard !== 'undefined') RoleGuard.purgeForIntern();
+      if (!isIntern && typeof RoleGuard !== 'undefined') RoleGuard.purgeInternOnly();
+      if (authUserBadge && isIntern) {
+        authUserBadge.style.display = 'inline-block';
+        authUserBadge.innerHTML = `👩‍🎓 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'นศ.ฝึกสอน')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(นศ.ฝึกประสบการณ์ • ${this.escapeHtml((user.classes || []).join(', '))})</span>`;
+      } else if (authUserBadge) {
         authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `👨‍🏫 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'คุณครู')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(${this.escapeHtml(user.email || 'ครูผู้สอน')})</span>`;
       }
@@ -947,7 +954,7 @@ const App = {
   switchRole(role, save = true) {
     const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
     if (role === 'teacher') {
-      if (!user || user.role !== 'teacher') {
+      if (!user || (user.role !== 'teacher' && user.role !== 'intern')) {
         alert('🔒 พื้นที่เฉพาะสำหรับคุณครูผู้สอน กรุณาเข้าสู่ระบบด้วยบัญชีครู');
         this.openTeacherLoginModal();
         return;
@@ -2979,6 +2986,13 @@ const App = {
     const scoreVal = scoreEl ? scoreEl.value : null;
 
     Store.saveSubmissionTeacherFeedback(className, period, studentId, feedbackText, scoreVal);
+    // นศ.ฝึกสอน: คะแนนต้องรอครูพี่เลี้ยงอนุมัติ
+    if (typeof InternMode !== 'undefined' && InternMode.isActive()) {
+      if (scoreVal !== null && scoreVal !== '') InternMode.proposeGrades(className, period, { [studentId]: scoreVal }, feedbackText);
+      alert('📨 ส่งคะแนน/คำแนะนำให้ครูพี่เลี้ยงอนุมัติแล้ว (จะมีผลเมื่ออนุมัติ)');
+      this.renderSubmissionsTab();
+      return;
+    }
     // ส่งคำแนะนำถึงมือถือนักเรียน (ถ้าตั้งค่าซิงค์แล้ว)
     if (typeof Notices !== 'undefined' && typeof TeacherPull !== 'undefined' && TeacherPull.isConfigured()) {
       Notices.postFeedback(className, period, studentId, feedbackText, scoreVal)

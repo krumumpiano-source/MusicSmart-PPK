@@ -1,6 +1,6 @@
 // MusicSmart PWA Service Worker
 // Bump APP_VERSION on every release (deploy workflow also stamps the commit SHA here)
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 const CACHE_NAME = 'musicsmart-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
@@ -18,6 +18,7 @@ const ASSETS_TO_CACHE = [
   './js/student-submit.js',
   './js/server-quiz.js',
   './js/teacher-tools.js',
+  './js/intern.js',
   './js/app.js',
   './js/tuner.js',
   './js/audio-tools.js',

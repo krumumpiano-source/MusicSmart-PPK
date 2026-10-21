@@ -44,6 +44,12 @@ function doPost(e) {
       return jsonOut(handleStudentPublicAction(SpreadsheetApp.getActiveSpreadsheet(), payload));
     }
 
+    // 0b. นักศึกษาฝึกสอน (ใช้โทเค็น นศ. ที่จำกัดเฉพาะห้องที่ได้รับมอบหมาย)
+    if (payload && INTERN_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
+      if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
+      return jsonOut(handleInternAction(SpreadsheetApp.getActiveSpreadsheet(), payload));
+    }
+
     // 0. ตรวจสอบรหัสซิงค์ (SYNC_TOKEN ใน Script Properties)
     var expectedToken = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');
     if (!expectedToken || !payload || payload.token !== expectedToken) {
@@ -70,6 +76,13 @@ function doPost(e) {
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
     if (action === 'fetch_due_dates') return jsonOut({ status: 'success', dueDates: listDueDates_(ss, payload.className || '') });
+    if (action === 'upsert_intern') return jsonOut(upsertIntern(ss, payload));
+    if (action === 'reset_intern_pin') return jsonOut(resetInternPin(ss, payload.internId));
+    if (action === 'list_interns') return jsonOut(listInterns(ss));
+    if (action === 'fetch_approvals') return jsonOut(fetchApprovals(ss, payload.status || ''));
+    if (action === 'decide_approval') return jsonOut(decideApproval(ss, payload.id, !!payload.approve));
+    if (action === 'fetch_intern_logs') return jsonOut(fetchInternLogs(ss, payload.internId || ''));
+    if (action === 'post_supervision') return jsonOut(postSupervision(ss, payload));
     if (action === 'post_notices') return jsonOut(postNotices(ss, payload.items || []));
     if (action === 'set_due_date') return jsonOut(setDueDate(ss, payload));
     if (action === 'upload_quiz_bank') return jsonOut(uploadQuizBank(ss, payload.units || []));
@@ -907,4 +920,208 @@ function studentNotices_(ss, payload) {
       message: String(vals[r][5]), score: vals[r][6] === '' ? null : vals[r][6], teacher: String(vals[r][7] || '') });
   }
   return { status: 'success', notices: out.slice(-50) };
+}
+
+/* ============================================================================
+ * นักศึกษาฝึกประสบการณ์วิชาชีพครู (Intern): บัญชี/PIN, โทเค็นจำกัดห้อง,
+ * คิวอนุมัติคะแนนโดยครูพี่เลี้ยง, บันทึกหลังสอน, แบบประเมินการนิเทศ
+ * ============================================================================ */
+var INTERN_SHEET = 'นศ_Interns';
+var INTERN_HEADERS = ['intern_id', 'name', 'classes', 'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'active'];
+var APPROVAL_SHEET = 'รออนุมัติคะแนน_Approvals';
+var APPROVAL_HEADERS = ['approval_id', 'created_ms', 'intern_id', 'intern_name', 'class', 'period', 'student_id', 'score', 'comment', 'status', 'decided_ms', 'client_id'];
+var INTERN_LOG_SHEET = 'นศ_บันทึกหลังสอน';
+var INTERN_LOG_HEADERS = ['log_id', 'created_ms', 'intern_id', 'intern_name', 'class', 'period', 'result', 'problems', 'solutions', 'client_id'];
+var SUPERVISION_SHEET = 'นิเทศ_Supervision';
+var SUPERVISION_HEADERS = ['eval_id', 'created_ms', 'intern_id', 'class', 'period', 'ratings_json', 'total', 'comments', 'mentor'];
+var INTERN_PUBLIC_ACTIONS = ['internLogin', 'internSetPin', 'internFetch', 'internProposeGrade', 'internPostLog'];
+
+function rowsOf_(sheet, headers) {
+  var vals = sheet.getDataRange().getValues(), out = [];
+  for (var r = 1; r < vals.length; r++) {
+    var o = { row: r + 1 };
+    for (var c = 0; c < headers.length; c++) o[headers[c]] = vals[r][c];
+    out.push(o);
+  }
+  return out;
+}
+function writeRow_(sheet, headers, rec) {
+  sheet.getRange(rec.row, 1, 1, headers.length).setValues([headers.map(function (h) { return rec[h] === undefined ? '' : rec[h]; })]);
+}
+function internSheet_(ss) { return getOrCreateSheet(ss, INTERN_SHEET, INTERN_HEADERS); }
+function findIntern_(ss, id) {
+  var list = rowsOf_(internSheet_(ss), INTERN_HEADERS);
+  for (var i = 0; i < list.length; i++) if (String(list[i].intern_id) === id) return list[i];
+  return null;
+}
+function internClasses_(rec) { return String(rec.classes || '').split(',').map(function (c) { return c.trim(); }).filter(String); }
+function cleanInternId_(v) { var s = String(v || '').trim(); return /^[A-Za-z0-9_-]{3,30}$/.test(s) ? s : ''; }
+
+// ---- ครูจัดการบัญชี นศ. (ต้องใช้ token) ----
+function upsertIntern(ss, payload) {
+  var id = cleanInternId_(payload.internId);
+  if (!id) return { status: 'error', message: 'รหัส นศ. ต้องเป็นตัวอักษรอังกฤษ/ตัวเลข 3-30 ตัว' };
+  var classes = (payload.classes || []).map(function (c) { return str_(c, 20); }).filter(String);
+  var sheet = internSheet_(ss);
+  var rec = findIntern_(ss, id);
+  if (!rec) {
+    sheet.appendRow([id, str_(payload.name, 80), classes.join(','), '', '', 0, '', '', true]);
+    return { status: 'success', created: true, internId: id };
+  }
+  rec.name = str_(payload.name, 80) || rec.name; rec.classes = classes.join(','); rec.active = payload.active === false ? false : true;
+  writeRow_(sheet, INTERN_HEADERS, rec);
+  return { status: 'success', created: false, internId: id };
+}
+function resetInternPin(ss, internId) {
+  var rec = findIntern_(ss, cleanInternId_(internId));
+  if (!rec) return { status: 'error', message: 'ไม่พบ นศ.' };
+  rec.salt = ''; rec.pin_hash = ''; rec.failed_count = 0; rec.locked_until = ''; rec.pin_set_at = '';
+  writeRow_(internSheet_(ss), INTERN_HEADERS, rec);
+  return { status: 'success' };
+}
+function listInterns(ss) {
+  return { status: 'success', interns: rowsOf_(internSheet_(ss), INTERN_HEADERS).map(function (r) {
+    return { internId: String(r.intern_id), name: String(r.name), classes: internClasses_(r), hasPin: !!r.pin_hash, active: r.active !== false };
+  }) };
+}
+
+// ---- โทเค็น นศ. ----
+function issueInternToken_(rec) {
+  var exp = Date.now() + STUDENT_SESSION_DAYS * 86400000;
+  var body = b64url_(JSON.stringify({ iid: String(rec.intern_id), role: 'intern', exp: exp, pv: String(rec.pin_set_at || '') }));
+  return { token: body + '.' + signSession_(body), exp: exp };
+}
+function verifyInternToken_(ss, token) {
+  var parts = String(token || '').split('.');
+  if (parts.length !== 2 || !safeEqual_(signSession_(parts[0]), parts[1])) return { error: 'bad_session' };
+  var claims;
+  try { claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0] + '==='.slice((parts[0].length + 3) % 4))).getDataAsString()); }
+  catch (e) { return { error: 'bad_session' }; }
+  if (!claims || claims.role !== 'intern' || !claims.iid) return { error: 'bad_session' };
+  if (Number(claims.exp) < Date.now()) return { error: 'session_expired' };
+  var rec = findIntern_(ss, String(claims.iid));
+  if (!rec || rec.active === false || !rec.pin_hash || String(rec.pin_set_at || '') !== String(claims.pv || '')) return { error: 'session_expired' };
+  return { rec: rec, classes: internClasses_(rec) };
+}
+
+function handleInternAction(ss, payload) {
+  if (!globalStudentThrottle_()) return { status: 'error', code: 'rate_limited', message: 'กรุณารอสักครู่' };
+  var a = payload.action;
+  if (a === 'internLogin' || a === 'internSetPin') {
+    var rec = findIntern_(ss, cleanInternId_(payload.internId));
+    if (!rec || rec.active === false) return { status: 'error', code: 'not_found', message: 'ไม่พบบัญชี นศ. กรุณาให้ครูพี่เลี้ยงเพิ่มบัญชี' };
+    var pin = String(payload.pin || '');
+    if (!/^\d{6}$/.test(pin)) return { status: 'error', code: 'bad_pin', message: 'PIN ต้องเป็นตัวเลข 6 หลัก' };
+    var sheet = internSheet_(ss), now = Date.now();
+    if (a === 'internSetPin') {
+      if (rec.pin_hash) return { status: 'error', code: 'pin_exists', message: 'ตั้ง PIN แล้ว หากลืมให้ครูพี่เลี้ยงรีเซ็ต' };
+      rec.salt = Utilities.getUuid(); rec.pin_hash = hashPin_('intern:' + rec.intern_id, pin, rec.salt);
+      rec.pin_set_at = new Date().toISOString(); rec.failed_count = 0; rec.locked_until = '';
+    } else {
+      if (Number(rec.locked_until || 0) > now) return { status: 'error', code: 'locked', message: 'ใส่ PIN ผิดหลายครั้ง ล็อก 15 นาที' };
+      if (!rec.pin_hash) return { status: 'error', code: 'needs_pin', message: 'เข้าใช้ครั้งแรก กรุณาตั้ง PIN' };
+      if (hashPin_('intern:' + rec.intern_id, pin, String(rec.salt)) !== String(rec.pin_hash)) {
+        rec.failed_count = Number(rec.failed_count || 0) + 1;
+        if (rec.failed_count >= STUDENT_MAX_FAILS) { rec.locked_until = now + STUDENT_LOCK_MINUTES * 60000; rec.failed_count = 0; }
+        writeRow_(sheet, INTERN_HEADERS, rec);
+        return { status: 'error', code: 'wrong_pin', message: 'PIN ไม่ถูกต้อง' };
+      }
+      rec.failed_count = 0; rec.locked_until = '';
+    }
+    writeRow_(sheet, INTERN_HEADERS, rec);
+    var t = issueInternToken_(rec);
+    return { status: 'success', sessionToken: t.token, sessionExp: t.exp, profile: { internId: String(rec.intern_id), name: String(rec.name), classes: internClasses_(rec) } };
+  }
+
+  var v = verifyInternToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' };
+  var iid = String(v.rec.intern_id), classes = v.classes;
+  function allowed(c) { return classes.indexOf(String(c)) !== -1; }
+
+  if (a === 'internFetch') {
+    var since = Number(payload.since || 0);
+    var roster = rowsOf_(getStudentSheet_(ss), STUDENT_AUTH_HEADERS).filter(function (r) { return allowed(r['class']); }).map(function (r) {
+      return { student_id: cleanId_(r.student_id), prefix: String(r.prefix || ''), first_name: String(r.first_name || ''), last_name: String(r.last_name || ''), nickname: String(r.nickname || ''), class: String(r['class']), no: r.no };
+    });
+    var subs = rowsOf_(getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS), STUDENT_INBOX_HEADERS)
+      .filter(function (r) { return allowed(r['class']) && Number(r.received_ms) > since; })
+      .map(function (r) { delete r.row; r.student_id = cleanId_(r.student_id); return r; });
+    var approvals = rowsOf_(getOrCreateSheet(ss, APPROVAL_SHEET, APPROVAL_HEADERS), APPROVAL_HEADERS).filter(function (r) { return String(r.intern_id) === iid; })
+      .map(function (r) { return { id: String(r.approval_id), className: String(r['class']), period: Number(r.period), studentId: cleanId_(r.student_id), score: r.score, status: String(r.status) }; });
+    var logs = rowsOf_(getOrCreateSheet(ss, INTERN_LOG_SHEET, INTERN_LOG_HEADERS), INTERN_LOG_HEADERS).filter(function (r) { return String(r.intern_id) === iid; })
+      .map(function (r) { return { className: String(r['class']), period: Number(r.period), result: String(r.result), problems: String(r.problems), solutions: String(r.solutions), createdMs: Number(r.created_ms) }; });
+    var evals = rowsOf_(getOrCreateSheet(ss, SUPERVISION_SHEET, SUPERVISION_HEADERS), SUPERVISION_HEADERS).filter(function (r) { return String(r.intern_id) === iid; })
+      .map(function (r) { var rt = {}; try { rt = JSON.parse(String(r.ratings_json || '{}')); } catch (e) { rt = {}; } return { className: String(r['class']), period: Number(r.period), ratings: rt, total: Number(r.total), comments: String(r.comments), mentor: String(r.mentor), createdMs: Number(r.created_ms) }; });
+    var due = listDueDates_(ss, '').filter(function (d) { return allowed(d.className); });
+    var next = since; subs.forEach(function (s) { if (Number(s.received_ms) > next) next = Number(s.received_ms); });
+    return { status: 'success', classes: classes, roster: roster, submissions: subs, nextSince: next, approvals: approvals, logs: logs, evaluations: evals, dueDates: due };
+  }
+
+  if (a === 'internProposeGrade') {
+    var items = payload.items || [];
+    if (items.length > 100) return { status: 'error', code: 'too_many', message: 'ส่งได้ครั้งละไม่เกิน 100 รายการ' };
+    var ap = getOrCreateSheet(ss, APPROVAL_SHEET, APPROVAL_HEADERS);
+    var seen = {}; rowsOf_(ap, APPROVAL_HEADERS).forEach(function (r) { seen[String(r.intern_id) + '|' + String(r.client_id)] = true; });
+    var accepted = [], rejected = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i] || {}, cid = String(it.clientId || '');
+      if (!/^[A-Za-z0-9_.:-]{8,80}$/.test(cid)) { rejected.push({ clientId: cid, reason: 'bad_client_id' }); continue; }
+      if (!allowed(it.className)) { rejected.push({ clientId: cid, reason: 'class_not_assigned' }); continue; }
+      var sc = Number(it.score), p = Number(it.period);
+      if (!(p >= 1 && p <= 40) || !(sc >= 0 && sc <= 100) || !/^\d{4,10}$/.test(cleanId_(it.studentId))) { rejected.push({ clientId: cid, reason: 'invalid' }); continue; }
+      if (seen[iid + '|' + cid]) { accepted.push(cid); continue; }
+      ap.appendRow([Utilities.getUuid(), Date.now(), iid, String(v.rec.name), String(it.className), p, cleanId_(it.studentId), sc, str_(it.comment, 1000), 'pending', '', cid]);
+      seen[iid + '|' + cid] = true; accepted.push(cid);
+    }
+    return { status: 'success', accepted: accepted, rejected: rejected };
+  }
+
+  if (a === 'internPostLog') {
+    if (!allowed(payload.className)) return { status: 'error', code: 'class_not_assigned', message: 'ไม่ใช่ห้องที่ได้รับมอบหมาย' };
+    var pp = Number(payload.period);
+    if (!(pp >= 1 && pp <= 40)) return { status: 'error', code: 'invalid', message: 'คาบไม่ถูกต้อง' };
+    var lg = getOrCreateSheet(ss, INTERN_LOG_SHEET, INTERN_LOG_HEADERS);
+    var cid2 = str_(payload.clientId, 80);
+    var dup = rowsOf_(lg, INTERN_LOG_HEADERS).some(function (r) { return String(r.intern_id) === iid && cid2 && String(r.client_id) === cid2; });
+    if (!dup) {
+      lg.appendRow([Utilities.getUuid(), Date.now(), iid, String(v.rec.name), String(payload.className), pp, str_(payload.result, 3000), str_(payload.problems, 3000), str_(payload.solutions, 3000), cid2]);
+      processSyncItem(ss, { type: 'session_log', data: { className: String(payload.className), period: pp, instructorName: String(v.rec.name), instructorRole: 'นศ.ฝึกประสบการณ์วิชาชีพครู',
+        reflection: { outcomes: str_(payload.result, 3000), problems: str_(payload.problems, 3000), solutions: str_(payload.solutions, 3000) } } });
+    }
+    return { status: 'success', duplicate: dup };
+  }
+  return { status: 'error', code: 'unknown', message: 'unknown action' };
+}
+
+// ---- ครูพี่เลี้ยง: คิวอนุมัติ / บันทึกหลังสอน / แบบประเมินการนิเทศ (ต้องใช้ token) ----
+function fetchApprovals(ss, status) {
+  var list = rowsOf_(getOrCreateSheet(ss, APPROVAL_SHEET, APPROVAL_HEADERS), APPROVAL_HEADERS)
+    .filter(function (r) { return !status || String(r.status) === status; })
+    .map(function (r) { return { id: String(r.approval_id), createdMs: Number(r.created_ms), internId: String(r.intern_id), internName: String(r.intern_name), className: String(r['class']), period: Number(r.period), studentId: cleanId_(r.student_id), score: Number(r.score), comment: String(r.comment), status: String(r.status) }; });
+  return { status: 'success', approvals: list };
+}
+function decideApproval(ss, id, approve) {
+  var sheet = getOrCreateSheet(ss, APPROVAL_SHEET, APPROVAL_HEADERS);
+  var list = rowsOf_(sheet, APPROVAL_HEADERS);
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].approval_id) !== String(id)) continue;
+    if (String(list[i].status) !== 'pending') return { status: 'error', message: 'รายการนี้ตัดสินแล้ว' };
+    list[i].status = approve ? 'approved' : 'rejected'; list[i].decided_ms = Date.now();
+    writeRow_(sheet, APPROVAL_HEADERS, list[i]);
+    return { status: 'success', approval: { id: String(id), className: String(list[i]['class']), period: Number(list[i].period), studentId: cleanId_(list[i].student_id), score: Number(list[i].score), status: list[i].status } };
+  }
+  return { status: 'error', message: 'ไม่พบรายการ' };
+}
+function fetchInternLogs(ss, internId) {
+  return { status: 'success', logs: rowsOf_(getOrCreateSheet(ss, INTERN_LOG_SHEET, INTERN_LOG_HEADERS), INTERN_LOG_HEADERS)
+    .filter(function (r) { return !internId || String(r.intern_id) === String(internId); })
+    .map(function (r) { return { internId: String(r.intern_id), internName: String(r.intern_name), className: String(r['class']), period: Number(r.period), result: String(r.result), problems: String(r.problems), solutions: String(r.solutions), createdMs: Number(r.created_ms) }; }) };
+}
+function postSupervision(ss, payload) {
+  var id = cleanInternId_(payload.internId);
+  if (!id || !findIntern_(ss, id)) return { status: 'error', message: 'ไม่พบ นศ.' };
+  var ratings = payload.ratings || {}, total = 0, clean = {};
+  Object.keys(ratings).slice(0, 20).forEach(function (k) { var n = Math.max(0, Math.min(5, Number(ratings[k]) || 0)); clean[str_(k, 80)] = n; total += n; });
+  getOrCreateSheet(ss, SUPERVISION_SHEET, SUPERVISION_HEADERS).appendRow([Utilities.getUuid(), Date.now(), id, str_(payload.className, 20), Number(payload.period) || '', JSON.stringify(clean), total, str_(payload.comments, 3000), str_(payload.mentor, 80)]);
+  return { status: 'success', total: total };
 }

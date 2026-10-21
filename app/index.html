@@ -73,6 +73,12 @@
       <div class="header-actions">
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btn-mentor-panel" class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="MentorPanel.open()" title="นักศึกษาฝึกสอน: บัญชี อนุมัติคะแนน บันทึกหลังสอน นิเทศ พอร์ตโฟลิโอ">
+            👩‍🎓 <span class="hide-on-tablet">นศ.ฝึกสอน</span>
+          </button>
+          <button data-intern-only style="display:none; background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" class="btn-nav-action" onclick="Portfolio.openForCurrentIntern()" title="แฟ้มสะสมผลงาน (พิมพ์/PDF)">
+            📁 <span class="hide-on-tablet">พอร์ตโฟลิโอของฉัน</span>
+          </button>
           <button id="btn-teacher-dashboard" class="btn-nav-action" style="background: #eef2ff; color: #3730a3; border-color: #c7d2fe; font-weight: 700;" onclick="TeacherDashboard.open()" title="แดชบอร์ดห้องเรียน คะแนน เวลาเรียน กลุ่มเสี่ยง และส่งออก ปพ.5">
             📊 <span class="hide-on-tablet">แดชบอร์ด</span>
           </button>
@@ -1065,6 +1071,15 @@
           <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center;" onclick="App.handleTeacherLogin()">
             🔐 เข้าสู่ห้องปฏิบัติการครู (Teacher Cockpit)
           </button>
+          <div id="auth-intern-block" style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed #cbd5e1;">
+            <div style="font-weight: 700; color: #a21caf; font-size: 0.9rem; margin-bottom: 0.4rem;">👩‍🎓 นักศึกษาฝึกประสบการณ์วิชาชีพครู (รหัส นศ. + PIN 6 หลัก)</div>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <input type="text" id="auth-intern-id" class="form-input" placeholder="รหัส นศ. ที่ครูพี่เลี้ยงให้" style="flex: 1; min-width: 140px;">
+              <input type="password" id="auth-intern-pin" class="form-input" placeholder="PIN 6 หลัก" maxlength="6" inputmode="numeric" style="max-width: 120px;">
+              <button class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="internLoginFromForm()">เข้าสู่ระบบ นศ.</button>
+            </div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">* เข้าครั้งแรกให้ตั้ง PIN ใหม่ ระบบจะให้ยืนยันอีกครั้ง</div>
+          </div>
         </div>
 
       </div>
@@ -3514,6 +3529,7 @@
   <script src="js/student-submit.js?v=20261021_04"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
+  <script src="js/intern.js?v=20261021_06"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>

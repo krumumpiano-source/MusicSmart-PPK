@@ -279,8 +279,16 @@ const Store = {
       const local = this.load(this.ROSTER_KEY, null);
       this._rosterCache = (local && typeof local === 'object' && Object.keys(local).length > 0) ? local : null;
     }
-    if (this._rosterCache) return this._rosterCache;
-    return (typeof STUDENTS_DATA !== 'undefined' && STUDENTS_DATA) ? STUDENTS_DATA : {};
+    const base = this._rosterCache || ((typeof STUDENTS_DATA !== 'undefined' && STUDENTS_DATA) ? STUDENTS_DATA : {});
+    // นศ.ฝึกสอน: เห็นเฉพาะห้องที่ได้รับมอบหมาย
+    const u = this.getCurrentUser ? this.getCurrentUser() : null;
+    if (u && u.role === 'intern') {
+      const allowed = new Set(u.classes || []);
+      const out = {};
+      Object.keys(base).forEach(c => { if (allowed.has(c)) out[c] = base[c]; });
+      return out;
+    }
+    return base;
   },
 
   hasLocalRoster() {

@@ -143,13 +143,31 @@ const RoleGuard = {
     '#modal-holiday', '#modal-export', '#modal-student-status', '#modal-transcript', '#modal-semester', '#modal-subjects',
     '#modal-academic-docs', '#modal-rubric-scoring', '#modal-car-analytics', '#modal-car-full-report',
     '#modal-official-forms', '#modal-app-settings', '#modal-google-sheet-sync', '#modal-lesson-editor',
-    '#modal-curriculum-hub', '#modal-first-time-setup', '#btn-teacher-dashboard', '#modal-teacher-dashboard', '[data-teacher-only]'
+    '#modal-curriculum-hub', '#modal-first-time-setup', '#btn-teacher-dashboard', '#modal-teacher-dashboard',
+    '#btn-mentor-panel', '#modal-mentor-panel', '#auth-intern-block', '[data-teacher-only]', '[data-intern-only]'
   ],
   purged: false,
 
   isStudent() {
     const u = (typeof Store !== 'undefined' && Store.getCurrentUser) ? Store.getCurrentUser() : null;
-    return !u || u.role !== 'teacher';
+    return !u || (u.role !== 'teacher' && u.role !== 'intern');
+  },
+
+  // สิ่งที่ นศ. ไม่ควรมี: จัดการผู้ใช้ ตั้งค่า รหัสซิงค์ครู แผงครูพี่เลี้ยง
+  INTERN_HIDDEN_SELECTORS: ['#modal-user-management', '#modal-app-settings', '#modal-google-sheet-sync', '#btn-copy-student-link',
+    '#btn-mentor-panel', '#modal-mentor-panel', '#instructor-chip', '#modal-first-time-setup'],
+  purgeForIntern(doc) {
+    const d = doc || (typeof document !== 'undefined' ? document : null);
+    if (!d || !d.querySelectorAll) return 0;
+    let n = 0;
+    this.INTERN_HIDDEN_SELECTORS.forEach(sel => d.querySelectorAll(sel).forEach(el => { el.remove(); n++; }));
+    d.querySelectorAll('[data-intern-only]').forEach(el => { el.style.display = ''; });
+    this.purged = true;
+    return n;
+  },
+  purgeInternOnly(doc) {
+    const d = doc || (typeof document !== 'undefined' ? document : null);
+    if (d && d.querySelectorAll) d.querySelectorAll('[data-intern-only]').forEach(el => el.remove());
   },
 
   purgeTeacherDom(doc) {

@@ -226,6 +226,7 @@ const TeacherPull = {
   pulling: false,
 
   isConfigured() {
+    if (typeof InternMode !== 'undefined' && InternMode.isActive()) return true;
     if (typeof GoogleSheetSync === 'undefined') return false;
     const c = GoogleSheetSync.getConfig();
     return !!(c.webAppUrl && c.syncToken);
@@ -299,6 +300,11 @@ const TeacherPull = {
   },
 
   async pull(opts = {}) {
+    if (typeof InternMode !== 'undefined' && InternMode.isActive()) {
+      const r = await InternMode.sync().catch(e => ({ success: false, message: e.message }));
+      if (!opts.silent) GoogleSheetSync.showToast(r.success ? `📥 ซิงค์ห้องที่สอนแล้ว: งาน ${r.submissions} รายการ` : '⚠️ ' + (r.message || 'ซิงค์ไม่สำเร็จ'), r.success ? 'success' : 'error');
+      return r;
+    }
     if (this.pulling) return { skipped: true };
     if (!this.isConfigured()) {
       if (!opts.silent) alert('กรุณาตั้งค่า URL และรหัสซิงค์ในหน้าต่าง "ซิงค์คู่ Google Sheets" ก่อน');
