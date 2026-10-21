@@ -1,6 +1,6 @@
 // ==========================================================================
 // MusicSmart • นักศึกษาฝึกประสบการณ์วิชาชีพครู (Phase 3)
-// InternMode : เข้าสู่ระบบ (รหัส นศ. + PIN) เห็นเนื้อหาครูเฉพาะห้องที่ได้รับมอบหมาย
+// InternMode : เข้าสู่ระบบ (รหัสนักศึกษา + PIN) เห็นเนื้อหาครูเฉพาะห้องที่ได้รับมอบหมาย
 //              แก้คะแนน = ส่งเข้าคิวรออนุมัติจากครูพี่เลี้ยง • บันทึกหลังสอนส่งถึงครูพี่เลี้ยง
 // MentorPanel: ครูพี่เลี้ยงจัดการบัญชี นศ. • อนุมัติคะแนน • ดูบันทึกหลังสอน • แบบประเมินการนิเทศ
 // Portfolio  : แฟ้มสะสมผลงาน (พิมพ์/บันทึกเป็น PDF จากเบราว์เซอร์)
@@ -177,7 +177,7 @@ const MentorPanel = {
           <table style="width:100%;font-size:0.84rem;border-collapse:collapse;">${interns.map(i => `<tr style="border-bottom:1px solid #e2e8f0;"><td>${e(i.internId)}</td><td>${e(i.name)}</td><td>${e(i.classes.join(', '))}</td><td>${i.hasPin ? '🔒 มี PIN' : '⚪ ยังไม่ตั้ง'}</td>
             <td><button class="btn-nav-action" data-reset="${e(i.internId)}">รีเซ็ต PIN</button> <button class="btn-nav-action" data-portfolio="${e(i.internId)}">📁 พอร์ตโฟลิโอ</button></td></tr>`).join('') || '<tr><td>ยังไม่มีบัญชี</td></tr>'}</table>
           <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;align-items:center;">
-            <input id="mp-id" class="form-input" placeholder="รหัส นศ. (อังกฤษ/ตัวเลข)" style="max-width:180px;">
+            <input id="mp-id" class="form-input" placeholder="รหัสนักศึกษา (อังกฤษ/ตัวเลข)" style="max-width:180px;">
             <input id="mp-name" class="form-input" placeholder="ชื่อ (เช่น นศ.ตัวอย่าง)" style="max-width:200px;">
             ${classes.map(c => `<label style="font-size:0.8rem;"><input type="checkbox" class="mp-cls" value="${e(c)}"> ${e(c)}</label>`).join('')}
             <button class="btn-nav-action primary" id="mp-save">บันทึกบัญชี</button></div></section>
