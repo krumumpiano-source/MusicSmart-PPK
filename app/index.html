@@ -1082,8 +1082,9 @@
               รหัสผ่าน (Password) หรือ รหัส PIN ครู:
             </label>
             <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN ครู" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
-            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * กรอกรหัสผ่านประจำตัวครูผู้สอนเพื่อความปลอดภัยของข้อมูล
+            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+              <span>* รหัสผ่านตรวจที่เซิร์ฟเวอร์ของโรงเรียน (ไม่เก็บในเว็บ)</span>
+              <a href="#" onclick="TeacherAuth.openForgot(); return false;" style="color: #2563eb; font-weight: 600;">ลืมรหัสผ่าน? / ตั้งรหัสใหม่</a>
             </div>
           </div>
 
@@ -1096,8 +1097,9 @@
               <input type="text" id="auth-intern-id" class="form-input" placeholder="รหัส นศ. ที่ครูพี่เลี้ยงให้" style="flex: 1; min-width: 140px;">
               <input type="password" id="auth-intern-pin" class="form-input" placeholder="PIN 6 หลัก" maxlength="6" inputmode="numeric" style="max-width: 120px;">
               <button class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="internLoginFromForm()">เข้าสู่ระบบ นศ.</button>
+              <button class="btn-nav-action" style="background: #ffffff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="InternRegistration.open()">📝 ลงทะเบียน นศ.</button>
             </div>
-            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">* เข้าครั้งแรกให้ตั้ง PIN ใหม่ ระบบจะให้ยืนยันอีกครั้ง</div>
+            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">* ยังไม่มีบัญชี กด "ลงทะเบียน" แล้วรอครูประจำวิชาอนุมัติ • ลืม PIN ให้ครูรีเซ็ต แล้วตั้ง PIN ใหม่ตอนเข้าสู่ระบบ</div>
           </div>
         </div>
 
@@ -3548,7 +3550,8 @@
   <script src="js/student-submit.js?v=20261021_04"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
-  <script src="js/intern.js?v=20261021_06"></script>
+  <script src="js/teacher-auth.js?v=20261021_09"></script>
+  <script src="js/intern.js?v=20261021_09"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/student-upload.js?v=20261021_08"></script>
   <script src="js/tuner.js?v=20261020_03"></script>

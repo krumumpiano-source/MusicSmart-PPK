@@ -495,7 +495,7 @@ const App = {
     }
   },
 
-  handleTeacherLogin() {
+  async handleTeacherLogin() {
     const email = (document.getElementById('auth-teacher-email')?.value || '').trim();
     const secretInput = document.getElementById('auth-teacher-secret');
     const secret = (secretInput?.value || '').trim();
@@ -511,7 +511,8 @@ const App = {
       return;
     }
 
-    const res = Store.verifyTeacherLogin(email, secret);
+    const res = (typeof TeacherAuth !== 'undefined') ? await TeacherAuth.login(email, secret) : Store.verifyTeacherLogin(email, secret);
+    if (res.success && res.notice) console.info(res.notice);
     if (res.success) {
       if (res.needsSetup) {
         this.openFirstTimeSetupModal(res.teacher);

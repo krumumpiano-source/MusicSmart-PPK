@@ -57,6 +57,12 @@ function doPost(e) {
       return jsonOut(handleStudentPublicAction(SpreadsheetApp.getActiveSpreadsheet(), payload));
     }
 
+    // 0a2. ครูเข้าสู่ระบบด้วยรหัสผ่าน (ตรวจบนเซิร์ฟเวอร์)
+    if (payload && TEACHER_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
+      if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
+      return jsonOut(handleTeacherPublicAction(payload));
+    }
+
     // 0b. นักศึกษาฝึกสอน (ใช้โทเค็น นศ. ที่จำกัดเฉพาะห้องที่ได้รับมอบหมาย)
     if (payload && INTERN_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
       if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
@@ -89,6 +95,8 @@ function doPost(e) {
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
     if (action === 'fetch_due_dates') return jsonOut({ status: 'success', dueDates: listDueDates_(ss, payload.className || '') });
+    if (action === 'teacher_set_password') return jsonOut(setTeacherPassword(payload));
+    if (action === 'decide_intern') return jsonOut(decideIntern(ss, payload));
     if (action === 'upsert_intern') return jsonOut(upsertIntern(ss, payload));
     if (action === 'reset_intern_pin') return jsonOut(resetInternPin(ss, payload.internId));
     if (action === 'list_interns') return jsonOut(listInterns(ss));
@@ -1002,14 +1010,15 @@ function studentNotices_(ss, payload) {
  * คิวอนุมัติคะแนนโดยครูพี่เลี้ยง, บันทึกหลังสอน, แบบประเมินการนิเทศ
  * ============================================================================ */
 var INTERN_SHEET = 'นศ_Interns';
-var INTERN_HEADERS = ['intern_id', 'name', 'classes', 'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'active'];
+var INTERN_HEADERS = ['intern_id', 'name', 'classes', 'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'active',
+  'status', 'university', 'faculty', 'major', 'phone', 'email', 'term', 'academic_year', 'preferred_classes', 'mentor_name', 'registered_at', 'decided_at', 'reject_reason'];
 var APPROVAL_SHEET = 'รออนุมัติคะแนน_Approvals';
 var APPROVAL_HEADERS = ['approval_id', 'created_ms', 'intern_id', 'intern_name', 'class', 'period', 'student_id', 'score', 'comment', 'status', 'decided_ms', 'client_id'];
 var INTERN_LOG_SHEET = 'นศ_บันทึกหลังสอน';
 var INTERN_LOG_HEADERS = ['log_id', 'created_ms', 'intern_id', 'intern_name', 'class', 'period', 'result', 'problems', 'solutions', 'client_id'];
 var SUPERVISION_SHEET = 'นิเทศ_Supervision';
 var SUPERVISION_HEADERS = ['eval_id', 'created_ms', 'intern_id', 'class', 'period', 'ratings_json', 'total', 'comments', 'mentor'];
-var INTERN_PUBLIC_ACTIONS = ['internLogin', 'internSetPin', 'internFetch', 'internProposeGrade', 'internPostLog'];
+var INTERN_PUBLIC_ACTIONS = ['internRegister', 'internLogin', 'internSetPin', 'internFetch', 'internProposeGrade', 'internPostLog'];
 
 function rowsOf_(sheet, headers) {
   var vals = sheet.getDataRange().getValues(), out = [];
@@ -1038,12 +1047,13 @@ function upsertIntern(ss, payload) {
   if (!id) return { status: 'error', message: 'รหัส นศ. ต้องเป็นตัวอักษรอังกฤษ/ตัวเลข 3-30 ตัว' };
   var classes = (payload.classes || []).map(function (c) { return str_(c, 20); }).filter(String);
   var sheet = internSheet_(ss);
+  ensureHeaders_(sheet, INTERN_HEADERS);
   var rec = findIntern_(ss, id);
   if (!rec) {
-    sheet.appendRow([id, str_(payload.name, 80), classes.join(','), '', '', 0, '', '', true]);
+    sheet.appendRow([id, str_(payload.name, 80), classes.join(','), '', '', 0, '', '', true, 'approved']);
     return { status: 'success', created: true, internId: id };
   }
-  rec.name = str_(payload.name, 80) || rec.name; rec.classes = classes.join(','); rec.active = payload.active === false ? false : true;
+  rec.name = str_(payload.name, 80) || rec.name; rec.classes = classes.join(','); if (String(rec.status || '') !== 'rejected') rec.status = 'approved'; rec.active = payload.active === false ? false : true;
   writeRow_(sheet, INTERN_HEADERS, rec);
   return { status: 'success', created: false, internId: id };
 }
@@ -1056,7 +1066,10 @@ function resetInternPin(ss, internId) {
 }
 function listInterns(ss) {
   return { status: 'success', interns: rowsOf_(internSheet_(ss), INTERN_HEADERS).map(function (r) {
-    return { internId: String(r.intern_id), name: String(r.name), classes: internClasses_(r), hasPin: !!r.pin_hash, active: r.active !== false };
+    var o = { internId: String(r.intern_id), name: String(r.name), classes: internClasses_(r), hasPin: !!r.pin_hash, active: r.active !== false,
+      status: String(r.status || 'approved'), registeredAt: String(r.registered_at || ''), decidedAt: String(r.decided_at || ''), rejectReason: String(r.reject_reason || '') };
+    INTERN_PROFILE_FIELDS.forEach(function (k) { o[k] = String(r[k] === undefined ? '' : r[k]); });   // ข้อมูลส่วนตัว: เฉพาะครูที่มี token
+    return o;
   }) };
 }
 
@@ -1076,18 +1089,30 @@ function verifyInternToken_(ss, token) {
   if (Number(claims.exp) < Date.now()) return { error: 'session_expired' };
   var rec = findIntern_(ss, String(claims.iid));
   if (!rec || rec.active === false || !rec.pin_hash || String(rec.pin_set_at || '') !== String(claims.pv || '')) return { error: 'session_expired' };
+  if (String(rec.status || 'approved') !== 'approved') return { error: 'session_expired' };
   return { rec: rec, classes: internClasses_(rec) };
 }
 
 function handleInternAction(ss, payload) {
   if (!globalStudentThrottle_()) return { status: 'error', code: 'rate_limited', message: 'กรุณารอสักครู่' };
   var a = payload.action;
+  if (a === 'internRegister') return internRegister_(ss, payload);
   if (a === 'internLogin' || a === 'internSetPin') {
     var rec = findIntern_(ss, cleanInternId_(payload.internId));
-    if (!rec || rec.active === false) return { status: 'error', code: 'not_found', message: 'ไม่พบบัญชี นศ. กรุณาให้ครูพี่เลี้ยงเพิ่มบัญชี' };
+    if (!rec || rec.active === false) return { status: 'error', code: 'not_found', message: 'ไม่พบบัญชี นศ. กรุณากด "ลงทะเบียน" ก่อน' };
+    var st = String(rec.status || 'approved');
+    // ไม่บอกสถานะจนกว่าจะยืนยัน PIN ถูก (กันการสอดส่องรหัส) — ยกเว้นบัญชีที่ยังไม่มี PIN
+    if (st !== 'approved' && rec.pin_hash && /^\d{6}$/.test(String(payload.pin || '')) &&
+        hashPin_('intern:' + rec.intern_id, String(payload.pin), String(rec.salt)) === String(rec.pin_hash) && Number(rec.locked_until || 0) <= Date.now()) {
+      if (st === 'pending') return { status: 'error', code: 'pending', message: 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ' };
+      return { status: 'error', code: 'rejected', message: 'ครูไม่อนุมัติการลงทะเบียน' + (rec.reject_reason ? ': ' + rec.reject_reason : '') + ' (ลงทะเบียนใหม่ได้)' };
+    }
     var pin = String(payload.pin || '');
     if (!/^\d{6}$/.test(pin)) return { status: 'error', code: 'bad_pin', message: 'PIN ต้องเป็นตัวเลข 6 หลัก' };
     var sheet = internSheet_(ss), now = Date.now();
+    if (st !== 'approved' && (a === 'internSetPin' || !rec.pin_hash)) {
+      return { status: 'error', code: st === 'pending' ? 'pending' : 'rejected', message: st === 'pending' ? 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ' : 'ครูไม่อนุมัติการลงทะเบียน (ลงทะเบียนใหม่ได้)' };
+    }
     if (a === 'internSetPin') {
       if (rec.pin_hash) return { status: 'error', code: 'pin_exists', message: 'ตั้ง PIN แล้ว หากลืมให้ครูพี่เลี้ยงรีเซ็ต' };
       rec.salt = Utilities.getUuid(); rec.pin_hash = hashPin_('intern:' + rec.intern_id, pin, rec.salt);
@@ -1105,7 +1130,8 @@ function handleInternAction(ss, payload) {
     }
     writeRow_(sheet, INTERN_HEADERS, rec);
     var t = issueInternToken_(rec);
-    return { status: 'success', sessionToken: t.token, sessionExp: t.exp, profile: { internId: String(rec.intern_id), name: String(rec.name), classes: internClasses_(rec) } };
+    if (st !== 'approved') return { status: 'error', code: 'wrong_pin', message: 'PIN ไม่ถูกต้อง' };
+    return { status: 'success', sessionToken: t.token, sessionExp: t.exp, profile: internOwnProfile_(rec) };
   }
 
   var v = verifyInternToken_(ss, payload.sessionToken);
@@ -1479,4 +1505,130 @@ function resolveUpload_(ss, sid, cid) {
   if (!/^[A-Za-z0-9_-]{8,60}$/.test(String(cid || ''))) return null;
   var u = findUpload_(uploadSheet_(ss), sid + '_' + cid);
   return u && String(u.status) === 'done' && cleanId_(u.student_id) === sid ? u : null;
+}
+
+/* ============================================================================
+ * เข้าสู่ระบบครูผ่านเซิร์ฟเวอร์ (Phase 6)
+ * - รหัสผ่านครูเก็บเป็น hash (SHA-256 ×100 + salt + PIN_PEPPER) ใน Script Properties: TEACHER_AUTH (ไม่อยู่ในชีต/เว็บ)
+ * - ตั้ง/รีเซ็ตรหัสผ่าน: action teacher_set_password (ต้องใช้ SYNC_TOKEN) — จากเครื่องครูหรือสคริปต์บน PC
+ * - เข้าสู่ระบบสำเร็จ: คืน SYNC_TOKEN ให้เครื่องครู (เครื่องใหม่ตั้งค่าซิงค์อัตโนมัติ)
+ * ============================================================================ */
+var TEACHER_PUBLIC_ACTIONS = ['teacherLogin', 'teacherAuthStatus'];
+var TEACHER_MAX_FAILS = 5;
+var TEACHER_LOCK_MINUTES = 15;
+var TEACHER_MIN_PASSWORD = 8;
+
+function teacherAuth_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('TEACHER_AUTH') || 'null'); } catch (e) { return null; }
+}
+function saveTeacherAuth_(a) { PropertiesService.getScriptProperties().setProperty('TEACHER_AUTH', JSON.stringify(a)); }
+function normEmail_(v) { return String(v || '').trim().toLowerCase(); }
+
+function setTeacherPassword(payload) {
+  var email = normEmail_(payload.email), pw = String(payload.password || '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: 'error', code: 'bad_email', message: 'อีเมลไม่ถูกต้อง' };
+  if (pw.length < TEACHER_MIN_PASSWORD || pw.length > 128) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านต้องยาว ' + TEACHER_MIN_PASSWORD + '–128 ตัวอักษร' };
+  if (/^(.)\1+$/.test(pw) || /^(12345678|password|ppk1234)/i.test(pw)) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านเดาง่ายเกินไป' };
+  var old = teacherAuth_() || {};
+  var salt = Utilities.getUuid();
+  saveTeacherAuth_({ email: email, name: str_(payload.name, 80) || old.name || '', salt: salt, hash: hashPin_('teacher:' + email, pw, salt),
+    set_at: new Date().toISOString(), failed: 0, locked_until: 0 });
+  return { status: 'success', email: email };
+}
+
+function handleTeacherPublicAction(payload) {
+  if (!globalStudentThrottle_()) return { status: 'error', code: 'rate_limited', message: 'มีผู้ใช้จำนวนมาก กรุณารอสักครู่' };
+  var a = teacherAuth_();
+  if (payload.action === 'teacherAuthStatus') return { status: 'success', configured: !!(a && a.hash) };
+  if (!a || !a.hash) return { status: 'error', code: 'not_configured', message: 'ยังไม่ได้ตั้งรหัสผ่านครูบนเซิร์ฟเวอร์' };
+  var now = Date.now();
+  if (Number(a.locked_until || 0) > now) return { status: 'error', code: 'locked', message: 'ใส่รหัสผิดหลายครั้ง ล็อก ' + TEACHER_LOCK_MINUTES + ' นาที' };
+  var email = normEmail_(payload.email), pw = String(payload.password || '');
+  var ok = email === a.email && pw.length > 0 && pw.length <= 128 && safeEqual_(hashPin_('teacher:' + a.email, pw, a.salt), a.hash);
+  if (!ok) {
+    a.failed = Number(a.failed || 0) + 1;
+    if (a.failed >= TEACHER_MAX_FAILS) { a.locked_until = now + TEACHER_LOCK_MINUTES * 60000; a.failed = 0; }
+    saveTeacherAuth_(a);
+    return { status: 'error', code: 'wrong_password', message: 'อีเมลหรือรหัสผ่านครูไม่ถูกต้อง (ตรวจที่เซิร์ฟเวอร์) — ลืมรหัสผ่านให้กด "ลืมรหัสผ่าน?"' };
+  }
+  if (a.failed || a.locked_until) { a.failed = 0; a.locked_until = 0; saveTeacherAuth_(a); }
+  return { status: 'success', email: a.email, name: a.name || '', passwordSetAt: a.set_at,
+    syncToken: PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN') || '' };
+}
+
+/* ============================================================================
+ * นศ. ลงทะเบียนเอง (Phase 6): สถานะ pending → ครูอนุมัติ (กำหนดห้อง) / ไม่อนุมัติ
+ * ข้อมูลส่วนตัวอยู่ในชีต นศ_Interns เท่านั้น ส่งให้ครูที่มี SYNC_TOKEN, นศ. เห็นเฉพาะของตัวเองหลังเข้าสู่ระบบ
+ * ============================================================================ */
+var INTERN_REG_PER_HOUR = 20;
+var INTERN_PROFILE_FIELDS = ['university', 'faculty', 'major', 'phone', 'email', 'term', 'academic_year', 'preferred_classes', 'mentor_name'];
+
+function validateInternRegistration_(p) {
+  var errs = [];
+  var name = String(p.fullName || '').trim().replace(/\s+/g, ' ');
+  if (name.length < 4 || name.length > 80 || !/\s/.test(name)) errs.push('ชื่อ-สกุล');
+  var id = String(p.internId || '').trim();
+  if (!/^[A-Za-z0-9_-]{5,20}$/.test(id)) errs.push('รหัสนักศึกษา (อังกฤษ/ตัวเลข 5–20 ตัว)');
+  ['university', 'faculty', 'major'].forEach(function (k) { var v = String(p[k] || '').trim(); if (v.length < 2 || v.length > 120) errs.push({ university: 'มหาวิทยาลัย', faculty: 'คณะ', major: 'สาขา' }[k]); });
+  var phone = String(p.phone || '').replace(/[\s-]/g, '');
+  if (!/^0\d{8,9}$/.test(phone)) errs.push('เบอร์โทร (เช่น 0812345678)');
+  var email = normEmail_(p.email);
+  if (!/^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) errs.push('อีเมล');
+  var term = String(p.term || '').trim();
+  if (['1', '2', '3'].indexOf(term) === -1) errs.push('ภาคเรียน');
+  var year = Number(p.academicYear);
+  if (!(year >= 2560 && year <= 2600)) errs.push('ปีการศึกษา (พ.ศ.)');
+  var pin = String(p.pin || '');
+  if (!/^\d{6}$/.test(pin) || /^(\d)\1{5}$/.test(pin) || pin === '123456' || pin === '654321') errs.push('PIN 6 หลัก (ห้ามเลขซ้ำ/เรียง)');
+  var pref = (Object.prototype.toString.call(p.preferredClasses) === '[object Array]' ? p.preferredClasses : []).slice(0, 10).map(function (c) { return str_(c, 20); }).filter(String);
+  var mentor = String(p.mentorName || '').trim();
+  if (mentor.length > 80) errs.push('ครูพี่เลี้ยง');
+  return { errs: errs, rec: { intern_id: id, name: name, university: str_(String(p.university).trim(), 120), faculty: str_(String(p.faculty).trim(), 120),
+    major: str_(String(p.major).trim(), 120), phone: phone, email: email, term: term, academic_year: year, preferred_classes: pref.join(','), mentor_name: mentor }, pin: pin };
+}
+
+function internRegister_(ss, payload) {
+  var cache = CacheService.getScriptCache();
+  var hk = 'intern_reg_' + Math.floor(Date.now() / 3600000);
+  var n = Number(cache.get(hk) || 0);
+  if (n >= INTERN_REG_PER_HOUR) return { status: 'error', code: 'rate_limited', message: 'มีการลงทะเบียนจำนวนมาก กรุณาลองใหม่ภายหลัง' };
+  cache.put(hk, String(n + 1), 3700);
+  var v = validateInternRegistration_(payload);
+  if (v.errs.length) return { status: 'error', code: 'invalid', fields: v.errs, message: 'กรุณาตรวจสอบ: ' + v.errs.join(', ') };
+  var sheet = internSheet_(ss);
+  ensureHeaders_(sheet, INTERN_HEADERS);
+  var existing = findIntern_(ss, v.rec.intern_id);
+  if (existing && String(existing.status || 'approved') !== 'rejected') {
+    return { status: 'error', code: 'duplicate', message: String(existing.status) === 'pending' ? 'รหัสนักศึกษานี้ลงทะเบียนแล้ว รอครูอนุมัติ' : 'รหัสนักศึกษานี้มีบัญชีแล้ว หากลืม PIN ให้ครูรีเซ็ต' };
+  }
+  var salt = Utilities.getUuid(), now = new Date().toISOString();
+  var rec = existing || { row: sheet.getDataRange().getValues().length + 1 };
+  Object.keys(v.rec).forEach(function (k) { rec[k] = v.rec[k]; });
+  rec.classes = ''; rec.salt = salt; rec.pin_hash = hashPin_('intern:' + v.rec.intern_id, v.pin, salt); rec.failed_count = 0; rec.locked_until = '';
+  rec.pin_set_at = now; rec.active = true; rec.status = 'pending'; rec.registered_at = now; rec.decided_at = ''; rec.reject_reason = '';
+  writeRow_(sheet, INTERN_HEADERS, rec);
+  return { status: 'success', internId: v.rec.intern_id, message: 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ' };
+}
+
+function internOwnProfile_(rec) {
+  var o = { internId: String(rec.intern_id), name: String(rec.name), classes: internClasses_(rec), status: String(rec.status || 'approved') };
+  INTERN_PROFILE_FIELDS.forEach(function (k) { o[k] = String(rec[k] === undefined ? '' : rec[k]); });
+  return o;
+}
+
+function decideIntern(ss, payload) {
+  var rec = findIntern_(ss, cleanInternId_(payload.internId));
+  if (!rec) return { status: 'error', message: 'ไม่พบ นศ.' };
+  if (payload.approve) {
+    var classes = (payload.classes || []).map(function (c) { return str_(c, 20); }).filter(String);
+    if (!classes.length) return { status: 'error', code: 'no_classes', message: 'กรุณาเลือกห้องที่มอบหมายอย่างน้อย 1 ห้อง' };
+    rec.status = 'approved'; rec.classes = classes.join(','); rec.active = true; rec.reject_reason = '';
+  } else {
+    rec.status = 'rejected'; rec.reject_reason = str_(payload.reason, 300); rec.classes = '';
+    rec.pin_set_at = new Date().toISOString();   // ยกเลิกโทเค็นที่อาจมีอยู่
+  }
+  rec.decided_at = new Date().toISOString();
+  ensureHeaders_(internSheet_(ss), INTERN_HEADERS);
+  writeRow_(internSheet_(ss), INTERN_HEADERS, rec);
+  return { status: 'success', internId: String(rec.intern_id), state: rec.status };
 }

@@ -20,7 +20,10 @@ const InternMode = {
   async _auth(action, internId, pin) {
     const r = await StudentAuth._post({ action, internId: String(internId || '').trim(), pin: String(pin || '').trim() });
     if (r.status !== 'success') return { success: false, code: r.code, message: r.message };
-    const user = { role: 'intern', internId: r.profile.internId, name: r.profile.name, classes: r.profile.classes || [],
+    const p = r.profile || {};
+    const own = {};   // ข้อมูลของตัวเอง (แสดงในพอร์ตโฟลิโอ)
+    ['university', 'faculty', 'major', 'term', 'academic_year', 'mentor_name'].forEach(k => { if (p[k]) own[k] = p[k]; });
+    const user = { role: 'intern', internId: p.internId, name: p.name, classes: p.classes || [], profile: own,
       sessionToken: r.sessionToken, sessionExp: r.sessionExp, loggedInAt: new Date().toISOString() };
     Store.setCurrentUser(user);
     if (typeof Store.clearRoster === 'function') Store.clearRoster();
@@ -117,6 +120,7 @@ const MentorPanel = {
     const cfg = GoogleSheetSync.getConfig();
     return GoogleSheetSync.postJSON(cfg.webAppUrl, body);
   },
+  decideIntern(internId, approve, classes, reason) { return this._post({ action: 'decide_intern', internId, approve: !!approve, classes: classes || [], reason: reason || '' }); },
   saveIntern(internId, name, classes) { return this._post({ action: 'upsert_intern', internId, name, classes }); },
   listInterns() { return this._post({ action: 'list_interns' }); },
   resetPin(internId) { return this._post({ action: 'reset_intern_pin', internId }); },
@@ -155,10 +159,20 @@ const MentorPanel = {
     catch (e) { m.innerHTML = `<div class="modal-card"><div class="modal-body">⚠️ ${this.esc(e.message)} <button class="btn-nav-action" onclick="document.getElementById('modal-mentor-panel').classList.remove('active')">ปิด</button></div></div>`; return; }
     const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];
     const e = this.esc.bind(this);
+    const regs = interns.filter(i => i.status === 'pending');
+    const rejected = interns.filter(i => i.status === 'rejected');
+    interns = interns.filter(i => i.status !== 'pending' && i.status !== 'rejected');
+    const detail = i => `${e(i.name)} • รหัส ${e(i.internId)}<br><span style="color:#475569;">${e(i.university)} / ${e(i.faculty)} / ${e(i.major)} • ภาค ${e(i.term)}/${e(i.academic_year)}<br>📞 ${e(i.phone)} • ✉️ ${e(i.email)}${i.preferred_classes ? ' • ขอฝึก: ' + e(i.preferred_classes) : ''}${i.mentor_name ? ' • ครูพี่เลี้ยง: ' + e(i.mentor_name) : ''}</span>`;
+    const regHtml = `<section><h4>📝 คำขอลงทะเบียน นศ. รออนุมัติ (${regs.length})</h4>
+      ${regs.map(i => `<div class="mp-reg" data-id="${e(i.internId)}" style="border:1px solid #f5d0fe;border-radius:8px;padding:0.5rem 0.7rem;margin-bottom:0.5rem;font-size:0.84rem;">${detail(i)}
+        <div style="margin-top:0.35rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">มอบหมายห้อง: ${classes.map(c => `<label><input type="checkbox" class="mp-reg-cls" value="${e(c)}" ${String(i.preferred_classes || '').split(',').includes(c) ? 'checked' : ''}> ${e(c)}</label>`).join('')}
+        <button class="btn-nav-action primary" data-reg-approve="${e(i.internId)}">อนุมัติ</button> <button class="btn-nav-action" data-reg-reject="${e(i.internId)}">ไม่อนุมัติ</button></div></div>`).join('') || '<div style="color:#64748b;">ไม่มีคำขอใหม่</div>'}
+      ${rejected.length ? `<details style="font-size:0.8rem;margin-top:0.3rem;"><summary>ไม่อนุมัติแล้ว (${rejected.length})</summary>${rejected.map(i => `<div>${e(i.name)} (${e(i.internId)}) ${i.rejectReason ? '• ' + e(i.rejectReason) : ''}</div>`).join('')}</details>` : ''}</section>`;
     m.innerHTML = `<div class="modal-card" style="max-width:980px;width:96vw;max-height:92vh;overflow:auto;">
       <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;"><h3 class="modal-title" style="margin:0;">👩‍🎓 นักศึกษาฝึกประสบการณ์วิชาชีพครู</h3>
         <button class="btn-nav-action" onclick="document.getElementById('modal-mentor-panel').classList.remove('active')">✕</button></div>
       <div class="modal-body" style="display:grid;gap:1rem;">
+        ${regHtml}
         <section><h4>บัญชี นศ. และห้องที่มอบหมาย</h4>
           <table style="width:100%;font-size:0.84rem;border-collapse:collapse;">${interns.map(i => `<tr style="border-bottom:1px solid #e2e8f0;"><td>${e(i.internId)}</td><td>${e(i.name)}</td><td>${e(i.classes.join(', '))}</td><td>${i.hasPin ? '🔒 มี PIN' : '⚪ ยังไม่ตั้ง'}</td>
             <td><button class="btn-nav-action" data-reset="${e(i.internId)}">รีเซ็ต PIN</button> <button class="btn-nav-action" data-portfolio="${e(i.internId)}">📁 พอร์ตโฟลิโอ</button></td></tr>`).join('') || '<tr><td>ยังไม่มีบัญชี</td></tr>'}</table>
@@ -186,6 +200,17 @@ const MentorPanel = {
       const cls = [...m.querySelectorAll('.mp-cls:checked')].map(x => x.value);
       try { await this.saveIntern(m.querySelector('#mp-id').value.trim(), m.querySelector('#mp-name').value.trim(), cls); reload(); } catch (err) { alert('❌ ' + err.message); }
     };
+    m.querySelectorAll('[data-reg-approve]').forEach(b => { b.onclick = async () => {
+      const box = b.closest('.mp-reg');
+      const cls = [...box.querySelectorAll('.mp-reg-cls:checked')].map(x => x.value);
+      if (!cls.length) { alert('กรุณาเลือกห้องที่มอบหมายอย่างน้อย 1 ห้อง'); return; }
+      try { await this.decideIntern(b.dataset.regApprove, true, cls); reload(); } catch (err) { alert('❌ ' + err.message); }
+    }; });
+    m.querySelectorAll('[data-reg-reject]').forEach(b => { b.onclick = async () => {
+      const reason = prompt('เหตุผลที่ไม่อนุมัติ (นศ. จะเห็นข้อความนี้)', '');
+      if (reason === null) return;
+      try { await this.decideIntern(b.dataset.regReject, false, [], reason); reload(); } catch (err) { alert('❌ ' + err.message); }
+    }; });
     m.querySelectorAll('[data-reset]').forEach(b => { b.onclick = async () => { if (confirm('รีเซ็ต PIN ของ นศ. คนนี้?')) { await this.resetPin(b.dataset.reset); reload(); } }; });
     m.querySelectorAll('[data-approve]').forEach(b => { b.onclick = async () => { await this.decide(b.dataset.approve, true); reload(); }; });
     m.querySelectorAll('[data-reject]').forEach(b => { b.onclick = async () => { await this.decide(b.dataset.reject, false); reload(); }; });
@@ -244,6 +269,63 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid 
   }
 };
 
+// ลงทะเบียน นศ. ด้วยตัวเอง → รอครูประจำวิชาอนุมัติ
+const InternRegistration = {
+  FIELDS: [
+    ['fullName', 'ชื่อ-สกุล (เช่น นายตัวอย่าง ทดสอบ)', 'text'], ['internId', 'รหัสนักศึกษา', 'text'],
+    ['university', 'มหาวิทยาลัย', 'text'], ['faculty', 'คณะ', 'text'], ['major', 'สาขาวิชา', 'text'],
+    ['phone', 'เบอร์โทรศัพท์', 'tel'], ['email', 'อีเมล', 'email'],
+    ['term', 'ภาคเรียน (1/2/3)', 'text'], ['academicYear', 'ปีการศึกษา (พ.ศ. เช่น 2569)', 'text'],
+    ['mentorName', 'ครูพี่เลี้ยง (ถ้าทราบ)', 'text'], ['preferredClasses', 'ห้องที่ต้องการฝึก (ถ้ามี คั่นด้วย , เช่น ม.1/1, ม.1/2)', 'text'],
+    ['pin', 'ตั้ง PIN 6 หลัก', 'password'], ['pin2', 'ยืนยัน PIN', 'password']
+  ],
+  validate(d) {
+    const errs = [];
+    if (String(d.fullName || '').trim().split(/\s+/).length < 2) errs.push('ชื่อ-สกุล');
+    if (!/^[A-Za-z0-9_-]{5,20}$/.test(String(d.internId || '').trim())) errs.push('รหัสนักศึกษา (อังกฤษ/ตัวเลข 5–20 ตัว)');
+    ['university', 'faculty', 'major'].forEach(k => { if (String(d[k] || '').trim().length < 2) errs.push({ university: 'มหาวิทยาลัย', faculty: 'คณะ', major: 'สาขา' }[k]); });
+    if (!/^0\d{8,9}$/.test(String(d.phone || '').replace(/[\s-]/g, ''))) errs.push('เบอร์โทร');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(d.email || '').trim())) errs.push('อีเมล');
+    if (!['1', '2', '3'].includes(String(d.term || '').trim())) errs.push('ภาคเรียน');
+    const y = Number(d.academicYear); if (!(y >= 2560 && y <= 2600)) errs.push('ปีการศึกษา (พ.ศ.)');
+    if (!/^\d{6}$/.test(String(d.pin || '')) || /^(\d)\1{5}$/.test(d.pin) || d.pin === '123456' || d.pin === '654321') errs.push('PIN 6 หลัก (ห้ามเลขซ้ำ/เรียง)');
+    else if (d.pin !== d.pin2) errs.push('PIN ยืนยันไม่ตรงกัน');
+    return errs;
+  },
+  async submit(d) {
+    const errs = this.validate(d);
+    if (errs.length) return { success: false, message: 'กรุณาตรวจสอบ: ' + errs.join(', ') };
+    const body = { action: 'internRegister', fullName: String(d.fullName).trim(), internId: String(d.internId).trim(), university: d.university, faculty: d.faculty,
+      major: d.major, phone: d.phone, email: d.email, term: String(d.term).trim(), academicYear: Number(d.academicYear), mentorName: d.mentorName || '',
+      preferredClasses: String(d.preferredClasses || '').split(',').map(s => s.trim()).filter(Boolean), pin: d.pin };
+    const r = await StudentAuth._post(body);
+    return r.status === 'success' ? { success: true, message: r.message } : { success: false, code: r.code, message: r.message };
+  },
+  open() {
+    let m = document.getElementById('modal-intern-register');
+    if (!m) {
+      m = document.createElement('div'); m.id = 'modal-intern-register'; m.className = 'modal-overlay';
+      m.innerHTML = `<div class="modal-card" style="max-width:520px;max-height:92vh;overflow:auto;"><div class="modal-header"><h3 class="modal-title" style="margin:0;">📝 ลงทะเบียนนักศึกษาฝึกประสบการณ์วิชาชีพครู</h3></div>
+        <div class="modal-body" style="display:grid;gap:0.4rem;font-size:0.86rem;">
+          <div style="color:#475569;">ข้อมูลส่วนตัวเก็บใน Google Sheet ของครูประจำวิชาเท่านั้น ใช้เพื่อการนิเทศและติดต่อ</div>
+          ${this.FIELDS.map(([k, label, type]) => `<input id="ir-${k}" type="${type}" class="form-input" placeholder="${label}" ${type === 'password' ? 'inputmode="numeric" maxlength="6" autocomplete="new-password"' : ''}>`).join('')}
+          <div style="display:flex;gap:0.5rem;justify-content:flex-end;"><button class="btn-nav-action" id="ir-cancel">ยกเลิก</button><button class="btn-nav-action primary" id="ir-save">ส่งคำขอลงทะเบียน</button></div>
+        </div></div>`;
+      document.body.appendChild(m);
+      m.querySelector('#ir-cancel').onclick = () => m.classList.remove('active');
+      m.querySelector('#ir-save').onclick = async () => {
+        const d = {}; this.FIELDS.forEach(([k]) => { d[k] = m.querySelector('#ir-' + k).value; });
+        const r = await this.submit(d).catch(e => ({ success: false, message: e.message }));
+        if (!r.success) { alert('⚠️ ' + r.message); return; }
+        m.querySelectorAll('input').forEach(i => { i.value = ''; });
+        m.classList.remove('active');
+        alert('✅ ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ\nเมื่ออนุมัติแล้ว เข้าสู่ระบบด้วยรหัสนักศึกษา + PIN ที่ตั้งไว้');
+      };
+    }
+    m.classList.add('active');
+  }
+};
+
 // ปุ่มเข้าสู่ระบบ นศ. (ในหน้าล็อกอินครู)
 async function internLoginFromForm() {
   const id = (document.getElementById('auth-intern-id') || {}).value || '';
@@ -260,4 +342,4 @@ async function internLoginFromForm() {
   location.reload();
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { InternMode, MentorPanel, Portfolio };
+if (typeof module !== 'undefined' && module.exports) module.exports = { InternMode, MentorPanel, Portfolio, InternRegistration };
