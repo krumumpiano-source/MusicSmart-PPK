@@ -88,7 +88,7 @@ const TeacherAuth = {
   openForgot() {
     let m = document.getElementById('modal-teacher-forgot');
     if (!m) {
-      m = document.createElement('div'); m.id = 'modal-teacher-forgot'; m.className = 'modal-overlay';
+      m = document.createElement('div'); m.id = 'modal-teacher-forgot'; m.className = 'modal-overlay'; m.style.zIndex = '100010';
       m.innerHTML = `<div class="modal-card" style="max-width:440px;"><div class="modal-header"><h3 class="modal-title" style="margin:0;">🔑 ตั้งรหัสผ่านครูใหม่</h3></div>
         <div class="modal-body" style="display:grid;gap:0.5rem;font-size:0.88rem;">
           <div style="color:#475569;">ใช้ <b>รหัสซิงค์ (SYNC_TOKEN)</b> ที่ตั้งไว้ใน Apps Script (Project Settings → Script Properties) เพื่อยืนยันว่าเป็นครู</div>
