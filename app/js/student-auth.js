@@ -144,7 +144,7 @@ const RoleGuard = {
     '#modal-academic-docs', '#modal-rubric-scoring', '#modal-car-analytics', '#modal-car-full-report',
     '#modal-official-forms', '#modal-app-settings', '#modal-google-sheet-sync', '#modal-lesson-editor',
     '#modal-curriculum-hub', '#modal-first-time-setup', '#btn-teacher-dashboard', '#modal-teacher-dashboard',
-    '#btn-mentor-panel', '#modal-mentor-panel', '#auth-intern-block', '[data-teacher-only]', '[data-intern-only]'
+    '#btn-mentor-panel', '#modal-mentor-panel', '#auth-intern-block', '#auth-tab-intern-btn', '#auth-pane-intern', '[data-teacher-only]', '[data-intern-only]'
   ],
   purged: false,
 
@@ -155,7 +155,8 @@ const RoleGuard = {
 
   // สิ่งที่ นศ. ไม่ควรมี: จัดการผู้ใช้ ตั้งค่า รหัสซิงค์ครู แผงครูพี่เลี้ยง
   INTERN_HIDDEN_SELECTORS: ['#modal-user-management', '#modal-app-settings', '#modal-google-sheet-sync', '#btn-copy-student-link',
-    '#btn-mentor-panel', '#modal-mentor-panel', '#instructor-chip', '#modal-first-time-setup'],
+    '#btn-mentor-panel', '#modal-mentor-panel', '#instructor-chip', '#modal-first-time-setup',
+    '#role-selector-pill', '#btn-google-sheets-pill', '#btn-export-report'],
   purgeForIntern(doc) {
     const d = doc || (typeof document !== 'undefined' ? document : null);
     if (!d || !d.querySelectorAll) return 0;

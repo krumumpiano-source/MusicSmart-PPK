@@ -304,12 +304,12 @@ const InternRegistration = {
   open() {
     let m = document.getElementById('modal-intern-register');
     if (!m) {
-      m = document.createElement('div'); m.id = 'modal-intern-register'; m.className = 'modal-overlay';
-      m.innerHTML = `<div class="modal-card" style="max-width:520px;max-height:92vh;overflow:auto;"><div class="modal-header"><h3 class="modal-title" style="margin:0;">📝 ลงทะเบียนนักศึกษาฝึกประสบการณ์วิชาชีพครู</h3></div>
+      m = document.createElement('div'); m.id = 'modal-intern-register'; m.className = 'modal-overlay'; m.style.zIndex = '100010';
+      m.innerHTML = `<div class="modal-card" style="max-width:520px;max-height:92vh;overflow:auto;"><div class="modal-header"><h3 class="modal-title" style="margin:0;">📝 ลงทะเบียนนักศึกษาฝึกสอน</h3></div>
         <div class="modal-body" style="display:grid;gap:0.4rem;font-size:0.86rem;">
           <div style="color:#475569;">ข้อมูลส่วนตัวเก็บใน Google Sheet ของครูประจำวิชาเท่านั้น ใช้เพื่อการนิเทศและติดต่อ</div>
           ${this.FIELDS.map(([k, label, type]) => `<input id="ir-${k}" type="${type}" class="form-input" placeholder="${label}" ${type === 'password' ? 'inputmode="numeric" maxlength="6" autocomplete="new-password"' : ''}>`).join('')}
-          <div style="display:flex;gap:0.5rem;justify-content:flex-end;"><button class="btn-nav-action" id="ir-cancel">ยกเลิก</button><button class="btn-nav-action primary" id="ir-save">ส่งคำขอลงทะเบียน</button></div>
+          <div class="ir-actions" style="display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;"><button class="btn-nav-action" id="ir-cancel">ยกเลิก</button><button class="btn-nav-action primary" id="ir-save">ส่งคำขอลงทะเบียน</button></div>
         </div></div>`;
       document.body.appendChild(m);
       m.querySelector('#ir-cancel').onclick = () => m.classList.remove('active');

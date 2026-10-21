@@ -24,8 +24,8 @@
   /* Text Contrast Hierarchy */
   --text-primary: #0f172a;      /* ข้อความหลัก: สีหมึกเข้ม อ่านชัดเจน */
   --text-secondary: #334155;    /* ข้อความรอง: เทาเข้ม */
-  --text-muted: #64748b;        /* ข้อความกำกับ: เทากลาง */
-  --text-light: #94a3b8;        /* ข้อความจาง */
+  --text-muted: #475569;        /* ข้อความกำกับ: เทากลาง */
+  --text-light: #64748b;        /* ข้อความจาง */
   
   /* Functional Status Colors */
   --status-success-bg: #ecfdf5;
@@ -3434,3 +3434,103 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
 #gs-sync-token { flex: 1 1 240px !important; min-width: 240px; }
 #btn-gs-test { white-space: nowrap; }
 @media (max-width: 480px) { #gs-sync-token { min-width: 0; flex-basis: 100% !important; } }
+
+/* ==========================================================================
+   UX audit fixes (13 items) — 2026-10-21
+   ========================================================================== */
+/* 1. Modals opened from the login screen must sit above it (login = 99999) */
+#modal-intern-register, #modal-teacher-forgot { z-index: 100010 !important; }
+
+/* 5. Crest badge: short text that always fits */
+.school-crest-badge { overflow: hidden; padding: 2px; flex: 0 0 auto; }
+.school-crest-badge .crest-text { font-size: 0.75rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1; white-space: nowrap; }
+
+/* 6. Login tabs: Thai label + small English subtitle */
+.auth-tab-label { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+.auth-tab-label small { font-size: 0.75rem; font-weight: 500; opacity: 0.75; }
+.auth-tab-btn { min-height: 48px; }
+.auth-forgot-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+
+/* 11. Minimum readable font size (inline 0.6x/0.70–0.74rem → 12px) */
+.teacher-role-tag, .today-slot-time, .badge-status, #app-display-badge,
+[style*="font-size: 0.6"], [style*="font-size:0.6"],
+[style*="font-size: 0.7rem"], [style*="font-size:0.7rem"],
+[style*="font-size: 0.70rem"], [style*="font-size: 0.72rem"], [style*="font-size:0.72rem"],
+[style*="font-size: 0.74rem"], [style*="font-size:0.74rem"] { font-size: 0.75rem !important; }
+[style*="color: #64748b"], [style*="color:#64748b"] { color: #475569 !important; }
+
+/* 7. Google Sheet modal: URL full row, test button + token stack cleanly */
+.gs-url-row { flex-wrap: wrap; }
+.gs-url-row #gs-webapp-url { flex: 1 1 280px !important; min-width: 0; }
+.gs-token-row { flex-wrap: wrap; }
+.gs-token-row #gs-sync-token { flex: 1 1 240px !important; min-width: 0; }
+
+/* 9. Tap targets >= 44px on touch / tablet & phone widths */
+@media (max-width: 1024px), (pointer: coarse) {
+  .btn-nav-action, .course-tab-btn, .role-pill-btn, .semester-badge, .teacher-chip,
+  .btn-preset-chip, .form-input, .form-select, .auth-tab-btn { min-height: 44px; }
+  .btn-close-modal, .modal-close-btn { min-width: 44px; min-height: 44px; }
+  .semester-badge, .teacher-chip { display: inline-flex; align-items: center; }
+}
+
+/* 2. ☰ เมนู button: phones only */
+#btn-header-menu { display: none; }
+
+@media (max-width: 767px) {
+  /* 11. mobile min 13px */
+  .teacher-role-tag, .today-slot-time, .badge-status, #app-display-badge,
+  [style*="font-size: 0.6"], [style*="font-size:0.6"],
+  [style*="font-size: 0.7"], [style*="font-size:0.7"] { font-size: 13px !important; }
+  #app-display-sub { white-space: normal; overflow: visible; text-overflow: clip; display: block; }
+
+  /* 2. teacher secondary buttons collapse into a drawer */
+  .app-header:has(#teacher-actions-group:not([style*="none"])) #btn-header-menu { display: inline-flex; }
+  #btn-header-menu { font-weight: 700; background: var(--ppk-navy, #1e3a8a); color: #fff; border-color: transparent; }
+  .header-actions { width: 100%; justify-content: flex-start; gap: 0.5rem; }
+  .app-header:not(.header-menu-open) #teacher-actions-group:not([style*="none"]) { display: none !important; }
+  .app-header.header-menu-open #teacher-actions-group:not([style*="none"]) {
+    display: grid !important; grid-template-columns: 1fr; gap: 0.5rem; width: 100%;
+    padding: 0.6rem; background: #f8fafc; border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 12px;
+  }
+  .app-header.header-menu-open #teacher-actions-group > *,
+  .app-header.header-menu-open #teacher-actions-group .quick-tools-wrapper > .btn-nav-action { width: 100%; justify-content: center; white-space: normal; }
+  .app-header.header-menu-open #teacher-actions-group .hide-on-tablet { display: inline !important; }
+  #auth-user-bar { margin-left: auto !important; }
+
+  /* 3. student toolbar: grid, no horizontal cut-off */
+  #student-actions-group:not([style*="none"]) { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; width: 100%; }
+  #student-actions-group .btn-nav-action { width: 100%; justify-content: center; white-space: normal; text-align: center; padding: 0.4rem 0.3rem; font-size: 0.82rem; line-height: 1.25; }
+
+  /* 6. login modal: no footer stealing space; tabs stay compact */
+  #modal-auth-login .auth-footer { display: none; }
+  #modal-auth-login .auth-tab-btn { padding: 0.6rem 0.3rem !important; font-size: 0.85rem !important; gap: 0.25rem !important; flex-direction: column; }
+  #modal-auth-login .auth-tab-label { align-items: center; text-align: center; }
+
+  /* 7. GS modal stacking */
+  .gs-url-row > *, .gs-token-row > * { flex: 1 1 100% !important; }
+  .gs-token-row label { white-space: normal !important; }
+  #btn-gs-fullsync, #btn-gs-send-test { flex: 1 1 100%; justify-content: center; }
+  #modal-google-sheet-sync .modal-footer { flex-wrap: wrap; gap: 0.5rem; }
+  #modal-google-sheet-sync .modal-footer .btn-nav-action { flex: 1 1 100%; justify-content: center; }
+
+  /* 8. assignment modal */
+  .assign-slot-row { display: grid !important; grid-template-columns: 1fr 1fr; width: 100%; }
+  .assign-slot-row > label, .assign-slot-row > span { grid-column: 1 / -1; }
+  .assign-slot-row .form-select { width: 100% !important; }
+  .assign-footer { flex-direction: column-reverse; align-items: stretch !important; gap: 0.5rem; }
+  .assign-footer > div { display: grid !important; grid-template-columns: 1fr 2fr; }
+  .assign-footer .btn-nav-action { justify-content: center; width: 100%; }
+
+  /* intern register actions */
+  .ir-actions .btn-nav-action { flex: 1 1 45%; justify-content: center; }
+}
+.btn-preset-chip { font-size: max(0.75rem, 12px); }
+@media (max-width: 1024px), (pointer: coarse) {
+  main button, .modal-overlay button { min-height: 44px; }
+}
+@media (max-width: 767px) { .btn-preset-chip { font-size: 13px; } }
+@media (max-width: 767px) {
+  .app-header.header-menu-open #teacher-actions-group .quick-tools-wrapper { width: 100%; }
+  .app-header.header-menu-open #teacher-actions-group .btn-nav-action,
+  .app-header.header-menu-open #teacher-actions-group .teacher-chip { justify-content: flex-start; }
+}

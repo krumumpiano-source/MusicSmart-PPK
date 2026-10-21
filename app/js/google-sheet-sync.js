@@ -819,7 +819,7 @@ const GoogleSheetSync = {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = origText || '🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)';
+        btn.innerHTML = origText || '🚀 ซิงค์ทั้งหมดตอนนี้';
       }
       this.updateUIStatus();
     }

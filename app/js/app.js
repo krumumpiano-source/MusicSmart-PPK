@@ -209,7 +209,7 @@ const App = {
       if (!isIntern && typeof RoleGuard !== 'undefined') RoleGuard.purgeInternOnly();
       if (authUserBadge && isIntern) {
         authUserBadge.style.display = 'inline-block';
-        authUserBadge.innerHTML = `👩‍🎓 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'นศ.ฝึกสอน')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(นศ.ฝึกประสบการณ์ • ${this.escapeHtml((user.classes || []).join(', '))})</span>`;
+        authUserBadge.innerHTML = `👩‍🎓 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'นศ.ฝึกสอน')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(นักศึกษาฝึกสอน • ${this.escapeHtml((user.classes || []).join(', '))})</span>`;
       } else if (authUserBadge) {
         authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `👨‍🏫 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name || 'คุณครู')}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(${this.escapeHtml(user.email || 'ครูผู้สอน')})</span>`;
@@ -240,41 +240,39 @@ const App = {
   },
 
   switchAuthTab(tab) {
-    const btnStudent = document.getElementById('auth-tab-student-btn');
-    const btnTeacher = document.getElementById('auth-tab-teacher-btn');
-    const paneStudent = document.getElementById('auth-pane-student');
-    const paneTeacher = document.getElementById('auth-pane-teacher');
-
+    const tabs = ['student', 'teacher', 'intern'];
+    if (!tabs.includes(tab)) tab = 'teacher';
+    tabs.forEach(t => {
+      const btn = document.getElementById(`auth-tab-${t}-btn`);
+      const pane = document.getElementById(`auth-pane-${t}`);
+      const on = t === tab;
+      if (btn) {
+        btn.style.background = on ? '#ffffff' : '#f1f5f9';
+        btn.style.color = on ? '#1e3a8a' : '#64748b';
+        btn.style.borderBottom = on ? '3px solid #0284c7' : '3px solid transparent';
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      }
+      if (pane) pane.style.display = on ? 'block' : 'none';
+    });
     if (tab === 'student') {
-      if (btnStudent) {
-        btnStudent.style.background = '#ffffff';
-        btnStudent.style.color = '#1e3a8a';
-        btnStudent.style.borderBottom = '3px solid #0284c7';
-      }
-      if (btnTeacher) {
-        btnTeacher.style.background = '#f1f5f9';
-        btnTeacher.style.color = '#64748b';
-        btnTeacher.style.borderBottom = '3px solid transparent';
-      }
-      if (paneStudent) paneStudent.style.display = 'block';
-      if (paneTeacher) paneTeacher.style.display = 'none';
       setTimeout(() => document.getElementById('auth-student-id')?.focus(), 150);
-    } else {
-      if (btnTeacher) {
-        btnTeacher.style.background = '#ffffff';
-        btnTeacher.style.color = '#1e3a8a';
-        btnTeacher.style.borderBottom = '3px solid #0284c7';
-      }
-      if (btnStudent) {
-        btnStudent.style.background = '#f1f5f9';
-        btnStudent.style.color = '#64748b';
-        btnStudent.style.borderBottom = '3px solid transparent';
-      }
-      if (paneStudent) paneStudent.style.display = 'none';
-      if (paneTeacher) paneTeacher.style.display = 'block';
+    } else if (tab === 'teacher') {
       this.onTeacherEmailInput(document.getElementById('auth-teacher-email')?.value);
       setTimeout(() => document.getElementById('auth-teacher-secret')?.focus(), 150);
+    } else {
+      setTimeout(() => document.getElementById('auth-intern-id')?.focus(), 150);
     }
+  },
+
+  // ☰ เมนู (มือถือ <768px): เปิด/ปิดแถบปุ่มของครู
+  toggleHeaderMenu(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const header = document.querySelector('.app-header');
+    if (!header) return;
+    const open = header.classList.toggle('header-menu-open');
+    const btn = document.getElementById('btn-header-menu');
+    if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.textContent = open ? '✕ ปิดเมนู' : '☰ เมนู'; }
   },
 
   _authEls() {
@@ -424,8 +422,8 @@ const App = {
     const titleEl = document.getElementById('pwa-prompt-student-title');
     if (titleEl && user) {
       titleEl.textContent = isFirstTime 
-        ? `🎉 ตั้งรหัส PIN สำเร็จแล้ว! ยินดีต้อนรับ ${user.name}`
-        : `👋 ยินดีต้อนรับ ${user.name}`;
+        ? `🎉 ตั้ง PIN สำเร็จ ยินดีต้อนรับ${user.nickname ? ' ' + user.nickname : ''}!`
+        : `👋 ยินดีต้อนรับ${user.nickname ? ' ' + user.nickname : ''}!`;
     }
 
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -655,7 +653,8 @@ const App = {
     // 2. Update Header Brand Section
     const crestEl = document.getElementById('app-crest-badge');
     if (crestEl) {
-      crestEl.innerHTML = `<span style="font-size: 0.85rem; font-weight: 800; letter-spacing: -0.5px;">${this.escapeHtml(settings.appBadge || 'T-PACE')}</span>`;
+      const crestText = String(settings.appBadge || 'T-PACE').trim().split(/\s+/).pop() || 'T-PACE';
+      crestEl.innerHTML = `<span class="crest-text">${this.escapeHtml(crestText)}</span>`;
       crestEl.title = `${settings.appName} • ${settings.schoolName}`;
     }
 

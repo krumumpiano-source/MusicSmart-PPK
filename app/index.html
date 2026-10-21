@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=29">
+  <link rel="stylesheet" href="css/styles.css?v=30">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- PWA Progressive Web App & Mobile App Tags -->
@@ -71,10 +71,11 @@
 
       <!-- Instructor Profile & Navigation Actions -->
       <div class="header-actions">
+        <button id="btn-header-menu" class="btn-nav-action" type="button" aria-expanded="false" aria-controls="teacher-actions-group" onclick="App.toggleHeaderMenu(event)">☰ เมนู</button>
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
           <button id="btn-mentor-panel" class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="MentorPanel.open()" title="นักศึกษาฝึกสอน: บัญชี อนุมัติคะแนน บันทึกหลังสอน นิเทศ พอร์ตโฟลิโอ">
-            👩‍🎓 <span class="hide-on-tablet">นศ.ฝึกสอน</span>
+            👩‍🎓 <span class="hide-on-tablet">นักศึกษาฝึกสอน</span>
           </button>
           <button data-intern-only style="display:none; background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" class="btn-nav-action" onclick="Portfolio.openForCurrentIntern()" title="แฟ้มสะสมผลงาน (พิมพ์/PDF)">
             📁 <span class="hide-on-tablet">พอร์ตโฟลิโอของฉัน</span>
@@ -90,7 +91,7 @@
             <span class="hide-on-tablet">ลิงก์ส่งนักเรียน</span>
           </button>
 
-          <div id="instructor-chip" class="teacher-chip" onclick="App.openUserManagementModal('teachers')" title="คลิกเพื่อจัดการบัญชีผู้ดูแล และสลับผู้สอน (ครูประจำวิชา / ครูฝึกสอน)">
+          <div id="instructor-chip" class="teacher-chip" onclick="App.openUserManagementModal('teachers')" title="คลิกเพื่อจัดการบัญชีผู้ดูแล และสลับผู้สอน (ครูประจำวิชา / นักศึกษาฝึกสอน)">
             <span id="badge-instructor-role" class="teacher-role-tag">ครูประจำวิชา</span>
             <span id="badge-instructor-name" class="teacher-name-label">คุณครูพงศธร โพธิแก้ว</span>
           </div>
@@ -210,7 +211,7 @@
                     <span class="tool-icon" style="background: #eef2ff; color: #4338ca;">👤</span>
                     <div class="tool-text">
                       <div class="tool-name">บัญชีแอดมิน & จัดการผู้ใช้</div>
-                      <div class="tool-desc">เปลี่ยนรหัสผ่าน, เพิ่มครูฝึกสอน, รีเซ็ต PIN</div>
+                      <div class="tool-desc">เปลี่ยนรหัสผ่าน, เพิ่มนักศึกษาฝึกสอน, รีเซ็ต PIN</div>
                     </div>
                   </button>
                   <button class="tools-item-btn" onclick="GoogleSheetSync.openModal(); App.closeToolsMenu();">
@@ -249,7 +250,7 @@
           </button>
 
           <!-- Primary Export / Report Button -->
-          <button class="btn-nav-action primary" onclick="App.openExportModal()" title="ส่งออกข้อมูลและบันทึกหลังสอน วก.5">
+          <button id="btn-export-report" class="btn-nav-action primary" onclick="App.openExportModal()" title="ส่งออกข้อมูลและบันทึกหลังสอน วก.5">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
             รายงาน & วก.5
           </button>
@@ -259,7 +260,7 @@
         <div id="student-actions-group" style="display: none; align-items: center; gap: 0.5rem;">
           <button id="btn-student-pwa-install" class="btn-nav-action" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd; font-weight: 700;" onclick="App.triggerPwaInstall()" title="ติดตั้งแอปพลิเคชัน MusicSmart ลงในอุปกรณ์">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-            <span>📲 ติดตั้งแอป</span>
+            <span>ติดตั้งแอป</span>
           </button>
           <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมดนตรี คาลิมบ้า 17 คีย์">
             <span>🎹 คาลิมบ้า</span>
@@ -973,10 +974,13 @@
       <!-- Auth Role Tabs -->
       <div style="display: flex; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
         <button id="auth-tab-student-btn" class="auth-tab-btn active" style="flex: 1; padding: 0.85rem 1rem; border: none; background: #ffffff; font-weight: 700; color: #1e3a8a; cursor: pointer; border-bottom: 3px solid #0284c7; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="App.switchAuthTab('student')">
-          <span>🎓</span> นักเรียน (Student)
+          <span>🎓</span><span class="auth-tab-label">นักเรียน<small>Student</small></span>
         </button>
         <button id="auth-tab-teacher-btn" class="auth-tab-btn" style="flex: 1; padding: 0.85rem 1rem; border: none; background: #f1f5f9; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="App.switchAuthTab('teacher')">
-          <span>👨‍🏫</span> ครูผู้สอน (Teacher)
+          <span>👨‍🏫</span><span class="auth-tab-label">ครูผู้สอน<small>Teacher</small></span>
+        </button>
+        <button id="auth-tab-intern-btn" class="auth-tab-btn" style="flex: 1; padding: 0.85rem 1rem; border: none; background: #f1f5f9; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="App.switchAuthTab('intern')">
+          <span>👩‍🎓</span><span class="auth-tab-label">นักศึกษาฝึกสอน<small>Intern</small></span>
         </button>
       </div>
 
@@ -1065,48 +1069,55 @@
         <div id="auth-pane-teacher" style="display: none;">
           <div class="form-group" style="margin-bottom: 1.15rem;">
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
-              อีเมลครูผู้สอน (Teacher Email):
+              อีเมลครูผู้สอน:
             </label>
             <input type="email" id="auth-teacher-email" class="form-input" placeholder="ระบุอีเมลครูผู้สอน เช่น krumum.piano@gmail.com" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" oninput="App.onTeacherEmailInput(this.value)">
             <div id="auth-teacher-first-time-hint" style="display: none; margin-top: 6px; padding: 0.5rem 0.75rem; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 0.82rem; color: #065f46; font-weight: 600;">
-              ✨ ยินดีต้อนรับนักศึกษาฝึกประสบการณ์วิชาชีพครู (เอกดนตรี มพ.)<br>
+              ✨ ยินดีต้อนรับนักศึกษาฝึกสอน (เอกดนตรี มพ.)<br>
               <span style="font-size: 0.76rem; font-weight: 400; color: #047857;">• เข้าสู่ระบบครั้งแรก<strong>ไม่ต้องใส่รหัสผ่าน</strong> สามารถกดปุ่มเข้าสู่ระบบด้านล่างได้ทันที</span>
             </div>
             <div id="auth-teacher-default-hint" style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-              * ใช้อีเมลประจำตัวคุณครูผู้สอน หรือนักศึกษาฝึกสอน
+              * ใช้อีเมลครูผู้สอน (นักศึกษาฝึกสอนให้ใช้แท็บ "นักศึกษาฝึกสอน")
             </div>
           </div>
 
           <div id="auth-teacher-secret-group" class="form-group" style="margin-bottom: 1.25rem;">
             <label class="form-label" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">
-              รหัสผ่าน (Password) หรือ รหัส PIN ครู:
+              รหัสผ่านครู:
             </label>
             <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่านหรือ PIN ครู" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
               <span>* รหัสผ่านตรวจที่เซิร์ฟเวอร์ของโรงเรียน (ไม่เก็บในเว็บ)</span>
-              <a href="#" onclick="TeacherAuth.openForgot(); return false;" style="color: #2563eb; font-weight: 600;">ลืมรหัสผ่าน? / ตั้งรหัสใหม่</a>
+              <a href="#" class="auth-forgot-link" onclick="TeacherAuth.openForgot(); return false;" style="color: #1d4ed8; font-weight: 600;">ลืมรหัสผ่าน? / ตั้งรหัสใหม่</a>
             </div>
           </div>
 
           <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center;" onclick="App.handleTeacherLogin()">
-            🔐 เข้าสู่ห้องปฏิบัติการครู (Teacher Cockpit)
+            🔐 เข้าสู่ระบบครู
           </button>
-          <div id="auth-intern-block" style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px dashed #cbd5e1;">
-            <div style="font-weight: 700; color: #a21caf; font-size: 0.9rem; margin-bottom: 0.4rem;">👩‍🎓 นักศึกษาฝึกประสบการณ์วิชาชีพครู (รหัสนักศึกษา + PIN 6 หลัก)</div>
-            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-              <input type="text" id="auth-intern-id" class="form-input" placeholder="รหัสนักศึกษา" style="flex: 1; min-width: 140px;">
-              <input type="password" id="auth-intern-pin" class="form-input" placeholder="PIN 6 หลัก" maxlength="6" inputmode="numeric" style="max-width: 120px;">
-              <button class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="internLoginFromForm()">เข้าสู่ระบบ นศ.</button>
-              <button class="btn-nav-action" style="background: #ffffff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="InternRegistration.open()">📝 ลงทะเบียน นศ.</button>
+        </div>
+
+        <!-- 3. INTERN AUTH PANE (รหัสนักศึกษา + PIN) -->
+        <div id="auth-pane-intern" style="display: none;">
+          <div id="auth-intern-block">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" for="auth-intern-id" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">รหัสนักศึกษา:</label>
+              <input type="text" id="auth-intern-id" class="form-input" placeholder="รหัสนักศึกษา" autocomplete="username" style="font-size: 1rem; padding: 0.65rem 0.85rem;">
             </div>
-            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">* ยังไม่มีบัญชี กด "ลงทะเบียน" แล้วรอครูประจำวิชาอนุมัติ • ลืม PIN ให้ครูรีเซ็ต แล้วตั้ง PIN ใหม่ตอนเข้าสู่ระบบ</div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label" for="auth-intern-pin" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">PIN 6 หลัก:</label>
+              <input type="password" id="auth-intern-pin" class="form-input" placeholder="••••••" maxlength="6" inputmode="numeric" style="font-size: 1.2rem; font-weight: 800; letter-spacing: 5px; text-align: center; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') internLoginFromForm()">
+            </div>
+            <button class="btn-nav-action primary" style="width: 100%; padding: 0.8rem; font-size: 1.05rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #a21caf; border-color: #86198f;" onclick="internLoginFromForm()">🔐 เข้าสู่ระบบนักศึกษาฝึกสอน</button>
+            <button class="btn-nav-action" style="width: 100%; margin-top: 0.6rem; padding: 0.7rem; font-weight: 700; border-radius: 8px; justify-content: center; background: #ffffff; color: #a21caf; border-color: #f5d0fe;" onclick="InternRegistration.open()">📝 ลงทะเบียนนักศึกษาฝึกสอน</button>
+            <div style="font-size: 0.8rem; color: #475569; margin-top: 0.6rem; line-height: 1.5;">* ยังไม่มีบัญชี กด "ลงทะเบียน" แล้วรอครูประจำวิชาอนุมัติ • ลืม PIN ให้ครูรีเซ็ต แล้วตั้ง PIN ใหม่ตอนเข้าสู่ระบบ</div>
           </div>
         </div>
 
       </div>
 
       <!-- Auth Footer -->
-      <div style="background: #f8fafc; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.76rem; color: #64748b;">
+      <div class="auth-footer" style="background: #f8fafc; padding: 0.75rem 1.25rem; border-top: 1px solid #e2e8f0; text-align: center; font-size: 0.76rem; color: #64748b;">
         ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE • โรงเรียนพะเยาพิทยาคม
       </div>
     </div>
@@ -1175,7 +1186,7 @@
           </div>
           <div>
             <h3 class="modal-title" style="margin: 0; color: #ffffff; font-size: 1.15rem; font-weight: 800;">
-              ยินดีต้อนรับนักศึกษาฝึกประสบการณ์วิชาชีพครู
+              ยินดีต้อนรับนักศึกษาฝึกสอน
             </h3>
             <div style="font-size: 0.8rem; color: #bae6fd; margin-top: 2px;">
               เอกดนตรี มหาวิทยาลัยพะเยา • กำหนดรหัสผ่านส่วนตัวและติดตั้งแอปพลิเคชัน
@@ -1187,13 +1198,13 @@
       <div class="modal-body" style="padding: 1.5rem;">
         <!-- Banner Info -->
         <div style="background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.84rem; color: #0369a1; line-height: 1.5;">
-          👋 <strong>สวัสดีครับคุณครูฝึกสอน!</strong> การเข้าสู่ระบบในครั้งแรกนี้ ระบบกำหนดให้ท่าน<strong>ตั้งรหัสผ่านประจำตัว</strong>เพื่อใช้ในการเข้าปฏิบัติการสอนในครั้งถัดไป และแนะนำให้กด<strong>ติดตั้งแอปพลิเคชัน</strong>ลงบนอุปกรณ์เพื่อความสะดวกสูงสุดครับ
+          👋 <strong>สวัสดีครับคุณนักศึกษาฝึกสอน!</strong> การเข้าสู่ระบบในครั้งแรกนี้ ระบบกำหนดให้ท่าน<strong>ตั้งรหัสผ่านประจำตัว</strong>เพื่อใช้ในการเข้าปฏิบัติการสอนในครั้งถัดไป และแนะนำให้กด<strong>ติดตั้งแอปพลิเคชัน</strong>ลงบนอุปกรณ์เพื่อความสะดวกสูงสุดครับ
         </div>
 
         <!-- Form Fields -->
         <div style="margin-bottom: 1rem;">
-          <label class="form-label" style="font-weight: 700; color: #1e293b;">ชื่อ-นามสกุลของคุณครูฝึกสอน:</label>
-          <input type="text" id="setup-teacher-name" class="form-input" placeholder="เช่น นายวรวุฒิ ดนตรีไพเราะ" value="คุณครูฝึกสอน (เอกดนตรี มพ.)" style="font-size: 0.95rem;">
+          <label class="form-label" style="font-weight: 700; color: #1e293b;">ชื่อ-นามสกุลของคุณนักศึกษาฝึกสอน:</label>
+          <input type="text" id="setup-teacher-name" class="form-input" placeholder="เช่น นายวรวุฒิ ดนตรีไพเราะ" value="คุณนักศึกษาฝึกสอน (เอกดนตรี มพ.)" style="font-size: 0.95rem;">
           <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">* สามารถแก้ไขเป็นชื่อ-นามสกุลจริงของท่านได้เลยครับ (จะปรากฏในบันทึกหลังสอน วก.5)</div>
         </div>
 
@@ -1777,7 +1788,7 @@
           <div>
             <h3 class="modal-title" style="margin: 0; color: #ffffff; font-size: 1.12rem;">การจัดการผู้ใช้งานและบัญชีผู้ดูแล (User & Admin Management)</h3>
             <div style="font-size: 0.76rem; color: #cbd5e1; margin-top: 2px;">
-              ตั้งค่าส่วนตัวแอดมิน • เปลี่ยนรหัสผ่าน • จัดการทีมครูผู้สอน/ครูฝึกสอน • บริหารจัดการ PIN นักเรียน
+              ตั้งค่าส่วนตัวแอดมิน • เปลี่ยนรหัสผ่าน • จัดการทีมครูผู้สอน/นักศึกษาฝึกสอน • บริหารจัดการ PIN นักเรียน
             </div>
           </div>
         </div>
@@ -1790,7 +1801,7 @@
           🔐 บัญชีแอดมิน & เปลี่ยนรหัสผ่าน
         </button>
         <button id="tab-btn-user-teachers" class="role-pill-btn" style="padding: 0.45rem 1rem; border-radius: 9999px; font-weight: 700; font-size: 0.85rem;" onclick="App.switchUserMgmtTab('teachers')">
-          👥 ทีมครูผู้สอน & ครูฝึกสอน
+          👥 ทีมครูผู้สอน & นักศึกษาฝึกสอน
         </button>
         <button id="tab-btn-user-students" class="role-pill-btn" style="padding: 0.45rem 1rem; border-radius: 9999px; font-weight: 700; font-size: 0.85rem;" onclick="App.switchUserMgmtTab('students')">
           🎓 บัญชีนักเรียน & รีเซ็ต PIN
@@ -1854,11 +1865,11 @@
             <div>
               <h4 style="margin: 0; font-size: 0.98rem; font-weight: 700; color: #0f172a;">รายชื่อทีมครูผู้สอนและนักศึกษาฝึกสอน</h4>
               <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                สามารถเพิ่มครูร่วมสอน หรือครูฝึกสอน เพื่อให้มีบัญชีล็อกอินและสลับการปฏิบัติการสอนในคาบได้
+                สามารถเพิ่มครูร่วมสอน หรือนักศึกษาฝึกสอน เพื่อให้มีบัญชีล็อกอินและสลับการปฏิบัติการสอนในคาบได้
               </div>
             </div>
             <button id="btn-toggle-add-teacher" class="btn-nav-action primary" style="background: #10b981; border-color: #10b981; font-weight: 700;" onclick="App.toggleAddTeacherForm()">
-              ➕ เพิ่มครูร่วมสอน / ครูฝึกสอน
+              ➕ เพิ่มครูร่วมสอน / นักศึกษาฝึกสอน
             </button>
           </div>
 
@@ -1876,7 +1887,7 @@
               <div>
                 <label class="form-label">บทบาท / ตำแหน่ง:</label>
                 <select id="new-teacher-role" class="form-select">
-                  <option value="ครูนักศึกษาฝึกสอน">🎓 ครูนักศึกษาฝึกสอน (ฝึกประสบการณ์วิชาชีพ)</option>
+                  <option value="ครูนักศึกษาฝึกสอน">🎓 นักศึกษาฝึกสอน (ฝึกประสบการณ์วิชาชีพ)</option>
                   <option value="ครูร่วมสอน">🤝 ครูร่วมสอน (Co-Teacher)</option>
                   <option value="ครูผู้ช่วย">🧑‍🏫 ครูผู้ช่วย / วิทยากรพิเศษ</option>
                   <option value="ครูประจำวิชา">📘 ครูประจำวิชา</option>
@@ -1991,7 +2002,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <button class="btn-nav-action" style="background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; font-weight: 700;" onclick="App.openTeachingAssignmentModal()" title="มอบหมายคาบสอนให้กับนักศึกษาฝึกสอน และบันทึกคำแนะนำนิเทศการสอน">
-            🎓 มอบหมาย นศ.ฝึกสอน & นิเทศการสอน
+            🎓 มอบหมาย นักศึกษาฝึกสอน & นิเทศการสอน
           </button>
           <button class="btn-nav-action" onclick="App.resetToOfficialTimetable()" title="คืนค่าตารางสอนทางการตามเอกสาร 2/2569">
             🔄 คืนค่าตารางทางการ
@@ -2016,7 +2027,7 @@
           <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
             <span style="font-weight: 700; color: #92400e;">💡 การมอบหมายสอน & นิเทศครูพี่เลี้ยง:</span>
             <span id="tt-stat-mentor-count" style="color: #1e3a8a; font-weight: 600;">👨‍🏫 ครูประจำวิชาสอนหลัก</span>
-            <span id="tt-stat-trainee-count" style="background: #fef3c7; color: #b45309; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">🎓 มอบหมาย นศ.ฝึกสอน</span>
+            <span id="tt-stat-trainee-count" style="background: #fef3c7; color: #b45309; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">🎓 มอบหมาย นักศึกษาฝึกสอน</span>
             <span id="tt-stat-coteach-count" style="background: #e0e7ff; color: #3730a3; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">👥 ร่วมสอน</span>
           </div>
           <span style="font-size: 0.75rem; color: #78350f;">(💡 คลิกที่ช่องคาบสอนในตาราง เพื่อมอบหมายหรือใส่คำแนะนำ/วิธีสอนได้ทันที)</span>
@@ -2051,7 +2062,7 @@
           <div>
             <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; color: #1e3a8a;">มอบหมายคาบสอน & คำแนะนำนิเทศจากครูพี่เลี้ยง</h3>
             <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
-              ระบบประสานงานวิชาชีพครู • ครูประจำวิชา (ครูพี่เลี้ยง) & นักศึกษาฝึกประสบการณ์วิชาชีพ
+              ระบบประสานงานวิชาชีพครู • ครูประจำวิชา (ครูพี่เลี้ยง) & นักศึกษาฝึกสอน
             </div>
           </div>
         </div>
@@ -2061,7 +2072,7 @@
       <div class="modal-body" style="padding: 1.25rem; max-height: 75vh; overflow-y: auto;">
         <!-- Slot Selector Bar -->
         <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+          <div class="assign-slot-row" style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
             <label style="font-weight: 700; font-size: 0.85rem; color: var(--ppk-navy-dark);">เลือกคาบสอน:</label>
             <select id="assign-select-day" class="form-select" style="width: 120px; font-weight: 600;" onchange="App.onAssignmentSlotChanged()">
               <option value="จันทร์">วันจันทร์</option>
@@ -2077,8 +2088,8 @@
               ห้อง ม.1/1 • คาบ 5
             </span>
           </div>
-          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px;" onclick="App.jumpToAssignedCockpit()">
-            🚀 ไปยังห้องเรียน Cockpit
+          <button class="btn-nav-action" style="font-size: 0.82rem; padding: 4px 10px;" onclick="App.jumpToAssignedCockpit()">
+            🚀 ไปยังห้องเรียน
           </button>
         </div>
 
@@ -2091,7 +2102,7 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
             <div>
               <label for="assign-teacher-id" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.35rem;">
-                ครูผู้สอน / นศ.ฝึกสอน:
+                ครูผู้สอน / นักศึกษาฝึกสอน:
               </label>
               <select id="assign-teacher-id" class="form-select" style="width: 100%; font-weight: 600;">
                 <!-- Populated dynamically from Store.getTeachersList() -->
@@ -2103,8 +2114,8 @@
                 รูปแบบการจัดการเรียนรู้:
               </label>
               <select id="assign-role-type" class="form-select" style="width: 100%; font-weight: 600;">
-                <option value="trainee">🎓 นศ.ฝึกสอน ปฏิบัติการสอนเดี่ยว (ครูพี่เลี้ยงสังเกตการณ์)</option>
-                <option value="co-teach">👥 ร่วมสอน (Co-teaching) ครูพี่เลี้ยงนำ - นศ.ฝึกสอนช่วยสาธิต/กลุ่ม</option>
+                <option value="trainee">🎓 นักศึกษาฝึกสอน ปฏิบัติการสอนเดี่ยว (ครูพี่เลี้ยงสังเกตการณ์)</option>
+                <option value="co-teach">👥 ร่วมสอน (Co-teaching) ครูพี่เลี้ยงนำ - นักศึกษาฝึกสอนช่วยสาธิต/กลุ่ม</option>
                 <option value="mentor">👨‍🏫 ครูประจำวิชา (ครูพี่เลี้ยง) สอนหลัก</option>
               </select>
             </div>
@@ -2115,7 +2126,7 @@
         <div style="background: #fdfaf6; border: 1px solid #fed7aa; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 0.75rem;">
             <h4 style="margin: 0; font-size: 0.95rem; color: #9a3412; display: flex; align-items: center; gap: 0.4rem;">
-              <span>💡</span> 2. คำแนะนำและวิธีการสอนจากครูพี่เลี้ยง (สำหรับส่งต่อให้ นศ.ฝึกสอน)
+              <span>💡</span> 2. คำแนะนำและวิธีการสอนจากครูพี่เลี้ยง (สำหรับส่งต่อให้ นักศึกษาฝึกสอน)
             </h4>
             <span style="font-size: 0.72rem; color: #c2410c; background: #ffedd5; padding: 2px 7px; border-radius: 4px; font-weight: 700;">
               ครูพี่เลี้ยง: นายพงศธร โพธิแก้ว
@@ -2134,7 +2145,7 @@
                 <button type="button" class="btn-preset-chip" onclick="App.appendAdvicePreset('ควบคุมเวลาแต่ละช่วงให้กระชับ ไม่ให้ช่วงบรรยายเกิน 10 นาที เน้นให้นักเรียนลงมือปฏิบัติ')">+ คุมเวลา 50 นาที</button>
               </div>
             </div>
-            <textarea id="assign-mentor-advice" class="form-input" rows="3" style="width: 100%; font-size: 0.85rem;" placeholder="ระบุคำแนะนำ ข้อควรระวัง หรือจุดเน้นสำหรับ นศ.ฝึกสอน ในคาบนี้..."></textarea>
+            <textarea id="assign-mentor-advice" class="form-input" rows="3" style="width: 100%; font-size: 0.85rem;" placeholder="ระบุคำแนะนำ ข้อควรระวัง หรือจุดเน้นสำหรับ นักศึกษาฝึกสอน ในคาบนี้..."></textarea>
           </div>
 
           <!-- Teaching Method & Steps Textarea -->
@@ -2161,25 +2172,25 @@
           </div>
         </div>
 
-        <!-- Section 3: บันทึกสะท้อนคิดหลังสอนของ นศ.ฝึกสอน (Trainee Reflection & Feedback) -->
+        <!-- Section 3: บันทึกสะท้อนคิดหลังสอนของ นักศึกษาฝึกสอน (Trainee Reflection & Feedback) -->
         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem;">
           <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; color: #166534; display: flex; align-items: center; gap: 0.4rem;">
-            <span>📝</span> 3. บันทึกสะท้อนคิดหลังสอนของ นศ.ฝึกสอน (ส่งกลับถึงครูพี่เลี้ยง)
+            <span>📝</span> 3. บันทึกสะท้อนคิดหลังสอนของ นักศึกษาฝึกสอน (ส่งกลับถึงครูพี่เลี้ยง)
           </h4>
-          <textarea id="assign-trainee-feedback" class="form-input" rows="2" style="width: 100%; font-size: 0.85rem;" placeholder="นศ.ฝึกสอน สามารถพิมพ์บันทึกสิ่งที่ทำได้ดี ปัญหาที่พบ หรือขอคำแนะนำเพิ่มเติมจากครูพี่เลี้ยงได้ที่นี่..."></textarea>
+          <textarea id="assign-trainee-feedback" class="form-input" rows="2" style="width: 100%; font-size: 0.85rem;" placeholder="นักศึกษาฝึกสอน สามารถพิมพ์บันทึกสิ่งที่ทำได้ดี ปัญหาที่พบ หรือขอคำแนะนำเพิ่มเติมจากครูพี่เลี้ยงได้ที่นี่..."></textarea>
           <div style="font-size: 0.72rem; color: #15803d; margin-top: 3px;">
-            * เมื่อ นศ.ฝึกสอน บันทึกข้อความ ครูพี่เลี้ยงจะมองเห็นและสามารถตอบกลับข้อเสนอแนะได้ทันที
+            * เมื่อ นักศึกษาฝึกสอน บันทึกข้อความ ครูพี่เลี้ยงจะมองเห็นและสามารถตอบกลับข้อเสนอแนะได้ทันที
           </div>
         </div>
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="modal-footer assign-footer" style="display: flex; justify-content: space-between; align-items: center;">
         <button class="btn-nav-action" style="color: #dc2626; border-color: #fecaca; background: #fef2f2;" onclick="App.deleteCurrentAssignment()">
-          🗑️ ยกเลิกการมอบหมายคาบนี้
+          🗑️ ยกเลิกคาบนี้
         </button>
         <div style="display: flex; gap: 0.5rem;">
           <button class="btn-nav-action" onclick="App.closeTeachingAssignmentModal()">ปิด</button>
-          <button class="btn-nav-action primary" onclick="App.saveCurrentAssignment()">💾 บันทึกการมอบหมาย & คำแนะนำ</button>
+          <button class="btn-nav-action primary" onclick="App.saveCurrentAssignment()">💾 บันทึก</button>
         </div>
       </div>
     </div>
@@ -3235,7 +3246,7 @@
               <span>👤</span> การจัดการบัญชีผู้ดูแล & ทีมผู้สอน
             </div>
             <div style="font-size: 0.8rem; color: #4338ca; margin-top: 2px;">
-              ต้องการเปลี่ยนรหัสผ่านแอดมิน, เพิ่มครูฝึกสอน/ครูร่วมสอน หรือรีเซ็ต PIN นักเรียน?
+              ต้องการเปลี่ยนรหัสผ่านแอดมิน, เพิ่มนักศึกษาฝึกสอน/ครูร่วมสอน หรือรีเซ็ต PIN นักเรียน?
             </div>
           </div>
           <button class="btn-nav-action primary" style="background: #4338ca; border-color: #4338ca; font-weight: 700;" onclick="App.closeSettingsModal(); App.openUserManagementModal('admin');">
@@ -3263,9 +3274,9 @@
             📊
           </div>
           <div>
-            <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; color: #065f46;">ระบบบันทึกคู่ขนาน Google Sheets & Local-First</h3>
+            <h3 class="modal-title" style="margin: 0; font-size: 1.15rem; color: #065f46;">เชื่อมต่อ Google Sheet</h3>
             <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
-              บันทึกข้อมูลลงเครื่องทันที (ไม่หลุด/ออฟไลน์ได้) พร้อมส่งเข้า Google Sheets อัตโนมัติ
+              บันทึกในเครื่องก่อน แล้วส่งขึ้น Google Sheet อัตโนมัติ
             </div>
           </div>
         </div>
@@ -3282,26 +3293,27 @@
         <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 12px; padding: 1.15rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
             <label style="font-weight: 700; font-size: 0.95rem; color: #1e293b;">
-              🔗 Google Apps Script Web App URL:
+              🔗 ลิงก์ Apps Script
             </label>
-            <span style="font-size: 0.75rem; color: #059669; font-weight: 600;">(ใช้บัญชี Google ของครู ฟรี 100%)</span>
+            <span style="font-size: 0.75rem; color: #047857; font-weight: 600;">Web App URL</span>
           </div>
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.65rem;">
-            <input type="url" id="gs-webapp-url" class="form-input" placeholder="https://script.google.com/macros/s/AKfycb.../exec" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
+          <div class="gs-url-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.65rem;">
+            <input type="url" id="gs-webapp-url" class="form-input" placeholder="https://script.google.com/macros/s/.../exec" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
             <button id="btn-gs-test" class="btn-nav-action" style="background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 600;" onclick="GoogleSheetSync.handleTestFromModal()">
               🔍 ทดสอบเชื่อมต่อ
             </button>
-          <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.65rem;">
-            <label for="gs-sync-token" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; white-space: nowrap;">🔑 รหัสซิงค์ (Sync Token):</label>
-            <input type="password" id="gs-sync-token" class="form-input" autocomplete="off" placeholder="ค่าเดียวกับ SYNC_TOKEN ใน Script Properties ของ Apps Script" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
+          </div>
+          <div class="gs-token-row" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.65rem;">
+            <label for="gs-sync-token" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; white-space: nowrap;">🔑 รหัสซิงค์</label>
+            <input type="password" id="gs-sync-token" class="form-input" autocomplete="off" placeholder="วางรหัสซิงค์ (SYNC_TOKEN)" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
           </div>
           <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.5rem;">
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
               <button type="button" id="btn-gs-fullsync" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 6px 14px; cursor: pointer;" onclick="GoogleSheetSync.handleFullSyncFromModal()">
-                🚀 ซิงค์ข้อมูลทั้งหมดในเครื่องขึ้นชีตเดี๋ยวนี้ (Full Sync)
+                🚀 ซิงค์ทั้งหมดตอนนี้
               </button>
               <button type="button" id="btn-gs-send-test" class="btn-preset-chip" style="background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; font-weight: 700; padding: 6px 14px; cursor: pointer;" onclick="GoogleSheetSync.handleSendTestRowFromModal()">
-                🧪 ส่งข้อมูลทดสอบ 1 แถวขึ้นชีต
+                🧪 ส่งแถวทดสอบ
               </button>
             </div>
             <div style="font-size: 0.78rem; color: var(--text-muted);">
@@ -3320,7 +3332,7 @@
               <span>⚡</span> วิธีสร้าง Google Sheet เชื่อมต่อ (ทำครั้งเดียวใน 1 นาที):
             </div>
             <button class="btn-nav-action primary" style="background: #059669; border-color: #059669; font-size: 0.82rem; padding: 0.4rem 0.85rem;" onclick="GoogleSheetSync.copyAppsScriptCode()">
-              📋 คัดลอกโค้ด Google Apps Script (1-Click Copy)
+              📋 คัดลอกโค้ด Apps Script
             </button>
           </div>
 
@@ -3471,9 +3483,9 @@
         <!-- Mentor Tips -->
         <div>
           <label class="form-label" style="font-weight: 700; color: #1e293b;">
-            💡 คำแนะนำการนิเทศ / เทคนิคการสอนสำหรับครูพี่เลี้ยง & นศ.ฝึกสอน:
+            💡 คำแนะนำการนิเทศ / เทคนิคการสอนสำหรับครูพี่เลี้ยง & นักศึกษาฝึกสอน:
           </label>
-          <textarea id="editor-mentor-tips" class="form-input" rows="3" placeholder="ข้อแนะนำสำหรับผู้เข้าสอนหรือ นศ.ฝึกสอนในคาบนี้"></textarea>
+          <textarea id="editor-mentor-tips" class="form-input" rows="3" placeholder="ข้อแนะนำสำหรับผู้เข้าสอนหรือ นักศึกษาฝึกสอนในคาบนี้"></textarea>
         </div>
       </div>
 
@@ -3543,15 +3555,15 @@
   <script src="data/lessons.js?v=20261020_03"></script>
   <script src="data/academic_docs.js?v=20261020_03"></script>
   <script src="data/quizzes.js?v=20261020_03"></script>
-  <script src="js/google-sheet-sync.js?v=20261021_01"></script>
+  <script src="js/google-sheet-sync.js?v=20261021_02"></script>
   <script src="data/store.js?v=20261020_03"></script>
-  <script src="js/student-auth.js?v=20261021_02"></script>
+  <script src="js/student-auth.js?v=20261021_03"></script>
   <script src="js/pwa-install.js?v=20261021_02"></script>
   <script src="js/student-submit.js?v=20261021_04"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
   <script src="js/teacher-auth.js?v=20261021_09"></script>
-  <script src="js/intern.js?v=20261021_09"></script>
+  <script src="js/intern.js?v=20261021_10"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/student-upload.js?v=20261021_08"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
@@ -3562,7 +3574,7 @@
   <script src="js/car-analytics.js?v=20261020_03"></script>
   <script src="js/official-forms.js?v=20261020_03"></script>
   <script src="js/virtual-kalimba.js?v=20261020_03"></script>
-  <script src="js/app.js?v=20261021_03"></script>
+  <script src="js/app.js?v=20261021_04"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>
