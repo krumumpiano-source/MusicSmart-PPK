@@ -73,6 +73,9 @@
       <div class="header-actions">
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btn-teacher-dashboard" class="btn-nav-action" style="background: #eef2ff; color: #3730a3; border-color: #c7d2fe; font-weight: 700;" onclick="TeacherDashboard.open()" title="แดชบอร์ดห้องเรียน คะแนน เวลาเรียน กลุ่มเสี่ยง และส่งออก ปพ.5">
+            📊 <span class="hide-on-tablet">แดชบอร์ด</span>
+          </button>
           <button id="btn-pull-student-work" class="btn-nav-action" style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; font-weight: 700;" onclick="TeacherPull.pull()" title="ดึงงานและคะแนนแบบทดสอบที่นักเรียนส่งจากมือถือ เข้าหน้าตรวจงาน">
             📥 <span class="hide-on-tablet">ดึงงานนักเรียน</span>
           </button>
@@ -3510,6 +3513,7 @@
   <script src="js/pwa-install.js?v=20261021_02"></script>
   <script src="js/student-submit.js?v=20261021_04"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
+  <script src="js/teacher-tools.js?v=20261021_05"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>

@@ -89,7 +89,7 @@ const PwaInstall = require('../app/js/pwa-install.js');
   RoleGuard.purgeTeacherDom(fakeDoc);
   assert.deepStrictEqual(removed.sort(), ['#modal-lesson-editor', '#view-cockpit', '#view-dashboard']);
   const html = fs.readFileSync(path.join(__dirname, '../app/index.html'), 'utf8');
-  RoleGuard.TEACHER_ONLY_SELECTORS.filter(s => s.startsWith('#')).forEach(sel => assert(html.includes(`id="${sel.slice(1)}"`), `selector exists: ${sel}`));
+  RoleGuard.TEACHER_ONLY_SELECTORS.filter(s => s.startsWith('#') && !['#modal-teacher-dashboard'].includes(s)).forEach(sel => assert(html.includes(`id="${sel.slice(1)}"`), `selector exists: ${sel}`));
   ['view-student', 'modal-quiz', 'modal-feldman-criticism', 'modal-virtual-kalimba', 'modal-tuner', 'modal-auth-login'].forEach(id =>
     assert(!RoleGuard.TEACHER_ONLY_SELECTORS.includes('#' + id), `student UI kept: ${id}`));
 

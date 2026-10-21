@@ -1510,6 +1510,7 @@ const App = {
       quizActionButtons.innerHTML = btnsHtml;
     }
     if (typeof StudentOutbox !== 'undefined') StudentOutbox.render();
+    if (typeof StudentNotices !== 'undefined') StudentNotices.render();
   },
 
   onStudentFileSelected(input) {
@@ -2159,6 +2160,7 @@ const App = {
       <input type="datetime-local" id="due-date-input" class="form-input" style="max-width:220px;padding:0.3rem 0.5rem;" value="${local}">
       <button type="button" class="btn-nav-action primary" id="due-date-save">บันทึก</button>
       ${due ? '<button type="button" class="btn-nav-action" id="due-date-clear">ล้าง</button>' : ''}
+      <button type="button" class="btn-nav-action" id="due-remind-btn" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;">🔔 ทวงงานผู้ยังไม่ส่ง (${(typeof Analytics !== 'undefined') ? Analytics.missingFor(className, period).length : 0})</button>
       <span style="color:#475569;">${due ? 'ส่งหลังเวลานี้ = ส่งช้า' : 'ยังไม่ตั้ง (ใช้เกณฑ์เดิม: หลังบันทึกคาบเกิน 7 วัน)'}</span>`;
     const save = async (val) => {
       try {
@@ -2170,6 +2172,12 @@ const App = {
       this.renderSubmissionsTab();
     };
     document.getElementById('due-date-save').onclick = () => save(document.getElementById('due-date-input').value);
+    const remind = document.getElementById('due-remind-btn');
+    if (remind) remind.onclick = async () => {
+      if (!confirm('ส่งแจ้งเตือนถึงนักเรียนที่ยังไม่ส่งงานคาบนี้? นักเรียนจะเห็นข้อความเมื่อเปิดแอปครั้งถัดไป')) return;
+      try { const r = await Notices.remindMissing(className, period); alert(`✅ ส่งแจ้งเตือนแล้ว ${r.posted} คน`); }
+      catch (e) { alert('❌ ' + e.message); }
+    };
     const clr = document.getElementById('due-date-clear');
     if (clr) clr.onclick = () => save('');
   },
@@ -2971,6 +2979,11 @@ const App = {
     const scoreVal = scoreEl ? scoreEl.value : null;
 
     Store.saveSubmissionTeacherFeedback(className, period, studentId, feedbackText, scoreVal);
+    // ส่งคำแนะนำถึงมือถือนักเรียน (ถ้าตั้งค่าซิงค์แล้ว)
+    if (typeof Notices !== 'undefined' && typeof TeacherPull !== 'undefined' && TeacherPull.isConfigured()) {
+      Notices.postFeedback(className, period, studentId, feedbackText, scoreVal)
+        .catch(err => GoogleSheetSync.showToast('⚠️ ส่งคำแนะนำถึงมือถือนักเรียนไม่สำเร็จ: ' + err.message, 'error'));
+    }
     if (scoreVal !== null && scoreVal !== '') {
       this.state.scores[studentId] = Number(scoreVal);
     }

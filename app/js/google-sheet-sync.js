@@ -923,6 +923,7 @@ function doPost(e) {
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
     if (action === 'fetch_due_dates') return jsonOut({ status: 'success', dueDates: listDueDates_(ss, payload.className || '') });
+    if (action === 'post_notices') return jsonOut(postNotices(ss, payload.items || []));
     if (action === 'set_due_date') return jsonOut(setDueDate(ss, payload));
     if (action === 'upload_quiz_bank') return jsonOut(uploadQuizBank(ss, payload.units || []));
     if (action === 'fetch_student_submissions') return jsonOut(fetchStudentSubmissions(ss, Number(payload.since || 0), Number(payload.limit || 500)));
@@ -1233,7 +1234,7 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices'];
 var STUDENT_MAX_BODY = 60000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
 var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
 var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
@@ -1335,6 +1336,7 @@ function handleStudentPublicAction(ss, payload) {
   if (payload.action === 'studentSubmit') return studentSubmit_(ss, payload);
   if (payload.action === 'studentQuizGet') return studentQuizGet_(ss, payload);
   if (payload.action === 'studentTasks') return studentTasks_(ss, payload);
+  if (payload.action === 'studentNotices') return studentNotices_(ss, payload);
   var studentId = cleanId_(payload.studentId);
   if (!/^\\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
   var sheet = getStudentSheet_(ss);
@@ -1721,6 +1723,43 @@ function gradeQuiz_(ss, unitNo, answers) {
   }
   var total = u.questions.length;
   return { score: score, total: total, percentage: Math.round(score / total * 100), title: u.title };
+}
+
+/* ============================================================================
+ * แจ้งเตือนนักเรียน (ทวงงาน) และคำแนะนำครูต่องาน — นักเรียนเห็นเฉพาะของตัวเอง
+ * ============================================================================ */
+var NOTICE_SHEET = 'แจ้งเตือน_Notices';
+var NOTICE_HEADERS = ['notice_id', 'student_id', 'created_ms', 'kind', 'ref', 'message', 'score', 'teacher'];
+
+function postNotices(ss, items) {
+  if (!items || items.length > 1000) return { status: 'error', message: 'จำนวนรายการไม่ถูกต้อง' };
+  var sheet = getOrCreateSheet(ss, NOTICE_SHEET, NOTICE_HEADERS);
+  var now = Date.now(), n = 0;
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    var sid = cleanId_(it.studentId);
+    var kind = it.kind === 'feedback' ? 'feedback' : 'reminder';
+    if (!/^\\d{4,10}$/.test(sid) || !it.message) continue;
+    sheet.appendRow([Utilities.getUuid(), sid, now, kind, str_(it.ref, 80), str_(it.message, 1000),
+      it.score === undefined || it.score === null ? '' : str_(it.score, 10), str_(it.teacher, 80)]);
+    n++;
+  }
+  return { status: 'success', posted: n };
+}
+
+function studentNotices_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var sid = cleanId_(v.rec.student_id);
+  var since = Number(payload.since || 0);
+  var vals = getOrCreateSheet(ss, NOTICE_SHEET, NOTICE_HEADERS).getDataRange().getValues();
+  var out = [];
+  for (var r = 1; r < vals.length; r++) {
+    if (cleanId_(vals[r][1]) !== sid || !(Number(vals[r][2]) > since)) continue;
+    out.push({ id: String(vals[r][0]), createdMs: Number(vals[r][2]), kind: String(vals[r][3]), ref: String(vals[r][4]),
+      message: String(vals[r][5]), score: vals[r][6] === '' ? null : vals[r][6], teacher: String(vals[r][7] || '') });
+  }
+  return { status: 'success', notices: out.slice(-50) };
 }`
 };
 

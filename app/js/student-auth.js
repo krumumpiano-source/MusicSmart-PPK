@@ -143,7 +143,7 @@ const RoleGuard = {
     '#modal-holiday', '#modal-export', '#modal-student-status', '#modal-transcript', '#modal-semester', '#modal-subjects',
     '#modal-academic-docs', '#modal-rubric-scoring', '#modal-car-analytics', '#modal-car-full-report',
     '#modal-official-forms', '#modal-app-settings', '#modal-google-sheet-sync', '#modal-lesson-editor',
-    '#modal-curriculum-hub', '#modal-first-time-setup', '[data-teacher-only]'
+    '#modal-curriculum-hub', '#modal-first-time-setup', '#btn-teacher-dashboard', '#modal-teacher-dashboard', '[data-teacher-only]'
   ],
   purged: false,
 
