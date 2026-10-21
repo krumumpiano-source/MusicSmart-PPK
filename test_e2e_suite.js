@@ -69,12 +69,19 @@ global.location = { href: 'http://localhost:8080/index.html', reload: () => {} }
 // ----------------------------------------------------
 console.log('\n[Phase 1] Loading Application Modules...');
 
-const STUDENTS_DATA = require('./app/data/students.js');
+// Real roster is private (gitignored). Use the fake sample roster when USE_SAMPLE_DATA=1 or when it is absent.
+const REAL_ROSTER = path.join(__dirname, 'app', 'data', 'students.js');
+const USE_SAMPLE = process.env.USE_SAMPLE_DATA === '1' || !fs.existsSync(REAL_ROSTER);
+const STUDENTS_DATA = require(USE_SAMPLE ? './tests/fixtures/students.sample.js' : './app/data/students.js');
 global.STUDENTS_DATA = STUDENTS_DATA;
 const totalClasses = Object.keys(STUDENTS_DATA).length;
 let totalStudentCount = 0;
 Object.values(STUDENTS_DATA).forEach(list => totalStudentCount += list.length);
-assert(totalClasses === 16 && totalStudentCount === 610, `Loaded roster: ${totalClasses} classrooms with ${totalStudentCount} active students`);
+if (USE_SAMPLE) {
+  assert(totalClasses >= 1 && totalStudentCount >= 1, `Loaded SAMPLE roster: ${totalClasses} classrooms with ${totalStudentCount} fake students`);
+} else {
+  assert(totalClasses === 16 && totalStudentCount === 610, `Loaded roster: ${totalClasses} classrooms with ${totalStudentCount} active students`);
+}
 
 const LESSONS_DATA = require('./app/data/lessons.js');
 global.LESSONS_DATA = LESSONS_DATA;
@@ -153,13 +160,13 @@ Store.logout();
 assert(Store.getActiveRole() === 'student', 'Store.getActiveRole() defaults securely to "student" when not logged in');
 
 // Test Student Forced PIN Registration & Authentication
-const regResult = Store.registerStudentPin('35994', '654321');
-assert(regResult.success === true && regResult.user && regResult.user.studentId === '35994', 'Store.registerStudentPin registers 6-digit PIN and sets user session');
+const regResult = Store.registerStudentPin(sampleStudent.student_id, '654321');
+assert(regResult.success === true && regResult.user && regResult.user.studentId === sampleStudent.student_id, 'Store.registerStudentPin registers 6-digit PIN and sets user session');
 
-const loginCorrect = Store.verifyStudentLogin('35994', '654321');
+const loginCorrect = Store.verifyStudentLogin(sampleStudent.student_id, '654321');
 assert(loginCorrect.success === true && loginCorrect.user.role === 'student', 'Store.verifyStudentLogin succeeds with correct PIN');
 
-const loginWrong = Store.verifyStudentLogin('35994', '999999');
+const loginWrong = Store.verifyStudentLogin(sampleStudent.student_id, '999999');
 assert(loginWrong.success === false, 'Store.verifyStudentLogin rejects incorrect PIN');
 
 // Clean up student test registration

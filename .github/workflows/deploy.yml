@@ -15,7 +15,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax checks
+        run: |
+          for f in app/sw.js app/js/*.js app/data/*.js google_apps_script.js; do node --check "$f"; done
+          python tools/sync_apps_script_template.py --check
+
+      - name: Tests (sample roster only)
+        env:
+          USE_SAMPLE_DATA: '1'
+        run: |
+          node tests/test_quiz_shuffle.js
+          python tests/test_lessons.py
+          python tests/test_students.py
+          node test_e2e_suite.js
+          node tests/test_sync.js
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -27,10 +57,22 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Build site (sample roster only, no real student data)
+        run: |
+          rm -rf _site
+          cp -r app _site
+          # PDPA: the public site must never contain the real roster
+          cp app/data/students.sample.js _site/data/students.js
+          rm -f _site/data/students.sample.js
+          # Stamp service worker cache with commit so every deploy refreshes clients
+          sed -i "s/^const APP_VERSION = '\(.*\)';/const APP_VERSION = '\1-${GITHUB_SHA::7}';/" _site/sw.js
+          grep -q "STUDENTS_IS_SAMPLE = true" _site/data/students.js
+          grep -n "APP_VERSION" _site/sw.js
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './app'
+          path: './_site'
 
       - name: Deploy to GitHub Pages
         id: deployment

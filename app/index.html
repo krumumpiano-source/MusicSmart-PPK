@@ -1869,6 +1869,17 @@
 
         <!-- PANE 3: STUDENT PIN RESET -->
         <div id="user-pane-students" class="user-mgmt-pane" style="display: none;">
+          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #92400e; margin-bottom: 0.5rem;">📥 นำเข้ารายชื่อนักเรียน (เก็บเฉพาะในเครื่องนี้)</h4>
+            <p style="font-size: 0.8rem; color: #78350f; margin-bottom: 0.75rem;">
+              รายชื่อจริงไม่ถูกเผยแพร่บนเว็บ (PDPA) ให้นำเข้าไฟล์ .json / .js / .xlsx / .csv ในแต่ละเครื่อง
+              คอลัมน์: ห้อง, เลขที่, รหัสนักเรียน, คำนำหน้า, ชื่อ, นามสกุล, ชื่อเล่น
+            </p>
+            <div id="roster-status" style="font-size: 0.82rem; margin-bottom: 0.6rem; color: #334155;"></div>
+            <input type="file" id="roster-import-file" accept=".json,.js,.xlsx,.xls,.csv" style="display:none" onchange="App.importRosterFile(this.files[0]); this.value='';">
+            <button class="btn-nav-action primary" onclick="document.getElementById('roster-import-file').click()">📂 เลือกไฟล์รายชื่อ</button>
+            <button class="btn-nav-action" onclick="App.clearRoster()">🗑️ ล้างรายชื่อในเครื่องนี้</button>
+          </div>
           <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
             <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
               <span>🔑</span> จัดการและรีเซ็ตรหัส PIN นักเรียน
@@ -3227,6 +3238,10 @@
             <button id="btn-gs-test" class="btn-nav-action" style="background: #f0fdf4; color: #15803d; border-color: #bbf7d0; font-weight: 600;" onclick="GoogleSheetSync.handleTestFromModal()">
               🔍 ทดสอบเชื่อมต่อ
             </button>
+          <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.65rem;">
+            <label for="gs-sync-token" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; white-space: nowrap;">🔑 รหัสซิงค์ (Sync Token):</label>
+            <input type="password" id="gs-sync-token" class="form-input" autocomplete="off" placeholder="ค่าเดียวกับ SYNC_TOKEN ใน Script Properties ของ Apps Script" style="flex: 1; font-family: monospace; font-size: 0.88rem;">
+          </div>
           <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.5rem;">
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
               <button type="button" id="btn-gs-fullsync" class="btn-preset-chip" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700; padding: 6px 14px; cursor: pointer;" onclick="GoogleSheetSync.handleFullSyncFromModal()">
@@ -3470,11 +3485,11 @@
   </div>
 
   <!-- Scripts -->
-  <script src="data/students.js?v=20261020_03"></script>
+  <script src="data/students.js?v=20261021_01"></script>
   <script src="data/lessons.js?v=20261020_03"></script>
   <script src="data/academic_docs.js?v=20261020_03"></script>
   <script src="data/quizzes.js?v=20261020_03"></script>
-  <script src="js/google-sheet-sync.js?v=20261020_03"></script>
+  <script src="js/google-sheet-sync.js?v=20261021_01"></script>
   <script src="data/store.js?v=20261020_03"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>

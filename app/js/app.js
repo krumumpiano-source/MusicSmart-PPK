@@ -2034,7 +2034,69 @@ const App = {
     }
   },
 
+  renderRosterStatus() {
+    const el = document.getElementById('roster-status');
+    if (!el || typeof Store === 'undefined') return;
+    const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];
+    let n = 0;
+    classes.forEach(c => { n += Store.getStudents(c).length; });
+    el.innerHTML = Store.hasLocalRoster()
+      ? `✅ ใช้รายชื่อที่นำเข้าในเครื่องนี้: ${classes.length} ห้อง ${n} คน`
+      : `⚠️ ยังไม่ได้นำเข้ารายชื่อ (กำลังใช้ข้อมูลตัวอย่าง ${n} คน)`;
+  },
+
+  importRosterFile(file) {
+    if (!file) return;
+    const name = (file.name || '').toLowerCase();
+    const done = (res) => {
+      if (res.success) {
+        alert(`✅ นำเข้ารายชื่อสำเร็จ ${res.classes} ห้อง ${res.count} คน (เก็บในเครื่องนี้เท่านั้น)`);
+        location.reload();
+      } else {
+        alert('❌ นำเข้าไม่สำเร็จ: ' + res.error);
+      }
+    };
+    const reader = new FileReader();
+    if (/\.(xlsx|xls|csv)$/.test(name)) {
+      if (typeof XLSX === 'undefined') { alert('ไม่พบไลบรารี Excel (ต้องต่ออินเทอร์เน็ตครั้งแรก)'); return; }
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          let rows = [];
+          wb.SheetNames.forEach(sn => {
+            XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval: '' }).forEach(r => {
+              if (!r['ห้อง'] && !r['class'] && !r['ห้องเรียน']) r['ห้อง'] = sn.replace('_', '/');
+              rows.push(r);
+            });
+          });
+          done(Store.importRoster(rows));
+        } catch (err) { done({ success: false, error: err.message }); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.onload = (e) => {
+        try {
+          let text = String(e.target.result);
+          if (/\.js$/.test(name)) {
+            const m = text.match(/=\s*(\{[\s\S]*\})\s*;/);
+            if (!m) throw new Error('ไม่พบ STUDENTS_DATA ในไฟล์ .js');
+            text = m[1];
+          }
+          done(Store.importRoster(JSON.parse(text)));
+        } catch (err) { done({ success: false, error: err.message }); }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+  },
+
+  clearRoster() {
+    if (!confirm('ล้างรายชื่อนักเรียนที่นำเข้าในเครื่องนี้?')) return;
+    Store.clearRoster();
+    location.reload();
+  },
+
   renderStudentPinsTab() {
+    this.renderRosterStatus();
     const classSel = document.getElementById('user-pin-reset-class');
     if (!classSel) return;
     const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];

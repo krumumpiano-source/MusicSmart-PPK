@@ -2,9 +2,45 @@ import re
 import json
 import os
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REAL = os.path.join(ROOT, "app", "data", "students.js")
+SAMPLE_FILES = [os.path.join(ROOT, "tests", "fixtures", "students.sample.js"),
+                os.path.join(ROOT, "app", "data", "students.sample.js")]
+
+
+def load_roster(filepath):
+    with open(filepath, "r", encoding="utf-8") as f:
+        content = f.read()
+    match = re.search(r'const STUDENTS_DATA = ({.*?});\s*if', content, re.DOTALL)
+    assert match is not None, f"STUDENTS_DATA not found in {filepath}"
+    return json.loads(match.group(1))
+
+
+def check_fields(data):
+    for c, lst in data.items():
+        for s in lst:
+            assert "student_id" in s and s["student_id"], f"Student missing student_id in {c}"
+            assert "first_name" in s and s["first_name"], f"Student missing first_name in {c}"
+            assert "no" in s, f"Student missing no in {c}"
+            assert s.get("class") == c, f"class mismatch in {c}"
+
+
+def test_sample_rosters():
+    for fp in SAMPLE_FILES:
+        data = load_roster(fp)
+        assert data, f"{fp} empty"
+        check_fields(data)
+    a, b = (load_roster(fp) for fp in SAMPLE_FILES)
+    assert a == b, "tests/fixtures/students.sample.js and app/data/students.sample.js differ"
+    print("SUCCESS: sample rosters valid")
+
+
 def test_students():
-    filepath = os.path.join("app", "data", "students.js")
-    assert os.path.exists(filepath), f"File {filepath} does not exist"
+    if os.environ.get("USE_SAMPLE_DATA") == "1" or not os.path.exists(REAL):
+        test_sample_rosters()
+        print("SKIP: real roster checks (USE_SAMPLE_DATA=1 or app/data/students.js not present)")
+        return
+    filepath = REAL
     
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()

@@ -1,11 +1,12 @@
 // MusicSmart PWA Service Worker
-const CACHE_NAME = 'musicsmart-v19';
+// Bump APP_VERSION on every release (deploy workflow also stamps the commit SHA here)
+const APP_VERSION = 'v20';
+const CACHE_NAME = 'musicsmart-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
-  './data/students.js',
   './data/lessons.js',
   './data/academic_docs.js',
   './data/quizzes.js',
@@ -52,6 +53,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Only intercept GET requests with http/https scheme
   if (!event.request || event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // Never cache the roster file or cross-origin API calls
+  if (event.request.url.includes('/data/students') || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
 

@@ -269,18 +269,100 @@ const Store = {
   },
 
   // --- Students Roster (with O(1) Hash Map Index) ---
-  getStudents(className) {
-    if (typeof STUDENTS_DATA !== 'undefined' && STUDENTS_DATA[className]) {
-      return STUDENTS_DATA[className];
+  // รายชื่อจริงเก็บเฉพาะในเครื่อง (localStorage) ผ่านการนำเข้า JSON/Excel
+  // ไฟล์ data/students.js บนเว็บเป็นข้อมูลตัวอย่างเท่านั้น (ไม่มีชื่อจริง)
+  ROSTER_KEY: 'ppk_students_roster',
+  _rosterCache: undefined,
+
+  getRoster() {
+    if (this._rosterCache === undefined) {
+      const local = this.load(this.ROSTER_KEY, null);
+      this._rosterCache = (local && typeof local === 'object' && Object.keys(local).length > 0) ? local : null;
     }
-    return [];
+    if (this._rosterCache) return this._rosterCache;
+    return (typeof STUDENTS_DATA !== 'undefined' && STUDENTS_DATA) ? STUDENTS_DATA : {};
+  },
+
+  hasLocalRoster() {
+    this.getRoster();
+    return !!this._rosterCache;
+  },
+
+  isSampleRoster() {
+    return !this.hasLocalRoster() && typeof STUDENTS_IS_SAMPLE !== 'undefined' && !!STUDENTS_IS_SAMPLE;
+  },
+
+  /**
+   * Normalise a roster from JSON ({"ม.1/1":[...]}, or a flat array) or Excel rows
+   * (columns: ห้อง/class, เลขที่/no, รหัสนักเรียน/student_id, คำนำหน้า/prefix, ชื่อ/first_name, นามสกุล/last_name, ชื่อเล่น/nickname)
+   */
+  normalizeRoster(input) {
+    let rows = [];
+    if (Array.isArray(input)) rows = input;
+    else if (input && typeof input === 'object') {
+      const src = input.STUDENTS_DATA || input.students || input;
+      Object.keys(src).forEach(cls => {
+        if (Array.isArray(src[cls])) src[cls].forEach(r => rows.push({ class: cls, ...r }));
+      });
+    }
+    const pick = (r, keys) => {
+      for (const k of keys) {
+        if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') return String(r[k]).trim();
+      }
+      return '';
+    };
+    const out = {};
+    rows.forEach(r => {
+      const cls = pick(r, ['class', 'className', 'ห้อง', 'ห้องเรียน', 'ชั้น']);
+      const sid = pick(r, ['student_id', 'studentId', 'รหัสนักเรียน', 'เลขประจำตัว', 'รหัส']);
+      const first = pick(r, ['first_name', 'firstName', 'ชื่อ']);
+      if (!cls || !sid || !first) return;
+      if (!out[cls]) out[cls] = [];
+      const no = Number(pick(r, ['no', 'เลขที่', 'rollNo'])) || (out[cls].length + 1);
+      out[cls].push({
+        id: `${cls}_${no}`,
+        student_id: sid,
+        prefix: pick(r, ['prefix', 'คำนำหน้า', 'คำนำหน้าชื่อ']),
+        first_name: first,
+        last_name: pick(r, ['last_name', 'lastName', 'นามสกุล']),
+        nickname: pick(r, ['nickname', 'ชื่อเล่น']),
+        class: cls,
+        no
+      });
+    });
+    Object.keys(out).forEach(c => out[c].sort((a, b) => a.no - b.no));
+    return out;
+  },
+
+  importRoster(input) {
+    const roster = this.normalizeRoster(input);
+    const classes = Object.keys(roster);
+    if (classes.length === 0) return { success: false, error: 'ไม่พบข้อมูลนักเรียน (ต้องมี ห้อง, รหัสนักเรียน, ชื่อ)' };
+    this.save(this.ROSTER_KEY, roster);
+    this._rosterCache = undefined;
+    this._studentIndex = null;
+    let count = 0;
+    classes.forEach(c => { count += roster[c].length; });
+    return { success: true, classes: classes.length, count };
+  },
+
+  clearRoster() {
+    try { localStorage.removeItem(this.ROSTER_KEY); } catch (e) {}
+    this._rosterCache = undefined;
+    this._studentIndex = null;
+  },
+
+  getStudents(className) {
+    const roster = this.getRoster();
+    return roster[className] || [];
   },
 
   _ensureStudentIndex() {
-    if (!this._studentIndex && typeof STUDENTS_DATA !== 'undefined') {
+    if (!this._studentIndex) {
+      const roster = this.getRoster();
       this._studentIndex = new Map();
-      for (const className of Object.keys(STUDENTS_DATA)) {
-        const list = STUDENTS_DATA[className] || [];
+      for (const className of Object.keys(roster)) {
+        const list = roster[className] || [];
         for (let i = 0; i < list.length; i++) {
           const s = list[i];
           this._studentIndex.set(String(s.student_id).trim(), { ...s, class: className });
@@ -290,7 +372,6 @@ const Store = {
   },
 
   getStudentById(studentId) {
-    if (typeof STUDENTS_DATA === 'undefined') return null;
     this._ensureStudentIndex();
     const key = String(studentId || '').trim();
     return this._studentIndex ? (this._studentIndex.get(key) || null) : null;
@@ -298,7 +379,7 @@ const Store = {
 
   getAllClasses(grade = 'M1') {
     const list = [];
-    const source = typeof STUDENTS_DATA !== 'undefined' ? STUDENTS_DATA : {};
+    const source = this.getRoster();
     const prefix = grade === 'M1' ? 'ม.1/' : 'ม.2/';
     for (const key of Object.keys(source)) {
       if (key.startsWith(prefix)) {
@@ -1008,7 +1089,8 @@ const Store = {
       timetable: this.getTimetable(),
       scheduleAssignments: this.getScheduleAssignments(),
       holidays: this.getHolidayLogs(),
-      extendedAssessments: this.collectExtendedAssessmentData()
+      extendedAssessments: this.collectExtendedAssessmentData(),
+      roster: this.hasLocalRoster() ? this.getRoster() : undefined
     };
     return JSON.stringify(payload, null, 2);
   },
@@ -1028,6 +1110,7 @@ const Store = {
       if (payload.studentAccounts) this.save(STORAGE_KEYS.STUDENT_ACCOUNTS, payload.studentAccounts);
       if (payload.semesterMeta) this.save(STORAGE_KEYS.SEMESTERS, payload.semesterMeta);
       if (payload.subjects) this.save(STORAGE_KEYS.SUBJECTS, payload.subjects);
+      if (payload.roster) this.importRoster(payload.roster);
       if (payload.extendedAssessments) {
         this.restoreExtendedAssessmentData(payload.extendedAssessments);
       }

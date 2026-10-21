@@ -18,6 +18,11 @@
  * 6. กด "ทำให้ใช้งานได้" (Deploy) และให้สิทธิ์อนุญาตเข้าถึง Google Sheet
  * 7. คัดลอก "URL เว็บแอป" (ขึ้นต้นด้วย https://script.google.com/macros/s/.../exec)
  *    นำไปวางในหน้าต่าง "ซิงค์คู่ Google Sheets" ของระบบ MusicSmart
+ * 8. ความปลอดภัย (จำเป็น): ไปที่ ⚙️ การตั้งค่าโปรเจกต์ (Project Settings) -> คุณสมบัติของสคริปต์
+ *    (Script Properties) -> เพิ่ม SYNC_TOKEN = ข้อความสุ่มยาว ๆ (เช่น 32 ตัวอักษรขึ้นไป)
+ *    แล้วนำค่าเดียวกันไปใส่ช่อง "รหัสซิงค์ (Sync Token)" ในหน้าต่างซิงค์ของ MusicSmart
+ *    คำขอที่ไม่มี token ถูกต้องจะถูกปฏิเสธ (unauthorized) ทุกครั้ง
+ *    หลังแก้โค้ดทุกครั้ง: Deploy -> Manage deployments -> แก้ไข -> Version: New version
  * ============================================================================
  */
 
@@ -28,6 +33,16 @@ function doPost(e) {
   try {
     var rawText = (e && e.postData && e.postData.contents) ? e.postData.contents : "{}";
     var payload = JSON.parse(rawText);
+
+    // 0. ตรวจสอบรหัสซิงค์ (SYNC_TOKEN ใน Script Properties)
+    var expectedToken = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');
+    if (!expectedToken || !payload || payload.token !== expectedToken) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: expectedToken ? 'unauthorized' : 'unauthorized: SYNC_TOKEN not configured in Script Properties'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     var action = payload.action || 'sync';
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -36,7 +51,6 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
         message: 'เชื่อมต่อ Google Sheet สำเร็จ: ' + ss.getName(),
-        spreadsheetUrl: ss.getUrl(),
         serverTime: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -62,7 +76,7 @@ function doPost(e) {
     // 3. การซิงค์รายการเดี่ยวแบบทันที (Realtime Single Sync)
     var result = processSyncItem(ss, payload);
     return ContentService.createTextOutput(JSON.stringify({
-      status: 'success',
+      status: (result && result.success) ? 'success' : 'error',
       type: payload.type,
       syncedAt: new Date().toISOString()
     })).setMimeType(ContentService.MimeType.JSON);
@@ -78,11 +92,9 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   return ContentService.createTextOutput(JSON.stringify({
     status: 'online',
     appName: 'MusicSmart Google Sheets Sync Service',
-    sheetName: ss.getName(),
     time: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
 }
@@ -292,6 +304,11 @@ function processSyncItem(ss, item) {
       data.pre !== undefined ? data.pre : "",
       data.post !== undefined ? data.post : "",
       data.formative !== undefined ? data.formative : "",
+      data.gain !== undefined ? data.gain : ""
+    ]);
+    return { type: type, success: true };
+  }
+
   // --------------------------------------------------------------------------
   // H. แผนการสอนและหลักสูตรที่ครูปรับแต่ง (Customized Curriculum & Lesson Plans)
   // --------------------------------------------------------------------------
