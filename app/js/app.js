@@ -1511,6 +1511,7 @@ const App = {
       }
 
       if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive()) {
+        btnsHtml += `<button class="btn-nav-action" style="background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe;font-weight:600;" onclick="PracticeQuiz.open(${unitNo})" title="ทำแบบฝึกได้ไม่จำกัด ไม่นับคะแนน">🧪 แบบฝึก (ไม่นับคะแนน)</button>`;
         const qs = StudentOutbox.statusFor(StudentOutbox.quizKey(unitNo));
         if (qs) btnsHtml += `<span class="${qs.cls}" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; align-self: center;">แบบทดสอบ: ${this.escapeHtml(qs.label)}</span>`;
       }

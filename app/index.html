@@ -267,6 +267,18 @@
           <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Tuner.openModal()" title="เครื่องตั้งสาย Tuner">
             <span>🎙️ ตั้งสาย</span>
           </button>
+          <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
+            <span>🥁 เมโทรนอม</span>
+          </button>
+          <button id="btn-student-calendar" class="btn-nav-action" style="background: #fefce8; color: #854d0e; border-color: #fde68a; font-weight: 700;" onclick="TaskCalendar.open()" title="ปฏิทินกำหนดส่งงาน + แจ้งเตือน">
+            <span>📅 ปฏิทินงาน</span>
+          </button>
+          <button id="btn-student-progress" class="btn-nav-action" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 700;" onclick="StudentProgress.open()" title="คะแนนและความก้าวหน้าของฉัน">
+            <span>📈 ความก้าวหน้า</span>
+          </button>
+          <button id="btn-student-recording" class="btn-nav-action" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 700;" onclick="Recording.open(App.state && App.state.period)" title="ส่งคลิปฝึกซ้อมเป็นลิงก์">
+            <span>🎧 ส่งคลิปฝึกซ้อม</span>
+          </button>
         </div>
 
         <!-- Current Auth User & Subtle Logout Action (Decluttered Header) -->
@@ -661,6 +673,7 @@
 
     <!-- VIEW 3: Student Portal (มุมมองนักเรียน) -->
     <section id="view-student" style="display: none;">
+      <div id="student-due-banner" style="display:none; margin: 0.5rem 0; padding: 0.6rem 0.9rem; border-radius: 8px; background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; font-weight: 600; font-size: 0.88rem;"></div>
       <!-- Student PWA Install Prompt Banner (Persistent & Responsive) -->
       <div id="student-pwa-banner" style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: linear-gradient(135deg, #0284c7 0%, #1e3a8a 100%); color: #ffffff; padding: 0.85rem 1.25rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -3530,6 +3543,7 @@
   <script src="js/server-quiz.js?v=20261021_04"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
   <script src="js/intern.js?v=20261021_06"></script>
+  <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>

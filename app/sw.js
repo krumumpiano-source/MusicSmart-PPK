@@ -1,6 +1,6 @@
 // MusicSmart PWA Service Worker
 // Bump APP_VERSION on every release (deploy workflow also stamps the commit SHA here)
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 const CACHE_NAME = 'musicsmart-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
@@ -19,6 +19,7 @@ const ASSETS_TO_CACHE = [
   './js/server-quiz.js',
   './js/teacher-tools.js',
   './js/intern.js',
+  './js/student-practice.js',
   './js/app.js',
   './js/tuner.js',
   './js/audio-tools.js',
@@ -55,6 +56,15 @@ self.addEventListener('activate', (event) => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// แตะการแจ้งเตือนกำหนดส่ง → เปิด/โฟกัสแอป
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) { if ('focus' in c) return c.focus(); }
+    return self.clients.openWindow ? self.clients.openWindow('./') : null;
+  }));
 });
 
 self.addEventListener('fetch', (event) => {

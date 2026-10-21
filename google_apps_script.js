@@ -394,7 +394,7 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices', 'studentProgress'];
 var STUDENT_MAX_BODY = 60000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
 var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
 var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
@@ -496,6 +496,7 @@ function handleStudentPublicAction(ss, payload) {
   if (payload.action === 'studentSubmit') return studentSubmit_(ss, payload);
   if (payload.action === 'studentQuizGet') return studentQuizGet_(ss, payload);
   if (payload.action === 'studentTasks') return studentTasks_(ss, payload);
+  if (payload.action === 'studentProgress') return studentProgress_(ss, payload);
   if (payload.action === 'studentNotices') return studentNotices_(ss, payload);
   var studentId = cleanId_(payload.studentId);
   if (!/^\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
@@ -685,6 +686,14 @@ function validateSubmission_(it) {
     if (!d.content && !d.url) return 'empty';
     return '';
   }
+  if (it.kind === 'recording') {
+    // คลิปฝึกซ้อม: ส่งเป็นลิงก์เท่านั้น (Google Drive / YouTube ฯลฯ)
+    var rp = Number(d.period);
+    if (!(rp >= 1 && rp <= 40 && Math.floor(rp) === rp)) return 'bad_period';
+    if (!d.url || !/^https:\/\//i.test(String(d.url)) || String(d.url).length > 500) return 'bad_url';
+    if (String(d.content || '').length > 1000) return 'too_long';
+    return '';
+  }
   if (it.kind === 'quiz_answers') {
     var u = Number(d.unitNo);
     if (!(u >= 1 && u <= 20 && Math.floor(u) === u)) return 'bad_unit';
@@ -748,7 +757,7 @@ function studentSubmit_(ss, payload) {
         str_(d.content, 5000), str_(d.url, 500), '', '', '', '',
         str_(d.submissionType, 40), str_(d.title, 200), str_(d.clientTime, 40), due || '', late, false]);
       processSyncItem(ss, { type: 'submission', data: { className: profile.studentClass, period: Number(d.period), studentId: sid,
-        studentName: profile.name, submissionType: (str_(d.submissionType, 40) || 'งานนักเรียน (มือถือ)') + (late ? ' (ส่งช้า)' : ''), songTitle: str_(d.title, 200),
+        studentName: profile.name, submissionType: (str_(d.submissionType, 40) || (it.kind === 'recording' ? 'คลิปฝึกซ้อม (ลิงก์)' : 'งานนักเรียน (มือถือ)')) + (late ? ' (ส่งช้า)' : ''), songTitle: str_(d.title, 200),
         content: str_(d.content, 5000), url: str_(d.url, 500) } });
       results[cid] = { late: late, dueAt: due || '' };
     }
@@ -827,6 +836,49 @@ function studentTasks_(ss, payload) {
   if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
   var cls = String(v.rec['class'] || '');
   return { status: 'success', studentClass: cls, dueDates: listDueDates_(ss, cls) };
+}
+
+/** นักเรียนดูความก้าวหน้าของตนเอง: งานที่ส่ง คะแนนแบบทดสอบ (แยกแบบฝึก) งานค้าง และคำแนะนำครู — เฉพาะของตัวเอง */
+function studentProgress_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var sid = String(v.rec.student_id), cls = String(v.rec['class'] || '');
+  var vals = getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS).getDataRange().getValues();
+  var h = vals[0] || [], ix = {};
+  for (var c = 0; c < h.length; c++) ix[h[c]] = c;
+  var submitted = {}, quizzes = {}, practice = {}, recordings = 0, late = 0;
+  for (var r = 1; r < vals.length; r++) {
+    var row = vals[r];
+    if (String(row[ix.student_id]) !== sid) continue;
+    var kind = String(row[ix.kind]), pu = Number(row[ix.period_or_unit]);
+    if (kind === 'quiz' || kind === 'practice_quiz') {
+      var target = kind === 'quiz' ? quizzes : practice;
+      var pct = Number(row[ix.percentage]) || 0;
+      var prev = target[pu];
+      target[pu] = { unitNo: pu, best: Math.max(prev ? prev.best : 0, pct), last: pct, attempts: (prev ? prev.attempts : 0) + 1 };
+    } else if (kind === 'recording') {
+      recordings++;  // คลิปฝึกซ้อมไม่นับแทนงานประจำคาบ
+    } else {
+      if (!submitted[pu]) submitted[pu] = { period: pu, late: false, kinds: [] };
+      if (submitted[pu].kinds.indexOf(kind) === -1) submitted[pu].kinds.push(kind);
+      if (row[ix.late] === true || String(row[ix.late]) === 'true') submitted[pu].late = true;
+    }
+  }
+  Object.keys(submitted).forEach(function (k) { if (submitted[k].late) late++; });
+  var due = listDueDates_(ss, cls), now = Date.now(), missing = [];
+  due.forEach(function (d) { if (!submitted[d.period] && new Date(d.dueAt).getTime() < now) missing.push(d.period); });
+  var qs = Object.keys(quizzes).map(function (k) { return quizzes[k]; });
+  var avg = qs.length ? Math.round(qs.reduce(function (a, q) { return a + q.best; }, 0) / qs.length) : null;
+  var fb = [];
+  var nv = getOrCreateSheet(ss, NOTICE_SHEET, NOTICE_HEADERS).getDataRange().getValues();
+  for (var n = 1; n < nv.length; n++) {
+    if (String(nv[n][1]) !== sid || String(nv[n][3]) !== 'feedback') continue;
+    fb.push({ ref: String(nv[n][4]), message: String(nv[n][5]), score: nv[n][6] === '' ? null : nv[n][6], createdMs: Number(nv[n][2]) });
+  }
+  return { status: 'success', studentClass: cls, dueDates: due,
+    submittedPeriods: Object.keys(submitted).map(function (k) { return submitted[k]; }),
+    quizzes: qs, practice: Object.keys(practice).map(function (k) { return practice[k]; }),
+    quizAverage: avg, missing: missing, late: late, recordings: recordings, feedback: fb.slice(-20) };
 }
 
 /** ครูอัปโหลดคลังข้อสอบ (แทนที่ทั้งหมด) */

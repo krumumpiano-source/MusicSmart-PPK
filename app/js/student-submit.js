@@ -196,7 +196,10 @@ const StudentOutbox = {
       window.addEventListener('online', () => this.flush());
       window.addEventListener('offline', () => this.render());
     }
-    setTimeout(() => { this.flush(); this.refreshTasks(); }, 2000);
+    setTimeout(() => {
+      this.flush();
+      this.refreshTasks().then(() => { if (typeof DueNotifier !== 'undefined') DueNotifier.check(); });
+    }, 2000);
   }
 };
 
@@ -269,6 +272,14 @@ const TeacherPull = {
           source: 'student_device', late: this.isLate(cls, no, r.received_at, r), dueAt: r.due_at || (DueDates.get(cls, no) || {}).dueAt || '', status: 'submitted',
           score: prev.score !== undefined ? prev.score : null, feedback: prev.feedback || ''
         });
+        subs++;
+      } else if (r.kind === 'recording') { // คลิปฝึกซ้อม: เก็บแยก ไม่ถือเป็นการส่งงานประจำคาบ
+        const recAll = JSON.parse(localStorage.getItem('ppk_student_recordings') || '{}');
+        const key = `${cls}_p${no}_${sid}`;
+        const recs = (recAll[key] || []).filter(x => x.clientId !== r.client_id);
+        recs.push({ clientId: r.client_id, url: String(r.url || ''), note: String(r.content || ''), at: this.thaiTime(r.received_at) });
+        recAll[key] = recs.slice(-10);
+        localStorage.setItem('ppk_student_recordings', JSON.stringify(recAll));
         subs++;
       } else if (r.kind === 'quiz') { // คะแนนที่ตรวจบนเซิร์ฟเวอร์
         const qkey = `music_quiz_${sid}_u${no}`;
