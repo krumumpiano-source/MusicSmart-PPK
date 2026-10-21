@@ -45,6 +45,8 @@ jobs:
           node tests/test_sync.js
           node tests/test_student_auth_gas.js
           node tests/test_student_portal.js
+          node tests/test_student_submit_gas.js
+          node tests/test_student_submit_client.js
 
   deploy:
     needs: test

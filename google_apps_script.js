@@ -40,6 +40,7 @@ function doPost(e) {
 
     // 0a. ระบบเข้าสู่ระบบของนักเรียน (ไม่ใช้ SYNC_TOKEN แต่เปิดเผยเฉพาะข้อมูลของนักเรียนคนนั้น)
     if (payload && STUDENT_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
+      if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
       return jsonOut(handleStudentPublicAction(SpreadsheetApp.getActiveSpreadsheet(), payload));
     }
 
@@ -68,6 +69,7 @@ function doPost(e) {
     if (action === 'upload_roster') return jsonOut(uploadStudentRoster(ss, payload.students || [], !!payload.replace));
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
+    if (action === 'fetch_student_submissions') return jsonOut(fetchStudentSubmissions(ss, Number(payload.since || 0), Number(payload.limit || 500)));
 
     // 2. การซิงค์แบบเป็นกลุ่ม (Batch Sync จาก Outbox)
     if (action === 'batch_sync') {
@@ -375,7 +377,14 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit'];
+var STUDENT_MAX_BODY = 60000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
+var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
+var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
+var STUDENT_MAX_ITEMS = 20;            // รายการต่อคำขอ
+var STUDENT_INBOX_SHEET = 'นักเรียนส่งงาน_Inbox';
+var STUDENT_INBOX_HEADERS = ['received_at', 'received_ms', 'client_id', 'student_id', 'class', 'kind', 'period_or_unit',
+  'content', 'url', 'score', 'total', 'percentage', 'time_spent_sec', 'submission_type', 'title', 'client_time'];
 var STUDENT_AUTH_SHEET = 'นักเรียน_Students_Auth';
 var STUDENT_AUTH_HEADERS = ['student_id', 'prefix', 'first_name', 'last_name', 'nickname', 'class', 'no',
   'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'last_login'];
@@ -463,6 +472,7 @@ function handleStudentPublicAction(ss, payload) {
   if (!globalStudentThrottle_()) {
     return { status: 'error', code: 'rate_limited', message: 'มีการเข้าสู่ระบบจำนวนมาก กรุณารอสักครู่แล้วลองใหม่' };
   }
+  if (payload.action === 'studentSubmit') return studentSubmit_(ss, payload);
   var studentId = cleanId_(payload.studentId);
   if (!/^\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
   var sheet = getStudentSheet_(ss);
@@ -490,7 +500,7 @@ function handleStudentPublicAction(ss, payload) {
     rec.pin_set_at = new Date().toISOString();
     rec.last_login = rec.pin_set_at;
     writeStudentRow_(sheet, rec);
-    return { status: 'success', profile: publicProfile_(rec) };
+    return withSession_({ status: 'success', profile: publicProfile_(rec) }, rec);
   }
 
   // studentLogin
@@ -514,7 +524,7 @@ function handleStudentPublicAction(ss, payload) {
   rec.locked_until = '';
   rec.last_login = new Date().toISOString();
   writeStudentRow_(sheet, rec);
-  return { status: 'success', profile: publicProfile_(rec) };
+  return withSession_({ status: 'success', profile: publicProfile_(rec) }, rec);
 }
 
 /** ครูอัปโหลด/อัปเดตรายชื่อ (เก็บ PIN เดิมไว้) replace=true จะลบรหัสที่ไม่อยู่ในรายชื่อใหม่ */
@@ -575,4 +585,159 @@ function studentPinStatus(ss) {
     list.push({ studentId: cleanId_(values[r][0]), hasPin: !!values[r][8], locked: Number(values[r][10] || 0) > Date.now() });
   }
   return { status: 'success', students: list };
+}
+
+/* ============================================================================
+ * โทเค็นเข้าสู่ระบบนักเรียน (HMAC-SHA256) + การส่งงานจากมือถือนักเรียน
+ * ============================================================================ */
+function getSessionSecret_() {
+  var props = PropertiesService.getScriptProperties();
+  var sec = props.getProperty('STUDENT_SESSION_SECRET');
+  if (!sec) {
+    sec = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('STUDENT_SESSION_SECRET', sec);
+  }
+  return sec;
+}
+
+function b64url_(str) {
+  return Utilities.base64EncodeWebSafe(str, Utilities.Charset.UTF_8).replace(/=+$/, '');
+}
+
+function signSession_(body) {
+  return toHex_(Utilities.computeHmacSha256Signature(body, getSessionSecret_(), Utilities.Charset.UTF_8));
+}
+
+// pv = เวลาตั้ง PIN: เมื่อครูรีเซ็ต PIN โทเค็นเก่าจะใช้ไม่ได้ทันที
+function issueSessionToken_(rec) {
+  var exp = Date.now() + STUDENT_SESSION_DAYS * 86400000;
+  var body = b64url_(JSON.stringify({ sid: cleanId_(rec.student_id), exp: exp, pv: String(rec.pin_set_at || '') }));
+  return { token: body + '.' + signSession_(body), exp: exp };
+}
+
+function withSession_(res, rec) {
+  var t = issueSessionToken_(rec);
+  res.sessionToken = t.token;
+  res.sessionExp = t.exp;
+  return res;
+}
+
+function safeEqual_(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  var d = 0;
+  for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+/** ตรวจโทเค็น คืน { rec } หรือ { error } */
+function verifySessionToken_(ss, token) {
+  var parts = String(token || '').split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return { error: 'bad_session' };
+  if (!safeEqual_(signSession_(parts[0]), parts[1])) return { error: 'bad_session' };
+  var claims;
+  try {
+    var pad = parts[0] + '==='.slice((parts[0].length + 3) % 4);
+    claims = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(pad)).getDataAsString());
+  } catch (e) { return { error: 'bad_session' }; }
+  if (!claims || !claims.sid || Number(claims.exp) < Date.now()) return { error: 'session_expired' };
+  var rec = findStudentRow_(getStudentSheet_(ss), cleanId_(claims.sid));
+  if (!rec || !rec.pin_hash || String(rec.pin_set_at || '') !== String(claims.pv || '')) return { error: 'session_expired' };
+  return { rec: rec };
+}
+
+function str_(v, max) { return String(v === undefined || v === null ? '' : v).slice(0, max); }
+
+function validateSubmission_(it) {
+  if (!it || typeof it !== 'object') return 'invalid';
+  var cid = String(it.clientId || '');
+  if (!/^[A-Za-z0-9_.:-]{8,80}$/.test(cid)) return 'bad_client_id';
+  var d = it.data || {};
+  if (it.kind === 'assignment') {
+    var p = Number(d.period);
+    if (!(p >= 1 && p <= 40 && Math.floor(p) === p)) return 'bad_period';
+    if (String(d.content || '').length > 5000) return 'too_long';
+    if (d.url && (!/^https?:\/\//i.test(String(d.url)) || String(d.url).length > 500)) return 'bad_url';
+    if (!d.content && !d.url) return 'empty';
+    return '';
+  }
+  if (it.kind === 'quiz') {
+    var u = Number(d.unitNo), sc = Number(d.score), tot = Number(d.totalQuestions);
+    if (!(u >= 1 && u <= 10 && Math.floor(u) === u)) return 'bad_unit';
+    if (!(tot >= 1 && tot <= 100) || !(sc >= 0 && sc <= tot)) return 'bad_score';
+    return '';
+  }
+  return 'bad_kind';
+}
+
+function studentSubmit_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var rec = v.rec;
+  var sid = cleanId_(rec.student_id);           // รหัสนักเรียนมาจากโทเค็นเท่านั้น ไม่เชื่อค่าจากเครื่อง
+  var items = payload.items;
+  if (!items || Object.prototype.toString.call(items) !== '[object Array]') return { status: 'error', code: 'invalid', message: 'รูปแบบข้อมูลไม่ถูกต้อง' };
+  if (items.length > STUDENT_MAX_ITEMS) return { status: 'error', code: 'too_many', message: 'ส่งได้ครั้งละไม่เกิน ' + STUDENT_MAX_ITEMS + ' รายการ' };
+
+  var inbox = getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS);
+  var existing = {};
+  var vals = inbox.getDataRange().getValues();
+  for (var r = 1; r < vals.length; r++) existing[cleanId_(vals[r][3]) + '|' + String(vals[r][2])] = true;
+
+  var cache = CacheService.getScriptCache();
+  var rlKey = 'stu_submit_' + sid + '_' + Math.floor(Date.now() / 3600000);
+  var used = Number(cache.get(rlKey) || 0);
+
+  var accepted = [], duplicates = [], rejected = [];
+  var profile = publicProfile_(rec);
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var cid = it && it.clientId ? String(it.clientId) : '';
+    var err = validateSubmission_(it);
+    if (err) { rejected.push({ clientId: cid, reason: err }); continue; }
+    if (existing[sid + '|' + cid]) { duplicates.push(cid); continue; }  // ส่งซ้ำ = สำเร็จ (idempotent)
+    if (used >= STUDENT_SUBMIT_PER_HOUR) { rejected.push({ clientId: cid, reason: 'rate_limited' }); continue; }
+    used++;
+    var d = it.data || {};
+    var now = new Date();
+    var isQuiz = it.kind === 'quiz';
+    var pct = isQuiz ? Math.round(Number(d.score) / Number(d.totalQuestions) * 100) : '';
+    inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, it.kind,
+      isQuiz ? Number(d.unitNo) : Number(d.period),
+      isQuiz ? '' : str_(d.content, 5000), isQuiz ? '' : str_(d.url, 500),
+      isQuiz ? Number(d.score) : '', isQuiz ? Number(d.totalQuestions) : '', pct,
+      isQuiz ? Math.max(0, Math.min(86400, Number(d.timeSpentSeconds) || 0)) : '',
+      str_(d.submissionType, 40), str_(isQuiz ? d.unitTitle : d.title, 200), str_(d.clientTime, 40)]);
+    existing[sid + '|' + cid] = true;
+    // เขียนลงชีตเดิมที่ครูใช้อยู่ด้วย (ชื่อ/ห้องมาจากรายชื่อในชีต ไม่ใช่จากเครื่องนักเรียน)
+    if (isQuiz) {
+      processSyncItem(ss, { type: 'quiz_result', data: { unitNo: Number(d.unitNo), unitTitle: str_(d.unitTitle, 200), studentId: sid,
+        studentName: profile.name, studentClass: profile.studentClass, studentNo: profile.no, score: Number(d.score),
+        totalQuestions: Number(d.totalQuestions), percentage: pct, timeSpentSeconds: Number(d.timeSpentSeconds) || 0 } });
+    } else {
+      processSyncItem(ss, { type: 'submission', data: { className: profile.studentClass, period: Number(d.period), studentId: sid,
+        studentName: profile.name, submissionType: str_(d.submissionType, 40) || 'งานนักเรียน (มือถือ)', songTitle: str_(d.title, 200),
+        content: str_(d.content, 5000), url: str_(d.url, 500) } });
+    }
+    accepted.push(cid);
+  }
+  cache.put(rlKey, String(used), 3700);
+  return { status: 'success', accepted: accepted, duplicates: duplicates, rejected: rejected };
+}
+
+/** ครูดึงงานที่นักเรียนส่งจากมือถือ (เฉพาะที่ใหม่กว่า since) */
+function fetchStudentSubmissions(ss, since, limit) {
+  var vals = getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS).getDataRange().getValues();
+  var out = [], next = since || 0;
+  limit = Math.max(1, Math.min(limit || 500, 1000));
+  for (var r = 1; r < vals.length && out.length < limit; r++) {
+    var ms = Number(vals[r][1]);
+    if (!(ms > (since || 0))) continue;
+    var o = {};
+    for (var c = 0; c < STUDENT_INBOX_HEADERS.length; c++) o[STUDENT_INBOX_HEADERS[c]] = vals[r][c];
+    o.student_id = cleanId_(o.student_id);
+    out.push(o);
+    if (ms > next) next = ms;
+  }
+  return { status: 'success', submissions: out, nextSince: next, more: out.length >= limit };
 }

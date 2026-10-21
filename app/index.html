@@ -73,6 +73,9 @@
       <div class="header-actions">
         <!-- Teacher Actions Group -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <button id="btn-pull-student-work" class="btn-nav-action" style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; font-weight: 700;" onclick="TeacherPull.pull()" title="ดึงงานและคะแนนแบบทดสอบที่นักเรียนส่งจากมือถือ เข้าหน้าตรวจงาน">
+            📥 <span class="hide-on-tablet">ดึงงานนักเรียน</span>
+          </button>
           <button id="btn-copy-student-link" class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700;" onclick="App.copyStudentShareLink()" title="คัดลอกลิงก์ส่งให้นักเรียนเพื่อเข้าสู่ระบบและติดตั้งแอปทันที">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span class="hide-on-tablet">ลิงก์ส่งนักเรียน</span>
@@ -3504,6 +3507,7 @@
   <script src="data/store.js?v=20261020_03"></script>
   <script src="js/student-auth.js?v=20261021_02"></script>
   <script src="js/pwa-install.js?v=20261021_02"></script>
+  <script src="js/student-submit.js?v=20261021_03"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>
@@ -3512,7 +3516,7 @@
   <script src="js/car-analytics.js?v=20261020_03"></script>
   <script src="js/official-forms.js?v=20261020_03"></script>
   <script src="js/virtual-kalimba.js?v=20261020_03"></script>
-  <script src="js/app.js?v=20261021_02"></script>
+  <script src="js/app.js?v=20261021_03"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>

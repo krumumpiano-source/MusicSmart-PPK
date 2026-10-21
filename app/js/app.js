@@ -74,6 +74,8 @@ const App = {
       this.renderTodaySchedule();
       this.renderTeacherTodoList();
       this.renderDashboard();
+      // ดึงงานที่นักเรียนส่งจากมือถืออัตโนมัติเมื่อเปิดแอป (ถ้าตั้งค่าซิงค์แล้ว)
+      if (typeof TeacherPull !== 'undefined' && TeacherPull.isConfigured()) setTimeout(() => TeacherPull.pull({ silent: true }), 1500);
     }
 
     this.initModalManager();
@@ -1331,13 +1333,14 @@ const App = {
       // Check current period assignment
       const currentPeriodKey = `${className}_p${this.state.studentPeriod}_${studentId}`;
       const curSub = allSubmissions[currentPeriodKey];
+      const st = this.studentTaskStatus(className, this.state.studentPeriod, !!curSub);
       todos.push({
         period: this.state.studentPeriod,
         title: `แบบฝึกหัดคาบที่ ${this.state.studentPeriod}`,
-        subtitle: curSub ? 'ส่งงานเรียบร้อยแล้ว' : 'ส่งคำตอบในหน้าบทเรียนนี้',
-        status: curSub ? 'done' : 'pending',
-        statusLabel: curSub ? 'ส่งแล้ว ✅' : 'รอส่ง ⏳',
-        statusClass: curSub ? 'badge-success' : 'badge-warning'
+        subtitle: st.subtitle,
+        status: st.state,
+        statusLabel: st.label,
+        statusClass: st.cls
       });
 
       todos.forEach(t => {
@@ -1414,9 +1417,12 @@ const App = {
     if (sub) {
       if (textInput) textInput.value = sub.content || '';
       if (urlInput) urlInput.value = sub.url || '';
-      if (timestampEl) timestampEl.innerHTML = `<span style="color: #16a34a; font-weight: 600;">✅ ส่งงานสำเร็จเมื่อ: ${sub.submittedAt}</span>`;
+      const st = this.studentTaskStatus(className, this.state.studentPeriod, true);
+      if (timestampEl) timestampEl.innerHTML = st.state === 'sent' || st.state === 'done'
+        ? `<span style="color: #16a34a; font-weight: 600;">✅ ส่งงานสำเร็จเมื่อ: ${this.escapeHtml(sub.submittedAt)}</span>`
+        : `<span style="color: ${st.state === 'failed' ? '#dc2626' : '#d97706'}; font-weight: 600;">${this.escapeHtml(st.subtitle)}</span>`;
       if (statusChipEl) {
-        statusChipEl.innerHTML = `<span class="badge-success" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">ส่งงานแล้ว</span>`;
+        statusChipEl.innerHTML = `<span class="${st.cls}" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">${this.escapeHtml(st.label)}</span>`;
       }
     } else {
       if (textInput) textInput.value = '';
@@ -1497,8 +1503,13 @@ const App = {
         `;
       }
 
+      if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive()) {
+        const qs = StudentOutbox.statusFor(StudentOutbox.quizKey(unitNo));
+        if (qs) btnsHtml += `<span class="${qs.cls}" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; align-self: center;">แบบทดสอบ: ${this.escapeHtml(qs.label)}</span>`;
+      }
       quizActionButtons.innerHTML = btnsHtml;
     }
+    if (typeof StudentOutbox !== 'undefined') StudentOutbox.render();
   },
 
   onStudentFileSelected(input) {
@@ -1555,7 +1566,22 @@ const App = {
       }
     }
 
-    const subType = hasFile ? (url ? 'file_and_url' : 'file_upload') : (url ? 'mixed' : 'text');
+    const remoteMode = (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive());
+    if (remoteMode && hasFile) {
+      alert('📎 การส่งจากมือถือยังไม่รองรับไฟล์แนบ\nกรุณาอัปโหลดไฟล์/คลิปไว้ที่ Google Drive หรือ YouTube แล้ววางลิงก์ในช่องลิงก์ผลงานแทน');
+      if (!content && !url) return;
+      fileBase64 = ''; fileName = ''; mimeType = ''; fileSize = 0;
+    }
+    if (remoteMode && url && !/^https?:\/\//i.test(url)) {
+      alert('ลิงก์ผลงานต้องขึ้นต้นด้วย http:// หรือ https://');
+      return;
+    }
+    if (remoteMode && content.length > 5000) {
+      alert('คำตอบยาวเกิน 5,000 ตัวอักษร กรุณาย่อให้สั้นลง');
+      return;
+    }
+
+    const subType = (hasFile && !remoteMode) ? (url ? 'file_and_url' : 'file_upload') : (url ? 'mixed' : 'text');
 
     Store.saveStudentSubmission(
       this.state.studentClass,
@@ -1572,8 +1598,24 @@ const App = {
       }
     );
 
-    alert(`🎉 ส่งงานประจำคาบที่ ${this.state.studentPeriod} เรียบร้อยแล้วครับ!\nระบบกำลังบันทึกข้อมูลและส่งเข้า Google Sheet / Google Drive ให้คุณครู`);
+    alert(remoteMode
+      ? `📤 บันทึกงานคาบที่ ${this.state.studentPeriod} แล้ว กำลังส่งให้คุณครู\nดูสถานะได้ที่ป้าย ส่งแล้ว / รอส่ง / ส่งไม่สำเร็จ (ถ้าออฟไลน์ ระบบจะส่งให้อัตโนมัติเมื่อต่อเน็ต)`
+      : `🎉 ส่งงานประจำคาบที่ ${this.state.studentPeriod} เรียบร้อยแล้วครับ!\nระบบกำลังบันทึกข้อมูลและส่งเข้า Google Sheet / Google Drive ให้คุณครู`);
     this.renderStudentPortal();
+  },
+
+  // สถานะงานของนักเรียน: ส่งแล้ว / รอส่ง / ส่งไม่สำเร็จ
+  studentTaskStatus(className, period, hasLocal) {
+    const remote = (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive())
+      ? StudentOutbox.statusFor(StudentOutbox.assignmentKey(className, period)) : null;
+    if (remote) {
+      const sub = remote.state === 'sent' ? 'ครูได้รับงานแล้ว'
+        : remote.state === 'failed' ? (remote.message || 'ส่งไม่สำเร็จ จะลองใหม่อัตโนมัติ')
+        : 'บันทึกในเครื่องแล้ว กำลังส่งให้ครู';
+      return { state: remote.state, label: remote.label, cls: remote.cls, subtitle: sub };
+    }
+    if (hasLocal) return { state: 'done', label: 'ส่งแล้ว ✅', cls: 'badge-success', subtitle: 'ส่งงานเรียบร้อยแล้ว' };
+    return { state: 'todo', label: 'ยังไม่ส่ง', cls: 'badge-warning', subtitle: 'ส่งคำตอบในหน้าบทเรียนนี้' };
   },
 
   buildStudentStudyGuideHTML(gradeKey, period, lesson) {
@@ -2787,7 +2829,7 @@ const App = {
             <div style="white-space: pre-wrap;">${this.escapeHtml(sub.content || '(ไม่มีข้อความ)')}</div>
             ${sub.fileName ? `<div style="margin-top: 6px; font-size: 0.82rem; font-weight: 600; color: #0284c7;">📎 ไฟล์แนบ: ${this.escapeHtml(sub.fileName)}</div>` : ''}
             ${sub.url ? `<div style="margin-top: 6px;"><a href="${this.escapeHtml(sub.url)}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">🔗 เปิดลิงก์ผลงาน / คลิปวิดีโอของนักเรียน</a></div>` : ''}
-            <div style="font-size: 0.72rem; color: #059669; margin-top: 6px;">ส่งเมื่อ: ${this.escapeHtml(sub.submittedAt)}</div>
+            <div style="font-size: 0.72rem; color: #059669; margin-top: 6px;">ส่งเมื่อ: ${this.escapeHtml(sub.submittedAt)}${sub.source === 'student_device' ? ' • 📱 ส่งจากมือถือนักเรียน' : ''}${sub.late ? ' <span class="badge-danger" style="font-size:0.7rem;padding:1px 6px;border-radius:4px;">ส่งช้า</span>' : ''}</div>
           </div>
         `;
 

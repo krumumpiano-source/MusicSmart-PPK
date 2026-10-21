@@ -37,8 +37,10 @@ const StudentAuth = {
     return res.json();
   },
 
-  _sessionFromProfile(p) {
+  _sessionFromProfile(p, r) {
     return {
+      sessionToken: (r && r.sessionToken) || '',
+      sessionExp: (r && r.sessionExp) || 0,
       role: 'student',
       studentId: String(p.studentId),
       studentClass: p.studentClass,
@@ -80,7 +82,7 @@ const StudentAuth = {
     try {
       const r = await this._post({ action, studentId: id, pin: p });
       if (r.status !== 'success') return { success: false, code: r.code, message: r.message, needsRegistration: r.code === 'needs_pin', mode: 'server' };
-      const user = this._sessionFromProfile(r.profile);
+      const user = this._sessionFromProfile(r.profile, r);
       Store.setCurrentUser(user);
       return { success: true, user, mode: 'server' };
     } catch (e) {
