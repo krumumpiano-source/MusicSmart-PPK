@@ -53,9 +53,12 @@ assert.deepStrictEqual(r.duplicates, ['c_test_0001']); assert.strictEqual(inbox(
 r = call({ action: 'studentSubmit', sessionToken: tok2, items: [asg('c_test_0001')] });
 assert.deepStrictEqual(r.accepted, ['c_test_0001']);
 
-// quiz goes to quiz sheet
-r = call({ action: 'studentSubmit', sessionToken: tok1, items: [{ clientId: 'q_test_0001', kind: 'quiz', data: { unitNo: 2, score: 8, totalQuestions: 10, timeSpentSeconds: 300 } }] });
-assert.deepStrictEqual(r.accepted, ['q_test_0001']);
+// quiz: client-scored results are refused; server grades answers from the uploaded bank
+assert.strictEqual(call({ action: 'studentSubmit', sessionToken: tok1, items: [{ clientId: 'q_test_0000', kind: 'quiz', data: { unitNo: 2, score: 10, totalQuestions: 10 } }] }).rejected[0].reason, 'bad_kind');
+call({ action: 'upload_quiz_bank', token: T, units: [{ unit_no: 2, title: 'หน่วยตัวอย่าง', questions: Array.from({ length: 10 }, (_, i) => ({ id: 'Q2-' + i, question: 'คำถามตัวอย่าง ' + i, choices: [{ key: 'ก', text: 'หนึ่ง' }, { key: 'ข', text: 'สอง' }], correct: i < 8 ? 'ก' : 'ข' })) }] });
+const answers = {}; for (let i = 0; i < 10; i++) answers['Q2-' + i] = 'ก';
+r = call({ action: 'studentSubmit', sessionToken: tok1, items: [{ clientId: 'q_test_0001', kind: 'quiz_answers', data: { unitNo: 2, answers, timeSpentSeconds: 300, score: 10 } }] });
+assert.deepStrictEqual(r.accepted, ['q_test_0001']); assert.strictEqual(r.results.q_test_0001.score, 8, 'server-graded, client score ignored');
 assert.strictEqual(sheets['คะแนนแบบทดสอบ_Quiz']._data()[1][3], '90001');
 
 // validation
@@ -64,7 +67,7 @@ assert.strictEqual(bad(asg('c_test_0002', { content: 'x'.repeat(5001) })), 'too_
 assert.strictEqual(bad(asg('c_test_0003', { url: 'javascript:alert(1)' })), 'bad_url');
 assert.strictEqual(bad(asg('c_test_0004', { period: 99 })), 'bad_period');
 assert.strictEqual(bad(asg('short')), 'bad_client_id');
-assert.strictEqual(bad({ clientId: 'q_test_0002', kind: 'quiz', data: { unitNo: 1, score: 50, totalQuestions: 10 } }), 'bad_score');
+assert.strictEqual(bad({ clientId: 'q_test_0002', kind: 'quiz_answers', data: { unitNo: 1, answers: {} } }), 'no_quiz');
 assert.strictEqual(bad({ clientId: 'f_test_0002', kind: 'file', data: {} }), 'bad_kind');
 assert.strictEqual(callRaw(JSON.stringify({ action: 'studentSubmit', sessionToken: tok1, items: [asg('c_test_0005', { content: 'x'.repeat(70000) })] })).code, 'too_large');
 assert.strictEqual(call({ action: 'studentSubmit', sessionToken: tok1, items: Array.from({ length: 21 }, (_, i) => asg('c_many_' + (1000 + i))) }).code, 'too_many');

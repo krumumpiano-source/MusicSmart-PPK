@@ -44,7 +44,7 @@ const StudentOutbox = {
     if (!u) return null;
     // ส่งใหม่ในงานเดิม = แทนที่รายการที่ยังรอส่ง (ฉบับล่าสุดเท่านั้น)
     const items = this.getItems().filter(it => it.taskKey !== taskKey);
-    const item = { clientId: this.newClientId(kind, u.studentId), kind, taskKey, data: Object.assign({}, data, { clientTime: new Date().toISOString() }), queuedAt: new Date().toISOString(), attempts: 0 };
+    const item = { clientId: this.newClientId(kind === 'quiz_answers' ? 'quiz' : kind, u.studentId), kind, taskKey, data: Object.assign({}, data, { clientTime: new Date().toISOString() }), queuedAt: new Date().toISOString(), attempts: 0 };
     items.push(item);
     this.saveItems(items);
     this.setStatus(taskKey, 'pending');
@@ -56,7 +56,7 @@ const StudentOutbox = {
   statusFor(taskKey) {
     const s = this.getStatuses()[taskKey];
     if (!s) return null;
-    if (s.state === 'sent') return { state: 'sent', label: 'ส่งแล้ว ✅', cls: 'badge-success', at: s.at };
+    if (s.state === 'sent') return { state: 'sent', label: 'ส่งแล้ว ✅', cls: 'badge-success', at: s.at, result: s.result };
     if (s.state === 'failed') return { state: 'failed', label: s.permanent ? 'ส่งไม่สำเร็จ ❌' : 'ส่งไม่สำเร็จ (จะลองใหม่) ⚠️', cls: 'badge-danger', message: s.message };
     return { state: 'pending', label: 'รอส่ง ⏳', cls: 'badge-warning' };
   },
@@ -64,7 +64,14 @@ const StudentOutbox = {
   sessionValid(u) { return !!(u && u.sessionToken && (!u.sessionExp || Number(u.sessionExp) > Date.now())); },
 
   async flush() {
-    if (this.flushing || !this.isActive()) return { skipped: true };
+    // ถ้ากำลังส่งอยู่ รอรอบนั้นเสร็จแล้วส่งรายการที่เหลือ
+    if (this.flushing && this._inflight) { await this._inflight.catch(() => {}); return this.flush(); }
+    if (!this.isActive()) return { skipped: true };
+    this._inflight = this._flushOnce();
+    try { return await this._inflight; } finally { this._inflight = null; }
+  },
+
+  async _flushOnce() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.render(); return { offline: true }; }
     const u = this.currentStudent();
     const items = this.getItems();
@@ -85,8 +92,13 @@ const StudentOutbox = {
       const rejected = {};
       (r.rejected || []).forEach(x => { rejected[x.clientId] = x.reason; });
       const remaining = [];
+      const results = r.results || {};
       this.getItems().forEach(it => {
-        if (done.has(it.clientId)) { this.setStatus(it.taskKey, 'sent'); return; }
+        if (done.has(it.clientId)) {
+          this.setStatus(it.taskKey, 'sent', results[it.clientId] ? { result: results[it.clientId] } : undefined);
+          if (results[it.clientId] && typeof this.onResult === 'function') { try { this.onResult(it, results[it.clientId]); } catch (e) { /* ignore */ } }
+          return;
+        }
         const reason = rejected[it.clientId];
         if (reason && reason !== 'rate_limited') {
           this.setStatus(it.taskKey, 'failed', { permanent: true, message: this.reasonText(reason) });
@@ -112,7 +124,24 @@ const StudentOutbox = {
 
   reasonText(code) {
     return ({ too_long: 'คำตอบยาวเกิน 5,000 ตัวอักษร', bad_url: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://', empty: 'ไม่มีคำตอบหรือลิงก์',
-      bad_period: 'คาบเรียนไม่ถูกต้อง', bad_score: 'คะแนนไม่ถูกต้อง' })[code] || 'ข้อมูลไม่ถูกต้อง';
+      bad_period: 'คาบเรียนไม่ถูกต้อง', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้' })[code] || 'ข้อมูลไม่ถูกต้อง';
+  },
+
+  TASKS_KEY: 'ppk_student_tasks',
+  getTasks() { return this._load(this.TASKS_KEY, { dueDates: [] }); },
+  dueFor(className, period) {
+    const d = (this.getTasks().dueDates || []).find(x => x.className === className && Number(x.period) === Number(period));
+    return d ? d.dueAt : '';
+  },
+  async refreshTasks() {
+    const u = this.currentStudent();
+    if (!this.isActive() || !this.sessionValid(u)) return null;
+    try {
+      const r = await StudentAuth._post({ action: 'studentTasks', sessionToken: u.sessionToken });
+      if (r.status === 'success') { this._save(this.TASKS_KEY, { dueDates: r.dueDates || [], fetchedAt: new Date().toISOString() }); return r; }
+      if (r.code === 'session_expired' || r.code === 'bad_session') this.needsReauth = true;
+    } catch (e) { /* offline: keep cache */ }
+    return null;
   },
 
   async reauth(pin) {
@@ -167,7 +196,27 @@ const StudentOutbox = {
       window.addEventListener('online', () => this.flush());
       window.addEventListener('offline', () => this.render());
     }
-    setTimeout(() => this.flush(), 2000);
+    setTimeout(() => { this.flush(); this.refreshTasks(); }, 2000);
+  }
+};
+
+// กำหนดส่งงาน (ครูตั้งต่อห้อง/คาบ) เก็บในเครื่องครูและส่งขึ้นเซิร์ฟเวอร์
+const DueDates = {
+  KEY: 'ppk_due_dates',
+  all() { try { return JSON.parse(localStorage.getItem(this.KEY) || '{}'); } catch (e) { return {}; } },
+  get(className, period) { return this.all()[`${className}_p${period}`] || null; },
+  async set(className, period, dueAt, title) {
+    const all = this.all();
+    const k = `${className}_p${period}`;
+    if (dueAt) all[k] = { className, period: Number(period), dueAt: new Date(dueAt).toISOString(), title: title || '' };
+    else delete all[k];
+    localStorage.setItem(this.KEY, JSON.stringify(all));
+    if (TeacherPull.isConfigured()) {
+      const cfg = GoogleSheetSync.getConfig();
+      await GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'set_due_date', className, period: Number(period), dueAt: dueAt ? new Date(dueAt).toISOString() : '', title: title || '' });
+      return { success: true, server: true };
+    }
+    return { success: true, server: false };
   }
 };
 
@@ -187,7 +236,11 @@ const TeacherPull = {
   },
 
   // ส่งช้า: ได้รับหลังวันที่ครูบันทึกคาบนั้นเกิน LATE_DAYS วัน (ถ้ามีบันทึกคาบ)
-  isLate(className, period, receivedIso) {
+  isLate(className, period, receivedIso, row) {
+    if (row && row.due_at) return row.late === true || String(row.late).toUpperCase() === 'TRUE';
+    const due = DueDates.get(className, period);
+    if (due) return new Date(receivedIso).getTime() > new Date(due.dueAt).getTime();
+    // ไม่มีกำหนดส่ง: ใช้เกณฑ์เดิม (หลังบันทึกคาบนั้นเกิน 7 วัน)
     if (typeof Store === 'undefined' || !Store.getAllSessions) return false;
     const sess = Store.getAllSessions()[Store.getSessionKey(className, period)];
     const base = sess && (sess.updatedAt || sess.savedAt || sess.createdAt);
@@ -212,18 +265,18 @@ const TeacherPull = {
           submissionType: r.submission_type || 'งานนักเรียน (มือถือ)',
           content: String(r.content || ''), url: String(r.url || ''),
           submittedAt: this.thaiTime(r.received_at), receivedAt: r.received_at,
-          source: 'student_device', late: this.isLate(cls, no, r.received_at), status: 'submitted',
+          source: 'student_device', late: this.isLate(cls, no, r.received_at, r), dueAt: r.due_at || (DueDates.get(cls, no) || {}).dueAt || '', status: 'submitted',
           score: prev.score !== undefined ? prev.score : null, feedback: prev.feedback || ''
         });
         subs++;
-      } else if (r.kind === 'quiz') {
+      } else if (r.kind === 'quiz') { // คะแนนที่ตรวจบนเซิร์ฟเวอร์
         const qkey = `music_quiz_${sid}_u${no}`;
         let prev = null;
         try { prev = JSON.parse(localStorage.getItem(qkey) || 'null'); } catch (e) { prev = null; }
         if (prev && prev.receivedAt && prev.receivedAt >= r.received_at) return;
         const total = Number(r.total) || 0;
         localStorage.setItem(qkey, JSON.stringify(Object.assign({}, prev || {}, {
-          submitted: true, unitNo: no, score: Number(r.score) || 0, maxScore: total, totalQuestions: total,
+          submitted: true, details: (prev && prev.details) || [], serverGraded: true, unitNo: no, score: Number(r.score) || 0, maxScore: total, totalQuestions: total,
           percentage: Number(r.percentage) || 0, timeSpentSeconds: Number(r.time_spent_sec) || 0,
           submittedAt: this.thaiTime(r.received_at), receivedAt: r.received_at, source: 'student_device'
         })));
@@ -233,6 +286,16 @@ const TeacherPull = {
     // บันทึกตรงโดยไม่ส่งกลับขึ้นชีตซ้ำ (ข้อมูลอยู่ในชีตแล้ว)
     Store.save('ppk_student_submissions', all);
     return { subs, quizzes };
+  },
+
+  // อัปโหลดคลังข้อสอบ (มีเฉลย) ขึ้นชีตของครู เพื่อให้เซิร์ฟเวอร์ตรวจคะแนนนักเรียน
+  async uploadQuizBank() {
+    if (!this.isConfigured()) throw new Error('กรุณาตั้งค่า URL และรหัสซิงค์ก่อน');
+    if (typeof QUIZZES_DATA === 'undefined') throw new Error('ไม่พบคลังข้อสอบ');
+    const cfg = GoogleSheetSync.getConfig();
+    const units = QUIZZES_DATA.units.map(u => ({ unit_no: u.unit_no, title: u.title,
+      questions: u.questions.map(q => ({ id: q.id, question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation, bloom: q.bloom })) }));
+    return GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'upload_quiz_bank', units });
   },
 
   async pull(opts = {}) {
@@ -271,4 +334,4 @@ const TeacherPull = {
 };
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.addEventListener) StudentOutbox.init();
-if (typeof module !== 'undefined' && module.exports) module.exports = { StudentOutbox, TeacherPull };
+if (typeof module !== 'undefined' && module.exports) module.exports = { StudentOutbox, TeacherPull, DueDates };

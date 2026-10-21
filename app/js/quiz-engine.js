@@ -129,6 +129,8 @@ const QuizEngine = {
   },
 
   openQuizModal(unitNo = 1, studentId = null) {
+    // มือถือนักเรียน (โหมดเซิร์ฟเวอร์): ใช้ข้อสอบจากเซิร์ฟเวอร์ ไม่ใช้เฉลยใน quizzes.js
+    if (typeof ServerQuiz !== 'undefined' && ServerQuiz.shouldUse()) return ServerQuiz.open(unitNo);
     this.loadSettings();
     const modal = document.getElementById('modal-quiz');
     if (!modal) return;

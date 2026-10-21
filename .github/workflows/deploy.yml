@@ -47,6 +47,7 @@ jobs:
           node tests/test_student_portal.js
           node tests/test_student_submit_gas.js
           node tests/test_student_submit_client.js
+          for t in tests/test_phase*.js; do node "$t"; done
 
   deploy:
     needs: test

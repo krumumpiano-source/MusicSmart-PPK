@@ -1615,6 +1615,12 @@ const App = {
       return { state: remote.state, label: remote.label, cls: remote.cls, subtitle: sub };
     }
     if (hasLocal) return { state: 'done', label: 'ส่งแล้ว ✅', cls: 'badge-success', subtitle: 'ส่งงานเรียบร้อยแล้ว' };
+    const due = (typeof StudentOutbox !== 'undefined') ? StudentOutbox.dueFor(className, period) : '';
+    if (due) {
+      const overdue = Date.now() > new Date(due).getTime();
+      return { state: 'todo', label: overdue ? 'เลยกำหนดส่ง' : 'ยังไม่ส่ง', cls: overdue ? 'badge-danger' : 'badge-warning',
+        subtitle: `กำหนดส่ง ${new Date(due).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short' })}` };
+    }
     return { state: 'todo', label: 'ยังไม่ส่ง', cls: 'badge-warning', subtitle: 'ส่งคำตอบในหน้าบทเรียนนี้' };
   },
 
@@ -2128,6 +2134,44 @@ const App = {
       };
       reader.readAsText(file, 'utf-8');
     }
+  },
+
+  async uploadQuizBankToServer() {
+    try {
+      const r = await TeacherPull.uploadQuizBank();
+      alert(`✅ อัปโหลดคลังข้อสอบแล้ว ${r.questions} ข้อ (${r.units} หน่วย)\nนักเรียนจะทำแบบทดสอบโดยไม่เห็นเฉลย และเซิร์ฟเวอร์ตรวจคะแนนให้`);
+    } catch (err) { alert('❌ ' + err.message); }
+  },
+
+  // แถบกำหนดส่งงานของคาบนี้ (หน้าตรวจงาน)
+  renderDueDateBar(className, period, listEl) {
+    if (typeof DueDates === 'undefined' || !listEl || !listEl.parentNode) return;
+    let bar = document.getElementById('submissions-due-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'submissions-due-bar';
+      bar.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:0.6rem 0.85rem;margin-bottom:0.75rem;font-size:0.85rem;';
+      listEl.parentNode.insertBefore(bar, listEl);
+    }
+    const due = DueDates.get(className, period);
+    const local = due ? new Date(new Date(due.dueAt).getTime() + 7 * 3600000).toISOString().slice(0, 16) : '';
+    bar.innerHTML = `<strong>📅 กำหนดส่งงานคาบที่ ${this.escapeHtml(period)}:</strong>
+      <input type="datetime-local" id="due-date-input" class="form-input" style="max-width:220px;padding:0.3rem 0.5rem;" value="${local}">
+      <button type="button" class="btn-nav-action primary" id="due-date-save">บันทึก</button>
+      ${due ? '<button type="button" class="btn-nav-action" id="due-date-clear">ล้าง</button>' : ''}
+      <span style="color:#475569;">${due ? 'ส่งหลังเวลานี้ = ส่งช้า' : 'ยังไม่ตั้ง (ใช้เกณฑ์เดิม: หลังบันทึกคาบเกิน 7 วัน)'}</span>`;
+    const save = async (val) => {
+      try {
+        // ค่าที่กรอกเป็นเวลาไทย (UTC+7)
+        const iso = val ? new Date(val + ':00+07:00').toISOString() : '';
+        const r = await DueDates.set(className, period, iso, `งานคาบที่ ${period}`);
+        GoogleSheetSync.showToast(r.server ? '✅ บันทึกกำหนดส่งแล้ว (ส่งขึ้นเซิร์ฟเวอร์แล้ว)' : '✅ บันทึกกำหนดส่งในเครื่องนี้แล้ว', 'success');
+      } catch (e) { alert('⚠️ บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ: ' + e.message); }
+      this.renderSubmissionsTab();
+    };
+    document.getElementById('due-date-save').onclick = () => save(document.getElementById('due-date-input').value);
+    const clr = document.getElementById('due-date-clear');
+    if (clr) clr.onclick = () => save('');
   },
 
   async uploadRosterToServer(replace = false) {
@@ -2750,6 +2794,7 @@ const App = {
 
     if (!listEl) return;
     listEl.innerHTML = '';
+    this.renderDueDateBar(className, period, listEl);
 
     let submittedCount = 0;
     const allItems = [];

@@ -303,12 +303,8 @@ const GoogleSheetSync = {
    * ซิงค์คะแนนแบบทดสอบท้ายหน่วย Quiz
    */
   syncQuizResult(quizData) {
-    if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive()) {
-      return StudentOutbox.enqueue('quiz', StudentOutbox.quizKey(quizData.unitNo || 1), {
-        unitNo: Number(quizData.unitNo || 1), unitTitle: quizData.unitTitle || '', score: Number(quizData.score) || 0,
-        totalQuestions: Number(quizData.totalQuestions) || 10, timeSpentSeconds: Number(quizData.timeSpentSeconds) || 0
-      });
-    }
+    // มือถือนักเรียน: คะแนนต้องตรวจบนเซิร์ฟเวอร์เท่านั้น (ServerQuiz) ไม่ส่งคะแนนที่คิดในเครื่อง
+    if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive()) return null;
     return this.enqueue('quiz_result', {
       unitNo: quizData.unitNo || 1,
       unitTitle: quizData.unitTitle || `หน่วยการเรียนรู้ที่ ${quizData.unitNo || 1}`,
@@ -926,6 +922,9 @@ function doPost(e) {
     if (action === 'upload_roster') return jsonOut(uploadStudentRoster(ss, payload.students || [], !!payload.replace));
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
+    if (action === 'fetch_due_dates') return jsonOut({ status: 'success', dueDates: listDueDates_(ss, payload.className || '') });
+    if (action === 'set_due_date') return jsonOut(setDueDate(ss, payload));
+    if (action === 'upload_quiz_bank') return jsonOut(uploadQuizBank(ss, payload.units || []));
     if (action === 'fetch_student_submissions') return jsonOut(fetchStudentSubmissions(ss, Number(payload.since || 0), Number(payload.limit || 500)));
 
     // 2. การซิงค์แบบเป็นกลุ่ม (Batch Sync จาก Outbox)
@@ -1234,14 +1233,18 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks'];
 var STUDENT_MAX_BODY = 60000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
 var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
 var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
 var STUDENT_MAX_ITEMS = 20;            // รายการต่อคำขอ
 var STUDENT_INBOX_SHEET = 'นักเรียนส่งงาน_Inbox';
 var STUDENT_INBOX_HEADERS = ['received_at', 'received_ms', 'client_id', 'student_id', 'class', 'kind', 'period_or_unit',
-  'content', 'url', 'score', 'total', 'percentage', 'time_spent_sec', 'submission_type', 'title', 'client_time'];
+  'content', 'url', 'score', 'total', 'percentage', 'time_spent_sec', 'submission_type', 'title', 'client_time', 'due_at', 'late', 'practice'];
+var DUE_SHEET = 'กำหนดส่ง_DueDates';
+var DUE_HEADERS = ['class', 'period', 'due_at', 'title', 'updated_at'];
+var QUIZ_BANK_SHEET = 'คลังข้อสอบ_QuizBank';
+var QUIZ_BANK_HEADERS = ['unit_no', 'unit_title', 'qid', 'question', 'choices_json', 'correct', 'explanation', 'bloom'];
 var STUDENT_AUTH_SHEET = 'นักเรียน_Students_Auth';
 var STUDENT_AUTH_HEADERS = ['student_id', 'prefix', 'first_name', 'last_name', 'nickname', 'class', 'no',
   'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'last_login'];
@@ -1330,6 +1333,8 @@ function handleStudentPublicAction(ss, payload) {
     return { status: 'error', code: 'rate_limited', message: 'มีการเข้าสู่ระบบจำนวนมาก กรุณารอสักครู่แล้วลองใหม่' };
   }
   if (payload.action === 'studentSubmit') return studentSubmit_(ss, payload);
+  if (payload.action === 'studentQuizGet') return studentQuizGet_(ss, payload);
+  if (payload.action === 'studentTasks') return studentTasks_(ss, payload);
   var studentId = cleanId_(payload.studentId);
   if (!/^\\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
   var sheet = getStudentSheet_(ss);
@@ -1518,10 +1523,13 @@ function validateSubmission_(it) {
     if (!d.content && !d.url) return 'empty';
     return '';
   }
-  if (it.kind === 'quiz') {
-    var u = Number(d.unitNo), sc = Number(d.score), tot = Number(d.totalQuestions);
-    if (!(u >= 1 && u <= 10 && Math.floor(u) === u)) return 'bad_unit';
-    if (!(tot >= 1 && tot <= 100) || !(sc >= 0 && sc <= tot)) return 'bad_score';
+  if (it.kind === 'quiz_answers') {
+    var u = Number(d.unitNo);
+    if (!(u >= 1 && u <= 20 && Math.floor(u) === u)) return 'bad_unit';
+    if (!d.answers || typeof d.answers !== 'object') return 'invalid';
+    var ks = Object.keys(d.answers);
+    if (ks.length > 100) return 'too_many';
+    for (var i = 0; i < ks.length; i++) if (String(ks[i]).length > 40 || String(d.answers[ks[i]]).length > 4) return 'invalid';
     return '';
   }
   return 'bad_kind';
@@ -1545,8 +1553,9 @@ function studentSubmit_(ss, payload) {
   var rlKey = 'stu_submit_' + sid + '_' + Math.floor(Date.now() / 3600000);
   var used = Number(cache.get(rlKey) || 0);
 
-  var accepted = [], duplicates = [], rejected = [];
+  var accepted = [], duplicates = [], rejected = [], results = {};
   var profile = publicProfile_(rec);
+  ensureHeaders_(inbox, STUDENT_INBOX_HEADERS);
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     var cid = it && it.clientId ? String(it.clientId) : '';
@@ -1557,29 +1566,35 @@ function studentSubmit_(ss, payload) {
     used++;
     var d = it.data || {};
     var now = new Date();
-    var isQuiz = it.kind === 'quiz';
-    var pct = isQuiz ? Math.round(Number(d.score) / Number(d.totalQuestions) * 100) : '';
-    inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, it.kind,
-      isQuiz ? Number(d.unitNo) : Number(d.period),
-      isQuiz ? '' : str_(d.content, 5000), isQuiz ? '' : str_(d.url, 500),
-      isQuiz ? Number(d.score) : '', isQuiz ? Number(d.totalQuestions) : '', pct,
-      isQuiz ? Math.max(0, Math.min(86400, Number(d.timeSpentSeconds) || 0)) : '',
-      str_(d.submissionType, 40), str_(isQuiz ? d.unitTitle : d.title, 200), str_(d.clientTime, 40)]);
-    existing[sid + '|' + cid] = true;
-    // เขียนลงชีตเดิมที่ครูใช้อยู่ด้วย (ชื่อ/ห้องมาจากรายชื่อในชีต ไม่ใช่จากเครื่องนักเรียน)
-    if (isQuiz) {
-      processSyncItem(ss, { type: 'quiz_result', data: { unitNo: Number(d.unitNo), unitTitle: str_(d.unitTitle, 200), studentId: sid,
-        studentName: profile.name, studentClass: profile.studentClass, studentNo: profile.no, score: Number(d.score),
-        totalQuestions: Number(d.totalQuestions), percentage: pct, timeSpentSeconds: Number(d.timeSpentSeconds) || 0 } });
+    if (it.kind === 'quiz_answers') {
+      var g = gradeQuiz_(ss, Number(d.unitNo), d.answers);
+      if (!g) { used--; rejected.push({ clientId: cid, reason: 'no_quiz' }); continue; }
+      var practice = !!d.practice;
+      inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, practice ? 'practice_quiz' : 'quiz', Number(d.unitNo),
+        '', '', g.score, g.total, g.percentage, Math.max(0, Math.min(86400, Number(d.timeSpentSeconds) || 0)),
+        'server_graded', g.title, str_(d.clientTime, 40), '', '', practice]);
+      if (!practice) {
+        processSyncItem(ss, { type: 'quiz_result', data: { unitNo: Number(d.unitNo), unitTitle: g.title, studentId: sid,
+          studentName: profile.name, studentClass: profile.studentClass, studentNo: profile.no, score: g.score,
+          totalQuestions: g.total, percentage: g.percentage, timeSpentSeconds: Number(d.timeSpentSeconds) || 0 } });
+      }
+      results[cid] = { score: g.score, total: g.total, percentage: g.percentage, practice: practice };
     } else {
+      var due = getDueDate_(ss, profile.studentClass, Number(d.period));
+      var late = !!(due && now.getTime() > new Date(due).getTime());
+      inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, it.kind, Number(d.period),
+        str_(d.content, 5000), str_(d.url, 500), '', '', '', '',
+        str_(d.submissionType, 40), str_(d.title, 200), str_(d.clientTime, 40), due || '', late, false]);
       processSyncItem(ss, { type: 'submission', data: { className: profile.studentClass, period: Number(d.period), studentId: sid,
-        studentName: profile.name, submissionType: str_(d.submissionType, 40) || 'งานนักเรียน (มือถือ)', songTitle: str_(d.title, 200),
+        studentName: profile.name, submissionType: (str_(d.submissionType, 40) || 'งานนักเรียน (มือถือ)') + (late ? ' (ส่งช้า)' : ''), songTitle: str_(d.title, 200),
         content: str_(d.content, 5000), url: str_(d.url, 500) } });
+      results[cid] = { late: late, dueAt: due || '' };
     }
+    existing[sid + '|' + cid] = true;
     accepted.push(cid);
   }
   cache.put(rlKey, String(used), 3700);
-  return { status: 'success', accepted: accepted, duplicates: duplicates, rejected: rejected };
+  return { status: 'success', accepted: accepted, duplicates: duplicates, rejected: rejected, results: results };
 }
 
 /** ครูดึงงานที่นักเรียนส่งจากมือถือ (เฉพาะที่ใหม่กว่า since) */
@@ -1597,6 +1612,115 @@ function fetchStudentSubmissions(ss, since, limit) {
     if (ms > next) next = ms;
   }
   return { status: 'success', submissions: out, nextSince: next, more: out.length >= limit };
+}
+
+/* ============================================================================
+ * กำหนดส่งงาน (Due dates) และแบบทดสอบที่ตรวจบนเซิร์ฟเวอร์ (เฉลยอยู่ในชีตครูเท่านั้น)
+ * ============================================================================ */
+function ensureHeaders_(sheet, headers) {
+  var vals = sheet.getDataRange().getValues();
+  var row = vals[0] || [];
+  if (row.length < headers.length || String(row[headers.length - 1]) !== headers[headers.length - 1]) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+}
+
+function setDueDate(ss, payload) {
+  var cls = str_(payload.className, 40), period = Number(payload.period);
+  if (!cls || !(period >= 1 && period <= 40)) return { status: 'error', message: 'ห้อง/คาบไม่ถูกต้อง' };
+  var dueAt = payload.dueAt ? new Date(payload.dueAt) : null;
+  if (dueAt && isNaN(dueAt.getTime())) return { status: 'error', message: 'วันที่ไม่ถูกต้อง' };
+  var sheet = getOrCreateSheet(ss, DUE_SHEET, DUE_HEADERS);
+  var vals = sheet.getDataRange().getValues();
+  var kept = [vals[0] || DUE_HEADERS];
+  for (var r = 1; r < vals.length; r++) {
+    if (!(String(vals[r][0]) === cls && Number(vals[r][1]) === period)) kept.push(vals[r]);
+  }
+  if (dueAt) kept.push([cls, period, dueAt.toISOString(), str_(payload.title, 200), new Date().toISOString()]);
+  sheet.clearContents();
+  sheet.getRange(1, 1, kept.length, DUE_HEADERS.length).setValues(kept.map(function (row) {
+    var o = []; for (var c = 0; c < DUE_HEADERS.length; c++) o.push(row[c] === undefined ? '' : row[c]); return o;
+  }));
+  return { status: 'success', className: cls, period: period, dueAt: dueAt ? dueAt.toISOString() : '' };
+}
+
+function listDueDates_(ss, cls) {
+  var vals = getOrCreateSheet(ss, DUE_SHEET, DUE_HEADERS).getDataRange().getValues();
+  var out = [];
+  for (var r = 1; r < vals.length; r++) {
+    if (!cls || String(vals[r][0]) === cls) out.push({ className: String(vals[r][0]), period: Number(vals[r][1]), dueAt: String(vals[r][2]), title: String(vals[r][3] || '') });
+  }
+  return out;
+}
+
+function getDueDate_(ss, cls, period) {
+  var list = listDueDates_(ss, cls);
+  for (var i = 0; i < list.length; i++) if (list[i].period === period) return list[i].dueAt;
+  return '';
+}
+
+/** นักเรียนดูกำหนดส่งของห้องตัวเอง */
+function studentTasks_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var cls = String(v.rec['class'] || '');
+  return { status: 'success', studentClass: cls, dueDates: listDueDates_(ss, cls) };
+}
+
+/** ครูอัปโหลดคลังข้อสอบ (แทนที่ทั้งหมด) */
+function uploadQuizBank(ss, units) {
+  var rows = [QUIZ_BANK_HEADERS], n = 0;
+  for (var i = 0; i < units.length; i++) {
+    var u = units[i] || {};
+    var qs = u.questions || [];
+    for (var j = 0; j < qs.length; j++) {
+      var q = qs[j] || {};
+      if (!q.id || !q.correct) continue;
+      var choices = (q.choices || []).map(function (c) { return { key: str_(c.key, 4), text: str_(c.text, 500) }; });
+      rows.push([Number(u.unit_no), str_(u.title, 200), str_(q.id, 40), str_(q.question, 1000), JSON.stringify(choices), str_(q.correct, 4), str_(q.explanation, 1000), str_(q.bloom, 40)]);
+      n++;
+    }
+  }
+  var sheet = getOrCreateSheet(ss, QUIZ_BANK_SHEET, QUIZ_BANK_HEADERS);
+  sheet.clearContents();
+  sheet.getRange(1, 1, rows.length, QUIZ_BANK_HEADERS.length).setValues(rows);
+  return { status: 'success', questions: n, units: units.length };
+}
+
+function quizUnit_(ss, unitNo) {
+  var vals = getOrCreateSheet(ss, QUIZ_BANK_SHEET, QUIZ_BANK_HEADERS).getDataRange().getValues();
+  var out = { title: '', questions: [] };
+  for (var r = 1; r < vals.length; r++) {
+    if (Number(vals[r][0]) !== unitNo) continue;
+    out.title = String(vals[r][1] || '');
+    var choices = [];
+    try { choices = JSON.parse(String(vals[r][4] || '[]')); } catch (e) { choices = []; }
+    out.questions.push({ id: String(vals[r][2]), question: String(vals[r][3]), choices: choices, correct: String(vals[r][5]), bloom: String(vals[r][7] || '') });
+  }
+  return out.questions.length ? out : null;
+}
+
+/** นักเรียนรับข้อสอบ (ไม่มีเฉลย ไม่มีคำอธิบาย) */
+function studentQuizGet_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var u = quizUnit_(ss, Number(payload.unitNo));
+  if (!u) return { status: 'error', code: 'no_quiz', message: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้' };
+  return { status: 'success', unitNo: Number(payload.unitNo), title: u.title,
+    questions: u.questions.map(function (q) { return { id: q.id, question: q.question, choices: q.choices, bloom: q.bloom }; }) };
+}
+
+/** ตรวจคำตอบด้วยเฉลยในชีต: answers = { qid: key } */
+function gradeQuiz_(ss, unitNo, answers) {
+  var u = quizUnit_(ss, unitNo);
+  if (!u) return null;
+  var score = 0;
+  for (var i = 0; i < u.questions.length; i++) {
+    var q = u.questions[i];
+    if (answers && String(answers[q.id] || '') === q.correct) score++;
+  }
+  var total = u.questions.length;
+  return { score: score, total: total, percentage: Math.round(score / total * 100), title: u.title };
 }`
 };
 

@@ -28,6 +28,7 @@ const API = 'https://script.google.com/macros/s/AKfycbTEST_sample/exec';
   // --- teacher device: upload sample roster ---
   GoogleSheetSync.saveConfig({ webAppUrl: API, syncToken: 'teacher-token', autoSync: false });
   await StudentAuth.uploadRoster();
+  gas.call({ action: 'upload_quiz_bank', token: 'teacher-token', units: [{ unit_no: 2, title: 'หน่วยตัวอย่าง', questions: Array.from({ length: 10 }, (_, i) => ({ id: 'Q2-' + i, question: 'คำถาม ' + i, choices: [{ key: 'ก', text: 'ก' }, { key: 'ค', text: 'ค' }], correct: 'ก' })) }] });
   const teacherStore = store;
 
   // --- student phone: fresh storage, no roster, no teacher token ---
@@ -46,9 +47,11 @@ const API = 'https://script.google.com/macros/s/AKfycbTEST_sample/exec';
   assert.strictEqual(StudentOutbox.statusFor(StudentOutbox.assignmentKey('ม.1/1', 3)).state, 'sent');
   assert.strictEqual(GoogleSheetSync.getOutbox().length, 0, 'teacher outbox unused on student phone');
 
+  // client-scored quiz results are never sent from a student phone
+  assert.strictEqual(GoogleSheetSync.syncQuizResult({ unitNo: 2, score: 10, totalQuestions: 10 }), null);
   // offline: queued, failed-will-retry, then sent on retry (idempotent)
   netDown = true;
-  GoogleSheetSync.syncQuizResult({ unitNo: 2, score: 7, totalQuestions: 10, studentId: '99999' });
+  StudentOutbox.enqueue('quiz_answers', StudentOutbox.quizKey(2), { unitNo: 2, answers: Object.fromEntries(Array.from({ length: 10 }, (_, i) => ['Q2-' + i, i < 7 ? 'ก' : 'ค'])) });
   await new Promise(res => setTimeout(res, 20));
   const qk = StudentOutbox.quizKey(2);
   assert.strictEqual(StudentOutbox.statusFor(qk).state, 'failed'); assert.strictEqual(StudentOutbox.getItems().length, 1);
@@ -58,7 +61,8 @@ const API = 'https://script.google.com/macros/s/AKfycbTEST_sample/exec';
   await StudentOutbox.flush();
   assert.strictEqual(StudentOutbox.statusFor(qk).state, 'sent'); assert.strictEqual(StudentOutbox.getItems().length, 0);
   // simulate a retry of an already-delivered item (lost reply): duplicate counts as sent
-  StudentOutbox.saveItems([{ clientId: cid, kind: 'quiz', taskKey: qk, data: { unitNo: 2, score: 7, totalQuestions: 10 } }]);
+  assert.strictEqual(StudentOutbox.statusFor(qk).result.score, 7, 'score from server');
+  StudentOutbox.saveItems([{ clientId: cid, kind: 'quiz_answers', taskKey: qk, data: { unitNo: 2, answers: {} } }]);
   await StudentOutbox.flush();
   assert.strictEqual(StudentOutbox.getItems().length, 0);
   assert.strictEqual(gas.sheets['นักเรียนส่งงาน_Inbox']._data().filter(x => x[2] === cid).length, 1, 'stored once');
