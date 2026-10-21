@@ -272,6 +272,8 @@ const GoogleSheetSync = {
   syncSubmission(className, period, studentId, subData) {
     // มือถือนักเรียน (โหมดเซิร์ฟเวอร์): ส่งผ่านโทเค็นนักเรียน ไม่ใช้รหัสซิงค์ของครู ไม่ส่งไฟล์
     if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive()) {
+      // มีไฟล์กำลังอัปโหลด: StudentUpload จะส่งงานพร้อมไฟล์เมื่ออัปโหลดเสร็จ
+      if (subData.pendingUploadId) return null;
       return StudentOutbox.enqueue('assignment', StudentOutbox.assignmentKey(className, period), {
         period: Number(period), content: String(subData.content || '').slice(0, 5000), url: String(subData.url || '').slice(0, 500),
         submissionType: subData.submissionType || 'text', title: subData.songTitle || subData.title || ''
@@ -886,6 +888,19 @@ const GoogleSheetSync = {
  */
 
 function doPost(e) {
+  // อัปโหลดชิ้นไฟล์นักเรียน: ไม่ต้องรอ Lock รวม (แต่ละชิ้นเขียนไฟล์ของตัวเอง)
+  var rawPeek = (e && e.postData && e.postData.contents) ? e.postData.contents : '';
+  if (/"action"\\s*:\\s*"studentUpload/.test(rawPeek.slice(0, 1000))) {
+    if (rawPeek.length > UPLOAD_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ชิ้นข้อมูลใหญ่เกินไป' });
+    var up = null;
+    try { up = JSON.parse(rawPeek); } catch (pe) { up = null; }
+    if (up && UPLOAD_ACTIONS.indexOf(up.action) !== -1) {
+      if (up.action === 'studentUploadChunk') return jsonOut(handleUploadAction(SpreadsheetApp.getActiveSpreadsheet(), up));
+      var ulock = LockService.getScriptLock();
+      ulock.tryLock(20000);
+      try { return jsonOut(handleUploadAction(SpreadsheetApp.getActiveSpreadsheet(), up)); } finally { ulock.releaseLock(); }
+    }
+  }
   var lock = LockService.getScriptLock();
   // รอ Lock สูงสุด 20 วินาทีเพื่อป้องกันการเขียนข้อมูลชนกันพร้อมกัน
   lock.tryLock(20000);
@@ -1046,7 +1061,7 @@ function processSyncItem(ss, item) {
         var safeFileName = "[" + (data.className || "PPK") + "_" + (data.studentId || "std") + "] " + data.fileName;
         var blob = Utilities.newBlob(decoded, data.mimeType || "application/octet-stream", safeFileName);
         var file = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        applyDriveSharing_(file);   // ค่าเริ่มต้น: ส่วนตัว (เฉพาะครูเจ้าของ Drive)
         var driveLink = file.getUrl();
         fileUrl = fileUrl ? (fileUrl + " | " + driveLink) : driveLink;
       } catch (fErr) {
@@ -1256,7 +1271,7 @@ var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูง�
 var STUDENT_MAX_ITEMS = 20;            // รายการต่อคำขอ
 var STUDENT_INBOX_SHEET = 'นักเรียนส่งงาน_Inbox';
 var STUDENT_INBOX_HEADERS = ['received_at', 'received_ms', 'client_id', 'student_id', 'class', 'kind', 'period_or_unit',
-  'content', 'url', 'score', 'total', 'percentage', 'time_spent_sec', 'submission_type', 'title', 'client_time', 'due_at', 'late', 'practice'];
+  'content', 'url', 'score', 'total', 'percentage', 'time_spent_sec', 'submission_type', 'title', 'client_time', 'due_at', 'late', 'practice', 'upload_id'];
 var DUE_SHEET = 'กำหนดส่ง_DueDates';
 var DUE_HEADERS = ['class', 'period', 'due_at', 'title', 'updated_at'];
 var QUIZ_BANK_SHEET = 'คลังข้อสอบ_QuizBank';
@@ -1538,14 +1553,17 @@ function validateSubmission_(it) {
     if (!(p >= 1 && p <= 40 && Math.floor(p) === p)) return 'bad_period';
     if (String(d.content || '').length > 5000) return 'too_long';
     if (d.url && (!/^https?:\\/\\//i.test(String(d.url)) || String(d.url).length > 500)) return 'bad_url';
-    if (!d.content && !d.url) return 'empty';
+    if (d.uploadId && !/^[A-Za-z0-9_-]{8,60}$/.test(String(d.uploadId))) return 'bad_upload';
+    if (!d.content && !d.url && !d.uploadId) return 'empty';
     return '';
   }
   if (it.kind === 'recording') {
     // คลิปฝึกซ้อม: ส่งเป็นลิงก์เท่านั้น (Google Drive / YouTube ฯลฯ)
     var rp = Number(d.period);
     if (!(rp >= 1 && rp <= 40 && Math.floor(rp) === rp)) return 'bad_period';
-    if (!d.url || !/^https:\\/\\//i.test(String(d.url)) || String(d.url).length > 500) return 'bad_url';
+    if (d.uploadId && !/^[A-Za-z0-9_-]{8,60}$/.test(String(d.uploadId))) return 'bad_upload';
+    if (!d.uploadId && (!d.url || !/^https:\\/\\//i.test(String(d.url)) || String(d.url).length > 500)) return 'bad_url';
+    if (d.uploadId && d.url && !/^https:\\/\\//i.test(String(d.url))) return 'bad_url';
     if (String(d.content || '').length > 1000) return 'too_long';
     return '';
   }
@@ -1598,7 +1616,7 @@ function studentSubmit_(ss, payload) {
       var practice = !!d.practice;
       inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, practice ? 'practice_quiz' : 'quiz', Number(d.unitNo),
         '', '', g.score, g.total, g.percentage, Math.max(0, Math.min(86400, Number(d.timeSpentSeconds) || 0)),
-        'server_graded', g.title, str_(d.clientTime, 40), '', '', practice]);
+        'server_graded', g.title, str_(d.clientTime, 40), '', '', practice, '']);
       if (!practice) {
         processSyncItem(ss, { type: 'quiz_result', data: { unitNo: Number(d.unitNo), unitTitle: g.title, studentId: sid,
           studentName: profile.name, studentClass: profile.studentClass, studentNo: profile.no, score: g.score,
@@ -1606,15 +1624,22 @@ function studentSubmit_(ss, payload) {
       }
       results[cid] = { score: g.score, total: g.total, percentage: g.percentage, practice: practice };
     } else {
+      var urlOut = str_(d.url, 500), upId = '';
+      if (d.uploadId) {
+        var upRec = resolveUpload_(ss, sid, String(d.uploadId));
+        if (!upRec) { used--; rejected.push({ clientId: cid, reason: 'bad_upload' }); continue; }
+        upId = String(d.uploadId);
+        urlOut = urlOut ? (urlOut + ' | ' + String(upRec.file_url)) : String(upRec.file_url);
+      }
       var due = getDueDate_(ss, profile.studentClass, Number(d.period));
       var late = !!(due && now.getTime() > new Date(due).getTime());
       inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, it.kind, Number(d.period),
-        str_(d.content, 5000), str_(d.url, 500), '', '', '', '',
-        str_(d.submissionType, 40), str_(d.title, 200), str_(d.clientTime, 40), due || '', late, false]);
+        str_(d.content, 5000), urlOut, '', '', '', '',
+        str_(d.submissionType, 40), str_(d.title, 200), str_(d.clientTime, 40), due || '', late, false, upId]);
       processSyncItem(ss, { type: 'submission', data: { className: profile.studentClass, period: Number(d.period), studentId: sid,
         studentName: profile.name, submissionType: (str_(d.submissionType, 40) || (it.kind === 'recording' ? 'คลิปฝึกซ้อม (ลิงก์)' : 'งานนักเรียน (มือถือ)')) + (late ? ' (ส่งช้า)' : ''), songTitle: str_(d.title, 200),
-        content: str_(d.content, 5000), url: str_(d.url, 500) } });
-      results[cid] = { late: late, dueAt: due || '' };
+        content: str_(d.content, 5000), url: urlOut } });
+      results[cid] = { late: late, dueAt: due || '', fileUrl: upId ? urlOut : '' };
     }
     existing[sid + '|' + cid] = true;
     accepted.push(cid);
@@ -2031,6 +2056,286 @@ function postSupervision(ss, payload) {
   Object.keys(ratings).slice(0, 20).forEach(function (k) { var n = Math.max(0, Math.min(5, Number(ratings[k]) || 0)); clean[str_(k, 80)] = n; total += n; });
   getOrCreateSheet(ss, SUPERVISION_SHEET, SUPERVISION_HEADERS).appendRow([Utilities.getUuid(), Date.now(), id, str_(payload.className, 20), Number(payload.period) || '', JSON.stringify(clean), total, str_(payload.comments, 3000), str_(payload.mentor, 80)]);
   return { status: 'success', total: total };
+}
+
+/* ============================================================================
+ * อัปโหลดไฟล์/คลิปจากมือถือนักเรียน → Google Drive ของครู (แบ่งเป็นชิ้น, ส่งต่อได้, ไม่ซ้ำ)
+ * - ยืนยันตัวด้วยโทเค็นนักเรียน รหัสนักเรียนมาจากโทเค็นเท่านั้น
+ * - ชิ้นงานพักไว้ใน Drive: MusicSmart_Upload_Staging/<uploadId>/c000000 …  (ไม่ใช้ CacheService เพราะจำกัด 100KB)
+ * - ประกอบไฟล์ด้วย Drive API แบบ resumable (UrlFetchApp) ทีละชิ้น ไม่โหลดทั้งไฟล์เข้าหน่วยความจำ
+ * - ไฟล์ปลายทางเป็นส่วนตัวของครู (เจ้าของสคริปต์) เว้นแต่ตั้ง DRIVE_SHARE_ANYONE_WITH_LINK = true
+ * ============================================================================ */
+var UPLOAD_ACTIONS = ['studentUploadStart', 'studentUploadChunk', 'studentUploadFinish', 'studentUploadStatus'];
+var UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;        // 2 MB ต่อชิ้น (base64 ≈ 2.7 MB ต่อคำขอ; ต้องเป็นทวีคูณของ 256 KB)
+var UPLOAD_MAX_BODY = 3 * 1024 * 1024;           // ขนาดคำขอสูงสุด (ตัวอักษร) ของการอัปโหลด
+var UPLOAD_EXPIRE_HOURS = 24;                    // ชิ้นงานค้างเกินนี้ถูกล้างทิ้ง
+var UPLOAD_SHEET = 'อัปโหลด_Uploads';
+var UPLOAD_HEADERS = ['upload_id', 'student_id', 'class', 'period', 'purpose', 'file_name', 'ext', 'mime', 'size', 'chunk_size',
+  'total_chunks', 'status', 'started_ms', 'finished_ms', 'staging_folder_id', 'file_id', 'file_url', 'day', 'error'];
+var UPLOAD_ROOT_FOLDER = 'MusicSmart_Student_Uploads';
+var UPLOAD_STAGING_FOLDER = 'MusicSmart_Upload_Staging';
+// นามสกุล → ชนิด MIME ที่ยอมรับ + รูปแบบไบต์ต้นไฟล์ (magic) ที่ต้องตรง
+var UPLOAD_TYPES = {
+  jpg: { mimes: ['image/jpeg'], magic: 'jpeg' }, jpeg: { mimes: ['image/jpeg'], magic: 'jpeg' },
+  png: { mimes: ['image/png'], magic: 'png' }, webp: { mimes: ['image/webp'], magic: 'webp' },
+  heic: { mimes: ['image/heic', 'image/heif'], magic: 'heic' }, heif: { mimes: ['image/heic', 'image/heif'], magic: 'heic' },
+  mp3: { mimes: ['audio/mpeg', 'audio/mp3'], magic: 'mp3' }, m4a: { mimes: ['audio/mp4', 'audio/x-m4a', 'audio/m4a', 'audio/aac'], magic: 'isobmff' },
+  aac: { mimes: ['audio/aac', 'audio/x-aac'], magic: 'aac' }, wav: { mimes: ['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave'], magic: 'wav' },
+  ogg: { mimes: ['audio/ogg', 'application/ogg'], magic: 'ogg' }, mp4: { mimes: ['video/mp4'], magic: 'isobmff' },
+  mov: { mimes: ['video/quicktime'], magic: 'isobmff' }, webm: { mimes: ['video/webm', 'audio/webm'], magic: 'webm' },
+  pdf: { mimes: ['application/pdf'], magic: 'pdf' }
+};
+
+function uploadCfg_() {
+  var p = PropertiesService.getScriptProperties();
+  var num = function (k, d) { var v = Number(p.getProperty(k)); return v > 0 ? v : d; };
+  return { maxBytes: num('UPLOAD_MAX_MB', 50) * 1024 * 1024, dailyBytes: num('UPLOAD_DAILY_MB', 300) * 1024 * 1024,
+    dailyCount: num('UPLOAD_DAILY_COUNT', 20), shareLink: String(p.getProperty('DRIVE_SHARE_ANYONE_WITH_LINK') || '') === 'true' };
+}
+
+/** แชร์แบบทุกคนที่มีลิงก์เฉพาะเมื่อครูเปิดค่า DRIVE_SHARE_ANYONE_WITH_LINK=true (ค่าเริ่มต้น: ส่วนตัว) */
+function applyDriveSharing_(file) {
+  if (uploadCfg_().shareLink) file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+}
+
+function bangkokDay_(ms) { return new Date(ms + 7 * 3600000).toISOString().slice(0, 10); }
+
+function sniffType_(bytes) {
+  var b = function (i) { return i < bytes.length ? (bytes[i] + 256) % 256 : -1; };
+  var s = function (i, n) { var o = ''; for (var k = 0; k < n; k++) o += String.fromCharCode(b(i + k)); return o; };
+  if (b(0) === 0xFF && b(1) === 0xD8 && b(2) === 0xFF) return 'jpeg';
+  if (s(0, 8) === '\\x89PNG\\r\\n\\x1a\\n') return 'png';
+  if (s(0, 4) === 'RIFF' && s(8, 4) === 'WEBP') return 'webp';
+  if (s(0, 4) === 'RIFF' && s(8, 4) === 'WAVE') return 'wav';
+  if (s(0, 4) === '%PDF') return 'pdf';
+  if (s(0, 4) === 'OggS') return 'ogg';
+  if (b(0) === 0x1A && b(1) === 0x45 && b(2) === 0xDF && b(3) === 0xA3) return 'webm';
+  if (s(4, 4) === 'ftyp') {
+    var brand = s(8, 4);
+    if (/^(heic|heix|hevc|hevx|mif1|msf1|heim|heis)$/.test(brand)) return 'heic';
+    return 'isobmff';
+  }
+  if (s(0, 3) === 'ID3') return 'mp3';
+  if (b(0) === 0xFF && (b(1) & 0xF6) === 0xF0) return 'aac';      // ADTS
+  if (b(0) === 0xFF && (b(1) & 0xE0) === 0xE0) return 'mp3';      // MPEG audio frame
+  return '';
+}
+
+function uploadSheet_(ss) { return getOrCreateSheet(ss, UPLOAD_SHEET, UPLOAD_HEADERS); }
+
+function findUpload_(sheet, uploadId) {
+  var vals = sheet.getDataRange().getValues();
+  for (var r = 1; r < vals.length; r++) {
+    if (String(vals[r][0]) !== uploadId) continue;
+    var o = { _row: r + 1 };
+    for (var c = 0; c < UPLOAD_HEADERS.length; c++) o[UPLOAD_HEADERS[c]] = vals[r][c];
+    return o;
+  }
+  return null;
+}
+
+function updateUpload_(sheet, u, fields) {
+  for (var k in fields) {
+    if (!fields.hasOwnProperty(k)) continue;
+    u[k] = fields[k];
+    sheet.getRange(u._row, UPLOAD_HEADERS.indexOf(k) + 1, 1, 1).setValues([[fields[k]]]);
+  }
+}
+
+function childFolder_(parent, name) {
+  var it = parent ? parent.getFoldersByName(name) : DriveApp.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  return parent ? parent.createFolder(name) : DriveApp.createFolder(name);
+}
+
+function safeName_(s) { return String(s || '').replace(/[\\\\\\/:*?"<>|#%\\x00-\\x1f]/g, '_').slice(0, 60); }
+
+function chunkName_(i) { return 'c' + ('000000' + i).slice(-6); }
+
+function stagedChunks_(folder) {
+  var out = {}, it = folder.getFiles();
+  while (it.hasNext()) { var f = it.next(); var m = /^c(\\d{6})$/.exec(f.getName()); if (m) out[Number(m[1])] = f; }
+  return out;
+}
+
+function trashStaging_(u) {
+  if (!u.staging_folder_id) return;
+  try { DriveApp.getFolderById(String(u.staging_folder_id)).setTrashed(true); } catch (e) { /* ลบไปแล้ว */ }
+}
+
+function uploadPublic_(u) {
+  return { uploadId: String(u.upload_id), status: String(u.status), size: Number(u.size), chunkSize: Number(u.chunk_size),
+    totalChunks: Number(u.total_chunks), fileUrl: String(u.file_url || ''), fileId: String(u.file_id || ''), fileName: String(u.file_name) };
+}
+
+function handleUploadAction(ss, payload) {
+  if (!globalStudentThrottle_()) return { status: 'error', code: 'rate_limited', message: 'ระบบมีผู้ใช้จำนวนมาก กรุณารอสักครู่' };
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var sid = cleanId_(v.rec.student_id);
+  var cid = String(payload.uploadId || '');
+  if (!/^[A-Za-z0-9_-]{8,60}$/.test(cid)) return { status: 'error', code: 'bad_upload_id', message: 'รหัสการอัปโหลดไม่ถูกต้อง' };
+  var uploadId = sid + '_' + cid;                     // ผูกกับนักเรียน: คนอื่นใช้รหัสเดียวกันไม่ได้
+  var sheet = uploadSheet_(ss);
+  var u = findUpload_(sheet, uploadId);
+  if (payload.action === 'studentUploadStart') return uploadStart_(ss, sheet, v.rec, sid, uploadId, u, payload);
+  if (!u) return { status: 'error', code: 'no_upload', message: 'ไม่พบการอัปโหลดนี้ กรุณาเริ่มใหม่' };
+  if (payload.action === 'studentUploadStatus') return uploadStatus_(u);
+  if (String(u.status) === 'done') return { status: 'success', done: true, upload: uploadPublic_(u) };
+  if (String(u.status) !== 'open') return { status: 'error', code: 'upload_' + u.status, message: uploadErrText_(String(u.status), String(u.error)) };
+  if (Date.now() - Number(u.started_ms) > UPLOAD_EXPIRE_HOURS * 3600000) {
+    trashStaging_(u); updateUpload_(sheet, u, { status: 'expired' });
+    return { status: 'error', code: 'upload_expired', message: 'การอัปโหลดค้างนานเกินไป กรุณาเริ่มใหม่' };
+  }
+  if (payload.action === 'studentUploadChunk') return uploadChunk_(sheet, u, payload);
+  return uploadFinish_(ss, sheet, u);
+}
+
+function uploadErrText_(status, err) {
+  if (status === 'rejected') return 'ไฟล์ไม่ตรงกับชนิดที่แจ้ง (' + err + ') กรุณาเลือกไฟล์ใหม่';
+  if (status === 'expired') return 'การอัปโหลดค้างนานเกินไป กรุณาเริ่มใหม่';
+  return 'อัปโหลดไม่สำเร็จ';
+}
+
+function uploadStart_(ss, sheet, rec, sid, uploadId, u, payload) {
+  var cfg = uploadCfg_();
+  var name = String(payload.fileName || '');
+  var ext = (/\\.([A-Za-z0-9]{2,5})$/.exec(name) || [])[1];
+  ext = ext ? ext.toLowerCase() : '';
+  var t = UPLOAD_TYPES[ext];
+  var mime = String(payload.mimeType || '').toLowerCase();
+  var size = Number(payload.size);
+  var period = Number(payload.period);
+  var purpose = payload.purpose === 'recording' ? 'recording' : 'assignment';
+  if (!t) return { status: 'error', code: 'bad_type', message: 'ไม่รองรับไฟล์ชนิดนี้ (รับ รูป jpg/png/heic/webp, เสียง mp3/m4a/aac/wav/ogg, วิดีโอ mp4/mov/webm, pdf)' };
+  if (mime && t.mimes.indexOf(mime) === -1) return { status: 'error', code: 'type_mismatch', message: 'นามสกุลไฟล์กับชนิดไฟล์ไม่ตรงกัน' };
+  if (!(size > 0) || Math.floor(size) !== size) return { status: 'error', code: 'bad_size', message: 'ขนาดไฟล์ไม่ถูกต้อง' };
+  if (size > cfg.maxBytes) return { status: 'error', code: 'too_large', message: 'ไฟล์ใหญ่เกิน ' + Math.round(cfg.maxBytes / 1048576) + ' MB' };
+  if (!(period >= 1 && period <= 40 && Math.floor(period) === period)) return { status: 'error', code: 'bad_period', message: 'คาบเรียนไม่ถูกต้อง' };
+  if (u) {
+    // เริ่มซ้ำด้วยรหัสเดิม = ทำต่อ (ต้องเป็นไฟล์เดิม)
+    if (Number(u.size) !== size || String(u.ext) !== ext) return { status: 'error', code: 'upload_id_conflict', message: 'รหัสการอัปโหลดนี้ใช้กับไฟล์อื่นแล้ว' };
+    var st = uploadStatus_(u);
+    return st;
+  }
+  // โควตารายวัน (นับจากขนาดที่แจ้งตอนเริ่ม ไม่รวมที่ถูกปฏิเสธ)
+  var today = bangkokDay_(Date.now()), usedBytes = 0, usedCount = 0;
+  var vals = sheet.getDataRange().getValues();
+  for (var r = 1; r < vals.length; r++) {
+    if (cleanId_(vals[r][1]) !== sid || String(vals[r][17]) !== today || String(vals[r][11]) === 'rejected') continue;
+    usedBytes += Number(vals[r][8]) || 0; usedCount++;
+  }
+  if (usedCount + 1 > cfg.dailyCount || usedBytes + size > cfg.dailyBytes) {
+    return { status: 'error', code: 'quota', message: 'วันนี้อัปโหลดครบโควตาแล้ว (' + cfg.dailyCount + ' ไฟล์ / ' + Math.round(cfg.dailyBytes / 1048576) + ' MB) ลองใหม่พรุ่งนี้ หรือส่งเป็นลิงก์แทน' };
+  }
+  cleanupStaleUploads(5);   // ล้างของค้างไปด้วยเล็กน้อย
+  var staging = childFolder_(childFolder_(null, UPLOAD_STAGING_FOLDER), uploadId);
+  var now = Date.now();
+  var profile = publicProfile_(rec);
+  sheet.appendRow([uploadId, sid, profile.studentClass, period, purpose, safeName_(name), ext, t.mimes[0], size, UPLOAD_CHUNK_BYTES,
+    Math.ceil(size / UPLOAD_CHUNK_BYTES), 'open', now, '', staging.getId(), '', '', today, '']);
+  return uploadStatus_(findUpload_(sheet, uploadId));
+}
+
+function uploadStatus_(u) {
+  var received = [];
+  if (String(u.status) === 'open') {
+    try { received = Object.keys(stagedChunks_(DriveApp.getFolderById(String(u.staging_folder_id)))).map(Number).sort(function (a, b) { return a - b; }); } catch (e) { received = []; }
+  }
+  return { status: 'success', upload: uploadPublic_(u), received: received, done: String(u.status) === 'done' };
+}
+
+function uploadChunk_(sheet, u, payload) {
+  var n = Number(u.total_chunks), cs = Number(u.chunk_size), size = Number(u.size);
+  var idx = Number(payload.index);
+  if (!(idx >= 0 && idx < n && Math.floor(idx) === idx)) return { status: 'error', code: 'bad_index', message: 'ลำดับชิ้นไม่ถูกต้อง' };
+  var b64 = String(payload.data || '');
+  if (!/^[A-Za-z0-9+\\/=]+$/.test(b64)) return { status: 'error', code: 'bad_chunk', message: 'ข้อมูลชิ้นไม่ถูกต้อง' };
+  var bytes = Utilities.base64Decode(b64);
+  var expectLen = idx === n - 1 ? size - cs * (n - 1) : cs;
+  if (bytes.length !== expectLen) return { status: 'error', code: 'bad_chunk_size', message: 'ขนาดชิ้นไม่ถูกต้อง' };
+  if (idx === 0) {
+    var kind = sniffType_(bytes);
+    var want = UPLOAD_TYPES[String(u.ext)].magic;
+    if (kind !== want) {
+      trashStaging_(u);
+      updateUpload_(sheet, u, { status: 'rejected', error: 'ไม่ใช่ไฟล์ ' + u.ext });
+      return { status: 'error', code: 'type_mismatch', message: 'เนื้อไฟล์ไม่ใช่ ' + u.ext + ' จริง กรุณาเลือกไฟล์ใหม่' };
+    }
+  }
+  var folder = DriveApp.getFolderById(String(u.staging_folder_id));
+  var have = stagedChunks_(folder);
+  if (have[idx]) {
+    if (have[idx].getSize() === expectLen) return { status: 'success', index: idx, duplicate: true };
+    have[idx].setTrashed(true);   // ชิ้นเดิมเสีย เขียนทับ
+  }
+  folder.createFile(Utilities.newBlob(bytes, 'application/octet-stream', chunkName_(idx)));
+  return { status: 'success', index: idx };
+}
+
+function uploadFinish_(ss, sheet, u) {
+  var folder = DriveApp.getFolderById(String(u.staging_folder_id));
+  var have = stagedChunks_(folder), n = Number(u.total_chunks), missing = [];
+  for (var i = 0; i < n; i++) if (!have[i]) missing.push(i);
+  if (missing.length) return { status: 'error', code: 'missing_chunks', missing: missing.slice(0, 50), message: 'ยังส่งไม่ครบ ' + missing.length + ' ชิ้น' };
+  var dest = childFolder_(childFolder_(childFolder_(null, UPLOAD_ROOT_FOLDER), safeName_(u['class'] || 'ไม่ระบุห้อง')), 'คาบ' + Number(u.period));
+  var stamp = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMdd-HHmmss');
+  // ชื่อไฟล์ใช้รหัสนักเรียน ไม่ใช้ชื่อ
+  var fileName = (u.purpose === 'recording' ? 'ฝึกซ้อม_' : 'งาน_') + cleanId_(u.student_id) + '_p' + Number(u.period) + '_' + stamp + '.' + u.ext;
+  var token = ScriptApp.getOAuthToken();
+  var init = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
+    method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + token, 'X-Upload-Content-Type': String(u.mime), 'X-Upload-Content-Length': String(u.size) },
+    payload: JSON.stringify({ name: fileName, parents: [dest.getId()], mimeType: String(u.mime) })
+  });
+  var hdr = init.getHeaders() || {};
+  var session = hdr.Location || hdr.location;
+  if (!session) return { status: 'error', code: 'drive_error', message: 'Drive ไม่ตอบรับ (' + init.getResponseCode() + ') ลองกดส่งใหม่' };
+  var cs = Number(u.chunk_size), size = Number(u.size), fileId = '';
+  for (var k = 0; k < n; k++) {
+    var part = have[k].getBlob().getBytes();
+    var start = k * cs, end = start + part.length - 1;
+    var res = UrlFetchApp.fetch(session, { method: 'put', muteHttpExceptions: true, contentType: String(u.mime),
+      headers: { 'Content-Range': 'bytes ' + start + '-' + end + '/' + size }, payload: part });
+    var code = res.getResponseCode();
+    if (k < n - 1 && code !== 308) return { status: 'error', code: 'drive_error', message: 'Drive ขัดข้องระหว่างประกอบไฟล์ ลองกดส่งใหม่' };
+    if (k === n - 1) {
+      if (code !== 200 && code !== 201) return { status: 'error', code: 'drive_error', message: 'Drive ขัดข้อง (' + code + ') ลองกดส่งใหม่' };
+      fileId = JSON.parse(res.getContentText()).id;
+    }
+  }
+  var file = DriveApp.getFileById(fileId);
+  applyDriveSharing_(file);
+  updateUpload_(sheet, u, { status: 'done', finished_ms: Date.now(), file_id: fileId, file_url: file.getUrl() });
+  trashStaging_(u);
+  return { status: 'success', done: true, upload: uploadPublic_(u) };
+}
+
+/** ล้างชิ้นงานค้าง (เรียกจากทริกเกอร์ตามเวลา หรือระหว่างเริ่มอัปโหลด) */
+function cleanupStaleUploads(maxItems) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = uploadSheet_(ss), vals = sheet.getDataRange().getValues(), cut = Date.now() - UPLOAD_EXPIRE_HOURS * 3600000, n = 0;
+  var limit = Number(maxItems) > 0 ? Number(maxItems) : 1000;
+  for (var r = 1; r < vals.length && n < limit; r++) {
+    if (String(vals[r][11]) !== 'open' || Number(vals[r][12]) > cut) continue;
+    var u = findUpload_(sheet, String(vals[r][0]));
+    trashStaging_(u); updateUpload_(sheet, u, { status: 'expired' }); n++;
+  }
+  return n;
+}
+
+/** ครูกดรันครั้งเดียวในหน้า Apps Script: ตั้งทริกเกอร์ล้างชิ้นงานค้างทุก 6 ชั่วโมง */
+function installUploadCleanupTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cleanupStaleUploads') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('cleanupStaleUploads').timeBased().everyHours(6).create();
+  return 'ok';
+}
+
+/** ใช้ตอนส่งงาน: คืนลิงก์ไฟล์ที่อัปโหลดเสร็จแล้วของนักเรียนคนนี้ */
+function resolveUpload_(ss, sid, cid) {
+  if (!/^[A-Za-z0-9_-]{8,60}$/.test(String(cid || ''))) return null;
+  var u = findUpload_(uploadSheet_(ss), sid + '_' + cid);
+  return u && String(u.status) === 'done' && cleanId_(u.student_id) === sid ? u : null;
 }`
 };
 

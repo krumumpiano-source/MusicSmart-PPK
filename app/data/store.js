@@ -1332,6 +1332,7 @@ const Store = {
       fileBase64: data.fileBase64 || existing.fileBase64 || '',
       mimeType: data.mimeType || existing.mimeType || '',
       fileSize: data.fileSize || existing.fileSize || 0,
+      pendingUploadId: data.pendingUploadId || '',
       submittedAt: new Date().toLocaleString('th-TH'),
       status: data.status || 'submitted',
       score: data.score !== undefined ? data.score : (existing.score || null),

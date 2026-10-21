@@ -907,10 +907,16 @@
                 <div class="form-group" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.85rem;">
                   <label class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; font-weight: 700; color: #1e293b; font-size: 0.88rem;">
                     <span>📎 แนบไฟล์งาน / คลิปวิดีโอ / ไฟล์เสียง (ส่งเข้า Google Drive ครู):</span>
-                    <span style="font-size: 0.75rem; font-weight: 500; color: #0284c7;">(รูปภาพ, MP4, MP3, M4A, PDF ไม่เกิน 15MB)</span>
+                    <span style="font-size: 0.75rem; font-weight: 500; color: #0284c7;">(รูป jpg/png/heic/webp • เสียง mp3/m4a/aac/wav/ogg • วิดีโอ mp4/mov/webm • PDF ไม่เกิน 50 MB)</span>
                   </label>
-                  <input type="file" id="student-submission-file" class="form-input" accept="image/*,video/mp4,video/quicktime,audio/*,.pdf" style="background: #ffffff; padding: 0.45rem; font-size: 0.85rem;" onchange="App.onStudentFileSelected(this)" />
+                  <input type="file" id="student-submission-file" class="form-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,audio/*,.m4a,.aac,video/mp4,video/quicktime,video/webm,application/pdf,.pdf" style="background: #ffffff; padding: 0.45rem; font-size: 0.85rem;" onchange="App.onStudentFileSelected(this)" />
+                  <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem;">
+                    <label class="btn-nav-action" style="cursor: pointer; font-size: 0.8rem;">📷 ถ่ายรูป<input type="file" accept="image/*" capture="environment" style="display: none;" onchange="App.onStudentFileSelected(this)"></label>
+                    <label class="btn-nav-action" style="cursor: pointer; font-size: 0.8rem;">🎥 อัดวิดีโอ<input type="file" accept="video/*" capture="environment" style="display: none;" onchange="App.onStudentFileSelected(this)"></label>
+                    <label class="btn-nav-action" style="cursor: pointer; font-size: 0.8rem;">🎙️ อัดเสียง<input type="file" accept="audio/*" capture style="display: none;" onchange="App.onStudentFileSelected(this)"></label>
+                  </div>
                   <div id="student-file-preview" style="display: none; margin-top: 0.4rem; font-size: 0.8rem; color: #059669; font-weight: 600;"></div>
+                  <div id="student-upload-list"></div>
                 </div>
 
                 <!-- Optional Attachment Link -->
@@ -3544,6 +3550,7 @@
   <script src="js/teacher-tools.js?v=20261021_05"></script>
   <script src="js/intern.js?v=20261021_06"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
+  <script src="js/student-upload.js?v=20261021_08"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>

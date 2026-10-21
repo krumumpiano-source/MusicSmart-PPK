@@ -35,3 +35,15 @@
 - 🥁 เมโทรนอม 30–240 BPM (Web Audio) + 🎙️ จูนเนอร์โครมาติกเดิม (`Tuner`, ใช้ไมค์)
 - 🎧 ส่งคลิปฝึกซ้อมเป็นลิงก์ https (kind `recording`) — ไม่นับเป็นงานประจำคาบ; เครื่องครูเก็บที่ `ppk_student_recordings` และชีตส่งงาน
 - 🧪 แบบฝึก (ไม่นับคะแนน) ทุกหน่วย → `practice_quiz` ไม่เข้าชีตคะแนน
+
+## Phase 5 — อัปโหลดไฟล์/คลิปจากมือถือนักเรียนเข้า Google Drive ครู
+- Actions (โทเค็นนักเรียน, รหัสนักเรียนจากโทเค็นเท่านั้น): `studentUploadStart` → `studentUploadChunk` (base64 ชิ้นละ 2 MB, ส่งสลับลำดับ/ซ้ำได้) → `studentUploadFinish`; `studentUploadStatus` บอกชิ้นที่ได้รับแล้ว
+- uploadId สร้างจากเครื่อง ผูกกับรหัสนักเรียน (`<sid>_<id>`) → เริ่มซ้ำ = ทำต่อ, finish ซ้ำ = คืนลิงก์เดิม
+- ชนิดไฟล์: jpg/png/heic/webp, mp3/m4a/aac/wav/ogg, mp4/mov/webm, pdf — ตรวจทั้งนามสกุล+MIME และไบต์ต้นไฟล์ (ชิ้นแรก)
+- Script Properties (ไม่ตั้ง = ค่าเริ่มต้น): `UPLOAD_MAX_MB` (50), `UPLOAD_DAILY_MB` (300), `UPLOAD_DAILY_COUNT` (20), `DRIVE_SHARE_ANYONE_WITH_LINK` (ปิด)
+- ชิ้นงานพักใน `MusicSmart_Upload_Staging/<uploadId>/`, ประกอบเป็นไฟล์ด้วย Drive API resumable แล้วลบทิ้ง; ค้างเกิน 24 ชม. ถูกล้างโดย `cleanupStaleUploads` (ตั้งทริกเกอร์ด้วย `installUploadCleanupTrigger`)
+- ไฟล์ปลายทาง `MusicSmart_Student_Uploads/<ห้อง>/คาบN/งาน_<รหัส>_pN_<เวลา>.<ext>` (คลิปฝึกซ้อม = `ฝึกซ้อม_…`) เป็น**ส่วนตัวของครู** — ครูเปิดผ่านลิงก์ Drive ขณะล็อกอินบัญชีเจ้าของ
+- ส่งงาน/คลิปฝึกซ้อมอ้าง `uploadId` → เซิร์ฟเวอร์ใส่ลิงก์ Drive ลงชีต Inbox (คอลัมน์ `upload_id`) และ `งานนักเรียน_Submissions`
+- เส้นทางเดิมของครู (`fileBase64`) **ไม่แชร์แบบทุกคนที่มีลิงก์อีกต่อไป** เว้นแต่ตั้ง `DRIVE_SHARE_ANYONE_WITH_LINK=true`
+- แอปนักเรียน: เลือกไฟล์ / ถ่ายรูป / อัดวิดีโอ / อัดเสียง, ตรวจขนาด+ชนิดก่อนส่ง, เตือนคลิปใหญ่, แถบความคืบหน้า, หยุด/ทำต่อ/ลองใหม่, ทำต่อเองเมื่อกลับมาออนไลน์ (ไฟล์เก็บใน IndexedDB)
+- แอปครู: ลิงก์ "📎 เปิดไฟล์แนบใน Google Drive ครู" ในการ์ดงาน และรายการ "🎧 คลิปฝึกซ้อมของนักเรียน" ท้ายแท็บส่งงาน

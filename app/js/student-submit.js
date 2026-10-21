@@ -269,7 +269,7 @@ const TeacherPull = {
           submissionType: r.submission_type || 'งานนักเรียน (มือถือ)',
           content: String(r.content || ''), url: String(r.url || ''),
           submittedAt: this.thaiTime(r.received_at), receivedAt: r.received_at,
-          source: 'student_device', late: this.isLate(cls, no, r.received_at, r), dueAt: r.due_at || (DueDates.get(cls, no) || {}).dueAt || '', status: 'submitted',
+          source: 'student_device', attachment: !!r.upload_id, fileName: r.upload_id ? String(r.title || '') : (prev.fileName || ''), late: this.isLate(cls, no, r.received_at, r), dueAt: r.due_at || (DueDates.get(cls, no) || {}).dueAt || '', status: 'submitted',
           score: prev.score !== undefined ? prev.score : null, feedback: prev.feedback || ''
         });
         subs++;
@@ -277,7 +277,7 @@ const TeacherPull = {
         const recAll = JSON.parse(localStorage.getItem('ppk_student_recordings') || '{}');
         const key = `${cls}_p${no}_${sid}`;
         const recs = (recAll[key] || []).filter(x => x.clientId !== r.client_id);
-        recs.push({ clientId: r.client_id, url: String(r.url || ''), note: String(r.content || ''), at: this.thaiTime(r.received_at) });
+        recs.push({ clientId: r.client_id, url: String(r.url || ''), note: String(r.content || ''), at: this.thaiTime(r.received_at), file: !!r.upload_id, title: String(r.title || '') });
         recAll[key] = recs.slice(-10);
         localStorage.setItem('ppk_student_recordings', JSON.stringify(recAll));
         subs++;

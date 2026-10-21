@@ -195,12 +195,26 @@ const Recording = {
       { period: Number(period), url: String(url).trim(), content: String(note || '').slice(0, 1000), submissionType: 'คลิปฝึกซ้อม (ลิงก์)', title: 'คลิปฝึกซ้อม' });
     return { success: !!item, item };
   },
+  async submitFile(period, note) {
+    const f = typeof StudentUpload !== 'undefined' ? StudentUpload.picked : null;
+    if (!f) return { success: false, message: 'ยังไม่ได้เลือกไฟล์/อัดคลิป' };
+    const r = await StudentUpload.add(f, { purpose: 'recording', period, content: note });
+    if (r.success) StudentUpload.picked = null;
+    return r;
+  },
   open(period) {
-    StudentPanels.show('🎧 ส่งคลิปฝึกซ้อม (ลิงก์)', `<p style="font-size:0.82rem;color:#475569;">อัดเสียง/วิดีโอด้วยแอปกล้องหรือบันทึกเสียงของมือถือ → อัปโหลดขึ้น Google Drive หรือ YouTube (ไม่สาธารณะ) → แชร์ลิงก์แบบ "ทุกคนที่มีลิงก์" แล้ววางที่นี่</p>
+    const up = typeof StudentUpload !== 'undefined';
+    StudentPanels.show('🎧 ส่งคลิปฝึกซ้อม', `${up ? `<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:8px;padding:0.5rem 0.7rem;margin-bottom:0.5rem;">
+        <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">📤 อัปโหลดไฟล์ตรงเข้า Drive ครู (ไม่เกิน 50 MB)</div>
+        <label class="btn-nav-action" style="cursor:pointer;">🎙️ อัดเสียง<input type="file" accept="audio/*" capture style="display:none;" onchange="StudentUpload.pick(this,'rec-file-preview')"></label>
+        <label class="btn-nav-action" style="cursor:pointer;">🎥 อัดวิดีโอ<input type="file" accept="video/*" capture="environment" style="display:none;" onchange="StudentUpload.pick(this,'rec-file-preview')"></label>
+        <label class="btn-nav-action" style="cursor:pointer;">📁 เลือกไฟล์<input type="file" accept="${StudentUpload.ACCEPT}" style="display:none;" onchange="StudentUpload.pick(this,'rec-file-preview')"></label>
+        <div id="rec-file-preview" style="display:none;font-size:0.8rem;color:#059669;margin-top:4px;"></div></div>` : ''}
+      <p style="font-size:0.82rem;color:#475569;">หรือ อัปโหลดขึ้น Google Drive / YouTube เอง แล้ววางลิงก์ (https://)</p>
       <input id="rec-period" type="number" min="1" max="40" class="form-input" value="${Number(period) || 1}" style="max-width:100px;"> คาบที่
       <input id="rec-url" class="form-input" placeholder="https://drive.google.com/..." style="width:100%;margin-top:0.4rem;">
       <textarea id="rec-note" class="form-input" placeholder="บันทึกการฝึก (เช่น ฝึกเพลงอะไร กี่นาที)" style="width:100%;margin-top:0.4rem;"></textarea>
-      <button class="btn-nav-action primary" style="margin-top:0.5rem;" onclick="(function(){const r=Recording.submit(document.getElementById('rec-period').value,document.getElementById('rec-url').value,document.getElementById('rec-note').value);alert(r.success?'📤 ส่งคลิปแล้ว (ถ้าออฟไลน์จะส่งอัตโนมัติเมื่อมีเน็ต)':'⚠️ '+r.message);if(r.success)StudentPanels.close();})()">ส่งคลิป</button>`);
+      <button class="btn-nav-action primary" style="margin-top:0.5rem;" onclick="(async function(){const per=document.getElementById('rec-period').value,note=document.getElementById('rec-note').value;if(typeof StudentUpload!=='undefined'&&StudentUpload.picked){const u=await Recording.submitFile(per,note);alert(u.success?'📤 เริ่มอัปโหลดคลิปแล้ว ดูความคืบหน้าได้ในหน้าบทเรียน'+(u.warn?'\n⏳ '+u.warn:''):'⚠️ '+u.message);if(u.success)StudentPanels.close();return;}const r=Recording.submit(document.getElementById('rec-period').value,document.getElementById('rec-url').value,document.getElementById('rec-note').value);alert(r.success?'📤 ส่งคลิปแล้ว (ถ้าออฟไลน์จะส่งอัตโนมัติเมื่อมีเน็ต)':'⚠️ '+r.message);if(r.success)StudentPanels.close();})()">ส่งคลิป</button>`);
   }
 };
 

@@ -1519,9 +1519,11 @@ const App = {
     }
     if (typeof StudentOutbox !== 'undefined') StudentOutbox.render();
     if (typeof StudentNotices !== 'undefined') StudentNotices.render();
+    if (typeof StudentUpload !== 'undefined') StudentUpload.render();
   },
 
   onStudentFileSelected(input) {
+    if (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive() && typeof StudentUpload !== 'undefined') { StudentUpload.pick(input); return; }
     const previewEl = document.getElementById('student-file-preview');
     if (!previewEl) return;
     if (input.files && input.files[0]) {
@@ -1546,7 +1548,9 @@ const App = {
     const fileInput = document.getElementById('student-submission-file');
     const content = textInput ? textInput.value.trim() : '';
     const url = urlInput ? urlInput.value.trim() : '';
-    const hasFile = fileInput && fileInput.files && fileInput.files[0];
+    const remoteUpload = (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive() && typeof StudentUpload !== 'undefined');
+    const pickedFile = remoteUpload ? (StudentUpload.picked || (fileInput && fileInput.files && fileInput.files[0]) || null) : null;
+    const hasFile = pickedFile || (fileInput && fileInput.files && fileInput.files[0]);
 
     if (!content && !url && !hasFile) {
       alert('กรุณาพิมพ์คำตอบ แนบไฟล์ หรือใส่ลิงก์ผลงานก่อนกดส่งงานครับ');
@@ -1558,7 +1562,7 @@ const App = {
     let mimeType = '';
     let fileSize = 0;
 
-    if (hasFile) {
+    if (hasFile && !remoteUpload) {
       const file = fileInput.files[0];
       fileName = file.name;
       mimeType = file.type || 'application/octet-stream';
@@ -1576,10 +1580,21 @@ const App = {
     }
 
     const remoteMode = (typeof StudentOutbox !== 'undefined' && StudentOutbox.isActive());
+    if (remoteMode && url && !/^https?:\/\//i.test(url)) {
+      alert('ลิงก์ผลงานต้องขึ้นต้นด้วย http:// หรือ https://');
+      return;
+    }
     if (remoteMode && hasFile) {
-      alert('📎 การส่งจากมือถือยังไม่รองรับไฟล์แนบ\nกรุณาอัปโหลดไฟล์/คลิปไว้ที่ Google Drive หรือ YouTube แล้ววางลิงก์ในช่องลิงก์ผลงานแทน');
-      if (!content && !url) return;
-      fileBase64 = ''; fileName = ''; mimeType = ''; fileSize = 0;
+      // อัปโหลดไฟล์เข้า Drive ครูแบบแบ่งชิ้น แล้วส่งงาน (ข้อความ+ลิงก์+ไฟล์) เมื่ออัปโหลดเสร็จ
+      const r = await StudentUpload.add(pickedFile, { purpose: 'assignment', period: this.state.studentPeriod, className: this.state.studentClass, content, url });
+      if (!r.success) { alert('⚠️ ' + r.message); return; }
+      Store.saveStudentSubmission(this.state.studentClass, this.state.studentPeriod, this.state.studentId,
+        { submissionType: 'file_upload', content, url, fileName: pickedFile.name, fileSize: pickedFile.size, mimeType: pickedFile.type, pendingUploadId: r.id });
+      StudentUpload.picked = null;
+      if (fileInput) fileInput.value = '';
+      alert(`📤 เริ่มอัปโหลดไฟล์งานคาบที่ ${this.state.studentPeriod} แล้ว${r.warn ? '\n⏳ ' + r.warn : ''}\nดูความคืบหน้าใต้ช่องแนบไฟล์ (ถ้าเน็ตหลุด ระบบจะทำต่อเองเมื่อออนไลน์)`);
+      this.renderStudentPortal();
+      return;
     }
     if (remoteMode && url && !/^https?:\/\//i.test(url)) {
       alert('ลิงก์ผลงานต้องขึ้นต้นด้วย http:// หรือ https://');
@@ -2799,6 +2814,31 @@ const App = {
     }
   },
 
+  // ลิงก์ผลงาน: แยกหลายลิงก์ (ข้อความ | ไฟล์ Drive) และเปิดเฉพาะ http(s)
+  submissionLinksHtml(urlField) {
+    return String(urlField || '').split(' | ').map(u => u.trim()).filter(u => /^https?:\/\//i.test(u)).map(u => {
+      const drive = /^https:\/\/(drive|docs)\.google\.com\//i.test(u);
+      return `<div style="margin-top: 6px;"><a href="${this.escapeHtml(u)}" target="_blank" rel="noopener" style="color: ${drive ? '#047857' : '#2563eb'}; font-weight: 600; text-decoration: underline;">${drive ? '📎 เปิดไฟล์แนบใน Google Drive ครู' : '🔗 เปิดลิงก์ผลงาน / คลิปวิดีโอของนักเรียน'}</a></div>`;
+    }).join('');
+  },
+
+  // คลิปฝึกซ้อมของนักเรียน (ลิงก์/ไฟล์) ในคาบนี้ — ไม่นับเป็นงานประจำคาบ
+  renderPracticeRecordings(className, period, listEl) {
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem('ppk_student_recordings') || '{}'); } catch (e) { all = {}; }
+    const rows = [];
+    Store.getStudents(className).forEach(s => {
+      (all[`${className}_p${period}_${s.student_id}`] || []).forEach(r => rows.push({ s, r }));
+    });
+    const box = document.createElement('div');
+    box.id = 'teacher-practice-recordings';
+    box.style.cssText = 'background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:0.6rem 0.85rem;margin-top:0.75rem;font-size:0.85rem;';
+    box.innerHTML = `<div style="font-weight:700;color:#166534;margin-bottom:4px;">🎧 คลิปฝึกซ้อมของนักเรียน (คาบที่ ${period}) — ${rows.length} รายการ <span style="font-weight:400;color:#64748b;">(ไม่นับเป็นงานประจำคาบ)</span></div>` +
+      (rows.length ? rows.map(({ s, r }) => `<div style="padding:4px 0;border-top:1px dashed #bbf7d0;">เลขที่ ${this.escapeHtml(s.no)} • ${this.escapeHtml(s.prefix + s.first_name)} • ${this.escapeHtml(r.at || '')}${r.note ? ' • ' + this.escapeHtml(r.note) : ''}${this.submissionLinksHtml(r.url)}</div>`).join('')
+        : '<div style="color:#64748b;">ยังไม่มีคลิปฝึกซ้อม (กด 📥 ดึงงานนักเรียน เพื่ออัปเดต)</div>');
+    listEl.appendChild(box);
+  },
+
   renderSubmissionsTab() {
     const className = this.state.selectedClass;
     const period = this.state.selectedPeriod;
@@ -2889,7 +2929,7 @@ const App = {
             <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">เนื้อหาที่นักเรียนส่ง:</div>
             <div style="white-space: pre-wrap;">${this.escapeHtml(sub.content || '(ไม่มีข้อความ)')}</div>
             ${sub.fileName ? `<div style="margin-top: 6px; font-size: 0.82rem; font-weight: 600; color: #0284c7;">📎 ไฟล์แนบ: ${this.escapeHtml(sub.fileName)}</div>` : ''}
-            ${sub.url ? `<div style="margin-top: 6px;"><a href="${this.escapeHtml(sub.url)}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">🔗 เปิดลิงก์ผลงาน / คลิปวิดีโอของนักเรียน</a></div>` : ''}
+            ${this.submissionLinksHtml(sub.url)}
             <div style="font-size: 0.72rem; color: #059669; margin-top: 6px;">ส่งเมื่อ: ${this.escapeHtml(sub.submittedAt)}${sub.source === 'student_device' ? ' • 📱 ส่งจากมือถือนักเรียน' : ''}${sub.late ? ' <span class="badge-danger" style="font-size:0.7rem;padding:1px 6px;border-radius:4px;">ส่งช้า</span>' : ''}</div>
           </div>
         `;
@@ -2978,6 +3018,7 @@ const App = {
         listEl.appendChild(row);
       }
     });
+    this.renderPracticeRecordings(className, period, listEl);
   },
 
   saveStudentFeedback(className, period, studentId) {
