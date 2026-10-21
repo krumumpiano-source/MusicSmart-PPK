@@ -662,7 +662,7 @@
           <button class="btn-nav-action" style="background: #ffffff; color: #0284c7; border: none; font-weight: 700; padding: 0.45rem 0.85rem; border-radius: 8px; font-size: 0.88rem; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" onclick="App.triggerPwaInstall()">
             ติดตั้งทันที
           </button>
-          <button style="background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 1.1rem; padding: 0.2rem 0.4rem;" onclick="document.getElementById('student-pwa-banner').style.display='none'" title="ปิด">
+          <button style="background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 1.1rem; padding: 0.2rem 0.4rem;" onclick="if (typeof PwaInstall !== 'undefined') PwaInstall.dismiss(); else document.getElementById('student-pwa-banner').style.display='none'" title="ปิด">
             ✕
           </button>
         </div>
@@ -1879,6 +1879,16 @@
             <input type="file" id="roster-import-file" accept=".json,.js,.xlsx,.xls,.csv" style="display:none" onchange="App.importRosterFile(this.files[0]); this.value='';">
             <button class="btn-nav-action primary" onclick="document.getElementById('roster-import-file').click()">📂 เลือกไฟล์รายชื่อ</button>
             <button class="btn-nav-action" onclick="App.clearRoster()">🗑️ ล้างรายชื่อในเครื่องนี้</button>
+          </div>
+          <div style="background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #155e75; margin-bottom: 0.5rem;">☁️ เปิดให้นักเรียนเข้าสู่ระบบจากมือถือของตัวเอง</h4>
+            <p style="font-size: 0.8rem; color: #164e63; margin-bottom: 0.75rem;">
+              อัปโหลดรายชื่อจากเครื่องนี้ขึ้น Google Sheet ของครู (ต้องตั้งค่า URL + รหัสซิงค์ก่อน) ทำครั้งเดียวต่อภาคเรียน
+              นักเรียนจะตรวจได้เฉพาะรหัสของตัวเอง PIN ถูกเก็บแบบแฮชเท่านั้น จากนั้นกด "คัดลอกลิงก์นักเรียน" ส่งให้นักเรียน
+            </p>
+            <div id="roster-upload-status" style="font-size: 0.82rem; margin-bottom: 0.6rem; color: #334155;"></div>
+            <button class="btn-nav-action primary" onclick="App.uploadRosterToServer(false)">☁️ อัปโหลดรายชื่อขึ้น Google Sheet</button>
+            <button class="btn-nav-action" onclick="App.copyStudentShareLink()">🔗 คัดลอกลิงก์นักเรียน</button>
           </div>
           <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
             <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
@@ -3486,11 +3496,14 @@
 
   <!-- Scripts -->
   <script src="data/students.js?v=20261021_01"></script>
+  <script src="data/public-config.js?v=20261021_02"></script>
   <script src="data/lessons.js?v=20261020_03"></script>
   <script src="data/academic_docs.js?v=20261020_03"></script>
   <script src="data/quizzes.js?v=20261020_03"></script>
   <script src="js/google-sheet-sync.js?v=20261021_01"></script>
   <script src="data/store.js?v=20261020_03"></script>
+  <script src="js/student-auth.js?v=20261021_02"></script>
+  <script src="js/pwa-install.js?v=20261021_02"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>
@@ -3499,7 +3512,7 @@
   <script src="js/car-analytics.js?v=20261020_03"></script>
   <script src="js/official-forms.js?v=20261020_03"></script>
   <script src="js/virtual-kalimba.js?v=20261020_03"></script>
-  <script src="js/app.js?v=20261020_03"></script>
+  <script src="js/app.js?v=20261021_02"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>

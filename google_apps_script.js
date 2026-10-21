@@ -23,6 +23,10 @@
  *    แล้วนำค่าเดียวกันไปใส่ช่อง "รหัสซิงค์ (Sync Token)" ในหน้าต่างซิงค์ของ MusicSmart
  *    คำขอที่ไม่มี token ถูกต้องจะถูกปฏิเสธ (unauthorized) ทุกครั้ง
  *    หลังแก้โค้ดทุกครั้ง: Deploy -> Manage deployments -> แก้ไข -> Version: New version
+ * 9. ระบบเข้าสู่ระบบนักเรียน: ครูกดปุ่ม "อัปโหลดรายชื่อขึ้น Google Sheet" (จัดการผู้ใช้ > นักเรียน)
+ *    1 ครั้งต่อภาคเรียน ระบบจะสร้างชีต "นักเรียน_Students_Auth" เก็บรายชื่อและ PIN แบบแฮช (SHA-256 + salt)
+ *    นักเรียนใช้ action studentLookup / studentSetPin / studentLogin ได้โดยไม่ต้องมี token
+ *    แต่จะได้ข้อมูลเฉพาะของตัวเองเท่านั้น (รหัส ชื่อ ห้อง) ไม่มีทางดึงรายชื่อทั้งหมดได้
  * ============================================================================
  */
 
@@ -33,6 +37,11 @@ function doPost(e) {
   try {
     var rawText = (e && e.postData && e.postData.contents) ? e.postData.contents : "{}";
     var payload = JSON.parse(rawText);
+
+    // 0a. ระบบเข้าสู่ระบบของนักเรียน (ไม่ใช้ SYNC_TOKEN แต่เปิดเผยเฉพาะข้อมูลของนักเรียนคนนั้น)
+    if (payload && STUDENT_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
+      return jsonOut(handleStudentPublicAction(SpreadsheetApp.getActiveSpreadsheet(), payload));
+    }
 
     // 0. ตรวจสอบรหัสซิงค์ (SYNC_TOKEN ใน Script Properties)
     var expectedToken = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');
@@ -54,6 +63,11 @@ function doPost(e) {
         serverTime: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
+
+    // 1b. ครูอัปโหลดรายชื่อนักเรียน / รีเซ็ต PIN / ดูสถานะ PIN (ต้องมี token)
+    if (action === 'upload_roster') return jsonOut(uploadStudentRoster(ss, payload.students || [], !!payload.replace));
+    if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
+    if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
 
     // 2. การซิงค์แบบเป็นกลุ่ม (Batch Sync จาก Outbox)
     if (action === 'batch_sync') {
@@ -356,4 +370,209 @@ function getOrCreateSheet(ss, sheetName, headers) {
     }
   }
   return sheet;
+}
+
+/* ============================================================================
+ * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
+ * ============================================================================ */
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin'];
+var STUDENT_AUTH_SHEET = 'นักเรียน_Students_Auth';
+var STUDENT_AUTH_HEADERS = ['student_id', 'prefix', 'first_name', 'last_name', 'nickname', 'class', 'no',
+  'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'last_login'];
+var STUDENT_MAX_FAILS = 5;
+var STUDENT_LOCK_MINUTES = 15;
+var STUDENT_GLOBAL_PER_MINUTE = 300; // กันการสุ่มเดารหัสจำนวนมาก (ทั้งระบบ ต่อ 1 นาที)
+
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function toHex_(bytes) {
+  var out = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = bytes[i] < 0 ? bytes[i] + 256 : bytes[i];
+    out += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return out;
+}
+
+function getPinPepper_() {
+  var props = PropertiesService.getScriptProperties();
+  var pepper = props.getProperty('PIN_PEPPER');
+  if (!pepper) {
+    pepper = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('PIN_PEPPER', pepper);
+  }
+  return pepper;
+}
+
+function hashPin_(studentId, pin, salt) {
+  var value = salt + ':' + studentId + ':' + pin + ':' + getPinPepper_();
+  var h = '';
+  for (var i = 0; i < 100; i++) {
+    h = toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, h + value, Utilities.Charset.UTF_8));
+  }
+  return h;
+}
+
+function cleanId_(v) { return String(v === undefined || v === null ? '' : v).replace(/\s+/g, ''); }
+
+function getStudentSheet_(ss) { return getOrCreateSheet(ss, STUDENT_AUTH_SHEET, STUDENT_AUTH_HEADERS); }
+
+function findStudentRow_(sheet, studentId) {
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    if (cleanId_(values[r][0]) === studentId) {
+      var o = { row: r + 1 };
+      for (var c = 0; c < STUDENT_AUTH_HEADERS.length; c++) o[STUDENT_AUTH_HEADERS[c]] = values[r][c];
+      return o;
+    }
+  }
+  return null;
+}
+
+function writeStudentRow_(sheet, rec) {
+  var row = STUDENT_AUTH_HEADERS.map(function (h) { return rec[h] === undefined ? '' : rec[h]; });
+  sheet.getRange(rec.row, 1, 1, row.length).setValues([row]);
+}
+
+function maskName_(name) {
+  var s = String(name || '');
+  return s ? s.charAt(0) + '•••' : '•••';
+}
+
+function publicProfile_(rec) {
+  return {
+    studentId: cleanId_(rec.student_id),
+    name: String(rec.prefix || '') + String(rec.first_name || '') + ' ' + String(rec.last_name || ''),
+    nickname: String(rec.nickname || ''),
+    studentClass: String(rec['class'] || ''),
+    no: rec.no
+  };
+}
+
+function globalStudentThrottle_() {
+  var cache = CacheService.getScriptCache();
+  var key = 'stu_rate_' + Math.floor(Date.now() / 60000);
+  var n = Number(cache.get(key) || 0) + 1;
+  cache.put(key, String(n), 120);
+  return n <= STUDENT_GLOBAL_PER_MINUTE;
+}
+
+function handleStudentPublicAction(ss, payload) {
+  if (!globalStudentThrottle_()) {
+    return { status: 'error', code: 'rate_limited', message: 'มีการเข้าสู่ระบบจำนวนมาก กรุณารอสักครู่แล้วลองใหม่' };
+  }
+  var studentId = cleanId_(payload.studentId);
+  if (!/^\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
+  var sheet = getStudentSheet_(ss);
+  var rec = findStudentRow_(sheet, studentId);
+  if (!rec) return { status: 'error', code: 'not_found', message: 'ไม่พบรหัสนักเรียนนี้ในระบบ กรุณาแจ้งคุณครู' };
+  var hasPin = !!rec.pin_hash;
+  var now = Date.now();
+  var lockedUntil = Number(rec.locked_until || 0);
+
+  if (payload.action === 'studentLookup') {
+    // เปิดเผยเพียงห้องเรียนและอักษรตัวแรกของชื่อ เพื่อให้นักเรียนยืนยันตัวเอง
+    return { status: 'success', exists: true, hasPin: hasPin, studentClass: String(rec['class'] || ''),
+      maskedName: maskName_(rec.first_name), locked: lockedUntil > now };
+  }
+
+  var pin = String(payload.pin || '');
+  if (!/^\d{6}$/.test(pin)) return { status: 'error', code: 'bad_pin', message: 'รหัส PIN ต้องเป็นตัวเลข 6 หลัก' };
+
+  if (payload.action === 'studentSetPin') {
+    if (hasPin) return { status: 'error', code: 'pin_exists', message: 'รหัสนี้ตั้ง PIN แล้ว หากลืม PIN กรุณาให้คุณครูรีเซ็ต' };
+    rec.salt = Utilities.getUuid();
+    rec.pin_hash = hashPin_(studentId, pin, rec.salt);
+    rec.failed_count = 0;
+    rec.locked_until = '';
+    rec.pin_set_at = new Date().toISOString();
+    rec.last_login = rec.pin_set_at;
+    writeStudentRow_(sheet, rec);
+    return { status: 'success', profile: publicProfile_(rec) };
+  }
+
+  // studentLogin
+  if (lockedUntil > now) {
+    return { status: 'error', code: 'locked', message: 'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว ' + STUDENT_LOCK_MINUTES + ' นาที' };
+  }
+  if (!hasPin) return { status: 'error', code: 'needs_pin', message: 'ยังไม่ได้ตั้ง PIN กรุณาตั้ง PIN ก่อน' };
+  if (hashPin_(studentId, pin, String(rec.salt)) !== String(rec.pin_hash)) {
+    rec.failed_count = Number(rec.failed_count || 0) + 1;
+    var left = STUDENT_MAX_FAILS - rec.failed_count;
+    if (rec.failed_count >= STUDENT_MAX_FAILS) {
+      rec.locked_until = now + STUDENT_LOCK_MINUTES * 60000;
+      rec.failed_count = 0;
+      left = 0;
+    }
+    writeStudentRow_(sheet, rec);
+    return { status: 'error', code: 'wrong_pin', attemptsLeft: left,
+      message: left > 0 ? 'PIN ไม่ถูกต้อง (เหลืออีก ' + left + ' ครั้ง)' : 'ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว ' + STUDENT_LOCK_MINUTES + ' นาที' };
+  }
+  rec.failed_count = 0;
+  rec.locked_until = '';
+  rec.last_login = new Date().toISOString();
+  writeStudentRow_(sheet, rec);
+  return { status: 'success', profile: publicProfile_(rec) };
+}
+
+/** ครูอัปโหลด/อัปเดตรายชื่อ (เก็บ PIN เดิมไว้) replace=true จะลบรหัสที่ไม่อยู่ในรายชื่อใหม่ */
+function uploadStudentRoster(ss, students, replace) {
+  var sheet = getStudentSheet_(ss);
+  var values = sheet.getDataRange().getValues();
+  var index = {};
+  for (var r = 1; r < values.length; r++) index[cleanId_(values[r][0])] = r;
+  var seen = {}, added = 0, updated = 0;
+  for (var i = 0; i < students.length; i++) {
+    var s = students[i] || {};
+    var id = cleanId_(s.student_id);
+    if (!/^\d{4,10}$/.test(id) || seen[id]) continue;
+    seen[id] = true;
+    var base = [id, s.prefix || '', s.first_name || '', s.last_name || '', s.nickname || '', s['class'] || '', s.no || ''];
+    if (index[id] !== undefined) {
+      var row = values[index[id]];
+      for (var c = 0; c < base.length; c++) row[c] = base[c];
+      updated++;
+    } else {
+      var newRow = base.concat(['', '', 0, '', '', '']);
+      index[id] = values.length;
+      values.push(newRow);
+      added++;
+    }
+  }
+  var removed = 0;
+  if (replace) {
+    var kept = [values[0]];
+    for (var k = 1; k < values.length; k++) {
+      if (seen[cleanId_(values[k][0])]) kept.push(values[k]); else removed++;
+    }
+    values = kept;
+  }
+  sheet.clearContents();
+  sheet.getRange(1, 1, values.length, STUDENT_AUTH_HEADERS.length).setValues(values.map(function (row) {
+    var out = [];
+    for (var c = 0; c < STUDENT_AUTH_HEADERS.length; c++) out.push(row[c] === undefined ? '' : row[c]);
+    return out;
+  }));
+  return { status: 'success', added: added, updated: updated, removed: removed, total: values.length - 1 };
+}
+
+function resetStudentPinServer(ss, studentId) {
+  var id = cleanId_(studentId);
+  var sheet = getStudentSheet_(ss);
+  var rec = findStudentRow_(sheet, id);
+  if (!rec) return { status: 'error', code: 'not_found', message: 'ไม่พบรหัสนักเรียนนี้ในชีต' };
+  rec.salt = ''; rec.pin_hash = ''; rec.failed_count = 0; rec.locked_until = ''; rec.pin_set_at = '';
+  writeStudentRow_(sheet, rec);
+  return { status: 'success', studentId: id };
+}
+
+function studentPinStatus(ss) {
+  var values = getStudentSheet_(ss).getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < values.length; r++) {
+    list.push({ studentId: cleanId_(values[r][0]), hasPin: !!values[r][8], locked: Number(values[r][10] || 0) > Date.now() });
+  }
+  return { status: 'success', students: list };
 }

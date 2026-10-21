@@ -43,6 +43,8 @@ jobs:
           python tests/test_students.py
           node test_e2e_suite.js
           node tests/test_sync.js
+          node tests/test_student_auth_gas.js
+          node tests/test_student_portal.js
 
   deploy:
     needs: test

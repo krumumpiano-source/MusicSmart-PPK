@@ -218,7 +218,8 @@ const App = {
         authUserBadge.style.display = 'inline-block';
         authUserBadge.innerHTML = `🎓 <span style="color:var(--ppk-navy-dark);">${this.escapeHtml(user.name)}</span> <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">${this.escapeHtml(user.studentClass)} เลขที่ ${user.no}</span>`;
       }
-      // CRITICAL PRIVACY: Hide teacher actions, teacher courses, student switcher, and role switcher for students!
+      // CRITICAL PRIVACY: teacher-only sections are REMOVED from the DOM (not just hidden) for students
+      if (typeof RoleGuard !== 'undefined') RoleGuard.purgeTeacherDom();
       if (studentSwitcher) studentSwitcher.style.display = 'none';
       if (teacherActions) teacherActions.style.display = 'none';
       if (studentActions) studentActions.style.display = 'flex';
@@ -267,80 +268,88 @@ const App = {
     }
   },
 
-  onAuthStudentIdInput(val) {
-    const cleanId = (val || '').trim();
-    const previewBox = document.getElementById('auth-student-preview-box');
-    const previewName = document.getElementById('auth-student-preview-name');
-    const previewMeta = document.getElementById('auth-student-preview-meta');
-    const pinTag = document.getElementById('auth-student-pin-status-tag');
-    const modeLogin = document.getElementById('auth-student-mode-login');
-    const modeRegister = document.getElementById('auth-student-mode-register');
-    const indicator = document.getElementById('auth-student-id-indicator');
-    const errorBox = document.getElementById('auth-student-id-error');
-
-    if (errorBox) {
-      errorBox.style.display = 'none';
-      errorBox.textContent = '';
-    }
-
-    if (cleanId.length === 5) {
-      const studentInfo = Store.getStudentById(cleanId);
-      if (studentInfo) {
-        if (indicator) {
-          indicator.textContent = '✅';
-          indicator.style.display = 'block';
-        }
-        if (previewBox) previewBox.style.display = 'block';
-        if (previewName) previewName.textContent = `${studentInfo.prefix}${studentInfo.first_name} ${studentInfo.last_name} (${studentInfo.nickname || '-'})`;
-        if (previewMeta) previewMeta.textContent = `ห้อง ${studentInfo.class} • เลขที่ ${studentInfo.no} • รหัส: ${studentInfo.student_id}`;
-
-        const acc = Store.getStudentAccount(cleanId);
-        if (acc && (acc.pinHash || acc.pin)) {
-          // Case A: Existing Student with registered PIN
-          if (pinTag) {
-            pinTag.textContent = '🔒 ตั้ง PIN แล้ว';
-            pinTag.style.background = '#dcfce7';
-            pinTag.style.color = '#15803d';
-          }
-          if (modeLogin) modeLogin.style.display = 'block';
-          if (modeRegister) modeRegister.style.display = 'none';
-          setTimeout(() => document.getElementById('auth-student-pin')?.focus(), 150);
-        } else {
-          // Case B: First-time student -> FORCE PIN SETUP!
-          if (pinTag) {
-            pinTag.textContent = '✨ เข้าใช้งานครั้งแรก (ยังไม่ตั้ง PIN)';
-            pinTag.style.background = '#fef3c7';
-            pinTag.style.color = '#92400e';
-          }
-          if (modeLogin) modeLogin.style.display = 'none';
-          if (modeRegister) modeRegister.style.display = 'block';
-          setTimeout(() => document.getElementById('auth-student-new-pin')?.focus(), 150);
-        }
-        return;
-      } else {
-        // 5 digits entered BUT NOT FOUND in student roster!
-        if (indicator) {
-          indicator.textContent = '❌';
-          indicator.style.display = 'block';
-        }
-        if (previewBox) previewBox.style.display = 'none';
-        if (modeLogin) modeLogin.style.display = 'none';
-        if (modeRegister) modeRegister.style.display = 'none';
-        if (errorBox) {
-          errorBox.style.display = 'block';
-          errorBox.innerHTML = `⚠️ ไม่พบเลขประจำตัว <strong>${this.escapeHtml(cleanId)}</strong> ในระบบโรงเรียนพะเยาพิทยาคม<br><span style="font-size:0.78rem; font-weight:normal; opacity:0.9;">กรุณาตรวจสอบเลขประจำตัว 5 หลัก หรือแจ้งคุณครูผู้สอนเพื่อลงทะเบียน</span>`;
-        }
-        return;
-      }
-    }
-
-    if (indicator) indicator.style.display = 'none';
-    if (previewBox) previewBox.style.display = 'none';
-    if (modeLogin) modeLogin.style.display = 'none';
-    if (modeRegister) modeRegister.style.display = 'none';
+  _authEls() {
+    const g = (id) => document.getElementById(id);
+    return {
+      previewBox: g('auth-student-preview-box'), previewName: g('auth-student-preview-name'), previewMeta: g('auth-student-preview-meta'),
+      pinTag: g('auth-student-pin-status-tag'), modeLogin: g('auth-student-mode-login'), modeRegister: g('auth-student-mode-register'),
+      indicator: g('auth-student-id-indicator'), errorBox: g('auth-student-id-error')
+    };
   },
 
-  handleStudentLogin() {
+  _resetAuthStudentUi() {
+    const e = this._authEls();
+    if (e.indicator) e.indicator.style.display = 'none';
+    if (e.previewBox) e.previewBox.style.display = 'none';
+    if (e.modeLogin) e.modeLogin.style.display = 'none';
+    if (e.modeRegister) e.modeRegister.style.display = 'none';
+    if (e.errorBox) { e.errorBox.style.display = 'none'; e.errorBox.textContent = ''; }
+  },
+
+  _showAuthStudentError(html) {
+    const e = this._authEls();
+    if (e.indicator) { e.indicator.textContent = '❌'; e.indicator.style.display = 'block'; }
+    if (e.errorBox) { e.errorBox.style.display = 'block'; e.errorBox.innerHTML = html; }
+  },
+
+  _showStudentAuthMode(hasPin) {
+    const e = this._authEls();
+    if (e.pinTag) {
+      e.pinTag.textContent = hasPin ? '🔒 ตั้ง PIN แล้ว' : '✨ เข้าใช้งานครั้งแรก (ยังไม่ตั้ง PIN)';
+      e.pinTag.style.background = hasPin ? '#dcfce7' : '#fef3c7';
+      e.pinTag.style.color = hasPin ? '#15803d' : '#92400e';
+    }
+    if (e.modeLogin) e.modeLogin.style.display = hasPin ? 'block' : 'none';
+    if (e.modeRegister) e.modeRegister.style.display = hasPin ? 'none' : 'block';
+    setTimeout(() => document.getElementById(hasPin ? 'auth-student-pin' : 'auth-student-new-pin')?.focus(), 150);
+  },
+
+  // ขั้นที่ 1: กรอกรหัสนักเรียน -> ตรวจสอบกับเซิร์ฟเวอร์ (หรือรายชื่อในเครื่องในโหมดสาธิต)
+  async onAuthStudentIdInput(val) {
+    const cleanId = (val || '').trim();
+    this._authLookupSeq = (this._authLookupSeq || 0) + 1;
+    const seq = this._authLookupSeq;
+    this._resetAuthStudentUi();
+    if (cleanId.length !== 5) return;
+
+    const e = this._authEls();
+    if (e.indicator) { e.indicator.textContent = '⏳'; e.indicator.style.display = 'block'; }
+    const res = await StudentAuth.lookup(cleanId);
+    if (seq !== this._authLookupSeq) return; // ผู้ใช้พิมพ์ต่อแล้ว
+
+    if (!res.success) {
+      if (e.indicator) e.indicator.style.display = 'none';
+      if (res.code === 'network' || res.code === 'rate_limited') {
+        this._showAuthStudentError(`⚠️ ${this.escapeHtml(res.message || 'เชื่อมต่อไม่ได้')}`);
+      } else {
+        this._showAuthStudentError(`⚠️ ไม่พบเลขประจำตัว <strong>${this.escapeHtml(cleanId)}</strong> ในระบบ<br><span style="font-size:0.78rem; font-weight:normal; opacity:0.9;">กรุณาตรวจสอบเลขประจำตัว 5 หลัก หรือแจ้งคุณครูผู้สอนเพื่อลงทะเบียน</span>`);
+      }
+      return;
+    }
+
+    if (e.indicator) { e.indicator.textContent = '✅'; e.indicator.style.display = 'block'; }
+    if (e.previewBox) e.previewBox.style.display = 'block';
+    if (e.previewName) e.previewName.textContent = res.displayName || '-';
+    if (e.previewMeta) e.previewMeta.textContent = `ห้อง ${res.studentClass || '-'} • รหัส: ${cleanId}${res.mode === 'local' ? ' • (โหมดสาธิตในเครื่อง)' : ''}`;
+    if (res.locked) {
+      this._showAuthStudentError('🔒 ใส่ PIN ผิดหลายครั้ง ระบบล็อกชั่วคราว 15 นาที หรือให้คุณครูรีเซ็ต PIN');
+    }
+    this._showStudentAuthMode(res.hasPin);
+  },
+
+  _afterStudentLogin(user, isFirstTime) {
+    this.checkAuth();
+    const isStandalone = (typeof PwaInstall !== 'undefined') ? PwaInstall.isStandalone()
+      : (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
+    if (!isStandalone) {
+      this.openStudentPwaPromptModal(user, isFirstTime);
+    } else if (!isFirstTime) {
+      alert(`🎉 ยินดีต้อนรับ ${user.name} เข้าสู่ระบบ MusicSmart`);
+    }
+  },
+
+  // ขั้นที่ 2ก: เข้าสู่ระบบด้วยรหัส + PIN
+  async handleStudentLogin() {
     const studentId = (document.getElementById('auth-student-id')?.value || '').trim();
     const pin = (document.getElementById('auth-student-pin')?.value || '').trim();
 
@@ -355,31 +364,21 @@ const App = {
       return;
     }
 
-    const res = Store.verifyStudentLogin(studentId, pin);
+    const res = await StudentAuth.login(studentId, pin);
     if (res.success) {
-      this.checkAuth();
-      // If not running as standalone app, guide to install app!
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-      if (!isStandalone) {
-        this.openStudentPwaPromptModal(res.user, false);
-      } else {
-        alert(`🎉 ยินดีต้อนรับ ${res.user.name} เข้าสู่ระบบ MusicSmart`);
-      }
+      this._afterStudentLogin(res.user, false);
+    } else if (res.needsRegistration) {
+      alert(res.message || 'ยังไม่ได้ตั้งรหัส PIN กรุณาตั้ง PIN ก่อน');
+      this._showStudentAuthMode(false);
     } else {
-      if (res.needsRegistration) {
-        alert(res.message);
-        const modeLogin = document.getElementById('auth-student-mode-login');
-        const modeRegister = document.getElementById('auth-student-mode-register');
-        if (modeLogin) modeLogin.style.display = 'none';
-        if (modeRegister) modeRegister.style.display = 'block';
-        document.getElementById('auth-student-new-pin')?.focus();
-      } else {
-        alert(res.message);
-      }
+      alert(res.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      const pinEl = document.getElementById('auth-student-pin');
+      if (pinEl) { pinEl.value = ''; pinEl.focus(); }
     }
   },
 
-  handleStudentRegisterPin() {
+  // ขั้นที่ 2ข: เข้าใช้ครั้งแรก บังคับตั้ง PIN แล้วเข้าสู่ระบบทันที
+  async handleStudentRegisterPin() {
     const studentId = (document.getElementById('auth-student-id')?.value || '').trim();
     const newPin = (document.getElementById('auth-student-new-pin')?.value || '').trim();
     const confirmPin = (document.getElementById('auth-student-confirm-pin')?.value || '').trim();
@@ -400,13 +399,12 @@ const App = {
       return;
     }
 
-    const res = Store.registerStudentPin(studentId, newPin);
+    const res = await StudentAuth.setPin(studentId, newPin);
     if (res.success) {
-      this.checkAuth();
-      // Prompt/force PWA App Install immediately!
-      this.openStudentPwaPromptModal(res.user, true);
+      this._afterStudentLogin(res.user, true);
     } else {
-      alert(res.message);
+      alert(res.message || 'ตั้งรหัส PIN ไม่สำเร็จ');
+      if (res.code === 'pin_exists') this._showStudentAuthMode(true);
     }
   },
 
@@ -442,12 +440,7 @@ const App = {
   },
 
   copyStudentShareLink() {
-    const origin = window.location.origin;
-    let path = window.location.pathname;
-    let url = `${origin}${path}?role=student`;
-    if (!origin || origin === 'null') {
-      url = window.location.href.split('?')[0] + '?role=student';
-    }
+    let url = (typeof StudentAuth !== 'undefined') ? StudentAuth.studentLink() : `${window.location.origin}${window.location.pathname}?role=student`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(() => {
@@ -515,6 +508,7 @@ const App = {
         this.openFirstTimeSetupModal(res.teacher);
         return;
       }
+      if (typeof RoleGuard !== 'undefined' && RoleGuard.purged) { location.reload(); return; }
       this.checkAuth();
       alert(`👨‍🏫 ยินดีต้อนรับ ${res.user.name} เข้าสู่ห้องปฏิบัติการครู`);
     } else {
@@ -588,6 +582,7 @@ const App = {
   },
 
   triggerPwaInstall() {
+    if (typeof PwaInstall !== 'undefined') { PwaInstall.install(); return; }
     if (this.deferredPwaPrompt) {
       this.deferredPwaPrompt.prompt();
       this.deferredPwaPrompt.userChoice.then((choiceResult) => {
@@ -622,6 +617,7 @@ const App = {
     const name = user ? user.name : 'ผู้ใช้งาน';
     if (confirm(`ต้องการออกจากระบบ (${name}) หรือไม่?`)) {
       Store.logout();
+      if (typeof RoleGuard !== 'undefined' && RoleGuard.purged) { location.reload(); return; }
       this.state.role = 'student';
       this.state.studentId = null;
       this.state.studentClass = null;
@@ -739,6 +735,7 @@ const App = {
     const name = studentInfo ? `${studentInfo.prefix}${studentInfo.first_name} ${studentInfo.last_name}` : studentId;
     if (confirm(`ยืนยันการรีเซ็ตรหัส PIN ของ ${name} (รหัส ${studentId}) หรือไม่?\nเมื่อรีเซ็ตแล้ว นักเรียนจะสามารถเข้าสู่ระบบและตั้ง PIN 6 หลักใหม่ได้ด้วยตนเอง`)) {
       const res = Store.resetStudentPin(studentId);
+      this.resetStudentPinOnServer(studentId);
       alert(res.message);
       const classSel = document.getElementById('setting-pin-reset-class') || document.getElementById('user-pin-reset-class');
       if (classSel) this.onPinResetClassChange(classSel.value);
@@ -1142,7 +1139,12 @@ const App = {
     }
 
     const studentId = user.studentId || this.state.studentId;
-    const student = Store.getStudentById ? Store.getStudentById(studentId) : null;
+    let student = Store.getStudentById ? Store.getStudentById(studentId) : null;
+    if (!student && user.studentClass) {
+      // โหมดเซิร์ฟเวอร์: เครื่องนักเรียนไม่มีรายชื่อทั้งห้อง ใช้ข้อมูลของตัวเองจากการเข้าสู่ระบบเท่านั้น
+      student = { student_id: String(studentId), prefix: '', first_name: user.name || '', last_name: '',
+        nickname: user.nickname || '', class: user.studentClass, no: user.no || '-' };
+    }
     if (!student) {
       console.warn('Student account not found in roster:', studentId);
       return;
@@ -1163,7 +1165,7 @@ const App = {
     const subjEl = document.getElementById('student-portal-subject');
     const statusBadge = document.getElementById('student-portal-status-badge');
 
-    if (nameEl) nameEl.textContent = `${student.prefix}${student.first_name} ${student.last_name} (${student.nickname || '-'})`;
+    if (nameEl) nameEl.textContent = `${student.prefix}${student.first_name}${student.last_name ? ' ' + student.last_name : ''} (${student.nickname || '-'})`;
     if (idEl) idEl.textContent = student.student_id;
     if (classEl) classEl.textContent = className;
     if (noEl) noEl.textContent = student.no;
@@ -1378,7 +1380,8 @@ const App = {
     }
 
     // 7. Render Workspace: Lesson Content & In-Page Submission Area
-    const lesson = Store.getLesson(gradeKey, this.state.studentPeriod);
+    // ฉบับนักเรียน: ตัดขั้นตอนการสอน คำแนะนำครู รูบริกครู ออกก่อนสร้าง DOM
+    const lesson = RoleGuard.sanitizeLesson(Store.getLesson(gradeKey, this.state.studentPeriod));
     const badgePeriodEl = document.getElementById('student-workspace-period-badge');
     const titleEl = document.getElementById('student-workspace-title');
     const lessonTextEl = document.getElementById('student-lesson-text');
@@ -1396,7 +1399,7 @@ const App = {
     }
 
     if (promptEl) {
-      if (lesson?.assessment?.rubrics && lesson.assessment.rubrics.length > 0) {
+      if (lesson?.assessment?.has_score) {
         promptEl.textContent = `ภารกิจประจำคาบ: ปฏิบัติตามกิจกรรมการเรียนรู้ อธิบายความเข้าใจ หรือบันทึกผลการปฏิบัติเครื่องดนตรี (${lesson.topic})`;
       } else {
         promptEl.textContent = `ภารกิจ: บันทึกความเข้าใจ หรืออธิบายข้อคิดที่ได้จากการเรียนรู้ในคาบที่ ${this.state.studentPeriod}`;
@@ -1768,23 +1771,19 @@ const App = {
       `;
     }
 
-    // --- Active Learning Student Activities ---
-    if (lesson.steps && lesson.steps.length > 0) {
+    // --- เนื้อหา/สื่อที่ต้องเรียน (ฉบับนักเรียน: ไม่แสดงขั้นตอนการสอนของครู) ---
+    const studentMedia = (lesson.media || []).filter(m => m && m.title);
+    if (studentMedia.length > 0) {
       html += `
         <div style="font-weight: 700; color: #1e3a8a; font-size: 0.92rem; margin-bottom: 0.65rem;">
-          📋 ลำดับกิจกรรมการเรียนรู้ของนักเรียนในคาบนี้ (เปิดดูบนหน้าจอของคุณ):
+          📚 สื่อและเนื้อหาที่ต้องเรียนในคาบนี้:
         </div>
       `;
-      lesson.steps.forEach((st, idx) => {
+      studentMedia.forEach((m) => {
+        const safeUrl = /^(https?:\/\/|academic\/|images\/|\.\/)/.test(m.url || '') ? m.url : '';
         html += `
-          <div style="margin-bottom: 0.65rem; padding: 0.65rem 0.85rem; background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; border-radius: 6px;">
-            <div style="font-weight: 700; font-size: 0.88rem; color: #0369a1; display: flex; justify-content: space-between;">
-              <span>${idx + 1}. ${this.escapeHtml(st.phase)}</span>
-              <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">${st.duration} นาที</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #334155; margin-top: 4px; line-height: 1.5;">
-              ${this.escapeHtml(st.desc)}
-            </div>
+          <div style="margin-bottom: 0.5rem; padding: 0.55rem 0.85rem; background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; border-radius: 6px; font-size: 0.86rem;">
+            ${safeUrl ? `<a href="${this.escapeHtml(safeUrl)}" target="_blank" rel="noopener" style="color: #0369a1; font-weight: 600;">${this.escapeHtml(m.title)}</a>` : `<span style="font-weight: 600; color: #0369a1;">${this.escapeHtml(m.title)}</span>`}
           </div>
         `;
       });
@@ -2089,6 +2088,31 @@ const App = {
     }
   },
 
+  async uploadRosterToServer(replace = false) {
+    const el = document.getElementById('roster-upload-status');
+    try {
+      if (el) el.textContent = '⏳ กำลังอัปโหลดรายชื่อ...';
+      const r = await StudentAuth.uploadRoster(replace);
+      const msg = `✅ อัปโหลดสำเร็จ: เพิ่ม ${r.added} • อัปเดต ${r.updated} • รวม ${r.total} คน (PIN เดิมยังอยู่)`;
+      if (el) el.textContent = msg;
+      alert(msg);
+    } catch (err) {
+      if (el) el.textContent = '❌ ' + err.message;
+      alert('❌ ' + err.message);
+    }
+  },
+
+  async resetStudentPinOnServer(studentId) {
+    const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
+    if (!cfg.webAppUrl || !cfg.syncToken) return;
+    try {
+      await StudentAuth.resetPinServer(studentId);
+      if (GoogleSheetSync.showToast) GoogleSheetSync.showToast(`รีเซ็ต PIN รหัส ${studentId} บนเซิร์ฟเวอร์แล้ว`, 'success');
+    } catch (err) {
+      alert('⚠️ รีเซ็ต PIN บนเซิร์ฟเวอร์ไม่สำเร็จ: ' + err.message);
+    }
+  },
+
   clearRoster() {
     if (!confirm('ล้างรายชื่อนักเรียนที่นำเข้าในเครื่องนี้?')) return;
     Store.clearRoster();
@@ -2135,9 +2159,10 @@ const App = {
     const studentId = studentSel.value;
     const sName = studentSel.options[studentSel.selectedIndex]?.text || studentId;
 
-    if (confirm(`ต้องการรีเซ็ตรหัส PIN ของ ${sName}\nกลับเป็นค่าเริ่มต้น (เลขประจำตัว 5 หลัก) หรือไม่?`)) {
+    if (confirm(`ต้องการรีเซ็ตรหัส PIN ของ ${sName} หรือไม่?\nนักเรียนจะต้องตั้ง PIN 6 หลักใหม่ในการเข้าใช้ครั้งถัดไป`)) {
+      this.resetStudentPinOnServer(studentId);
       if (Store.resetStudentPin(studentId)) {
-        alert(`✅ รีเซ็ต PIN เรียบร้อยแล้ว!\nนักเรียนสามารถล็อกอินด้วยเลขประจำตัว ${studentId} ได้ทันที`);
+        alert(`✅ รีเซ็ต PIN เรียบร้อยแล้ว!\nนักเรียนรหัส ${studentId} จะต้องตั้ง PIN ใหม่เมื่อเข้าใช้ครั้งถัดไป`);
         const classSel = document.getElementById('user-pin-reset-class');
         if (classSel) this.onUserPinClassChange(classSel.value);
       } else {
