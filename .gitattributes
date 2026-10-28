@@ -1,3 +1,4 @@
 # Shell scripts and CI workflows must keep LF line endings (Linux runners)
 *.sh text eol=lf
 .github/workflows/*.yml text eol=lf
+*.bat text eol=crlf
