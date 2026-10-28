@@ -53,6 +53,9 @@ const App = {
       this.state.role = 'teacher';
     }
 
+    // ภาคเรียน/รหัสวิชาคำนวณจากวันที่ (term-config): ครูเปิดแอปแล้วถึงวันเริ่มภาคใหม่ -> เก็บข้อมูลภาคเดิมเข้า archive อัตโนมัติ
+    if (this.state.role === 'teacher') { try { Store.autoRolloverIfNeeded(); } catch (e) { console.warn('auto rollover', e); } }
+    try { Store.applyTermToStaticData(); } catch (e) { console.warn('apply term', e); }
     this.applyAppSettings();
     this.renderCourseTabs();
     this.updateSemesterBadge();
@@ -478,7 +481,7 @@ const App = {
   _showStudentAuthMode(hasPin, isTestAccount = false) {
     const e = this._authEls();
     if (e.pinTag) {
-      e.pinTag.textContent = isTestAccount ? '🧪 บัญชีทดสอบ (ใช้รหัสผ่านครู)' : (hasPin ? '🔒 ตั้ง PIN แล้ว' : '✨ เข้าใช้งานครั้งแรก (ยังไม่ตั้ง PIN)');
+      e.pinTag.textContent = isTestAccount ? '🧪 บัญชีสาธิต (โหมดพัฒนา ใช้รหัสทดสอบ)' : (hasPin ? '🔒 ตั้ง PIN แล้ว' : '✨ เข้าใช้งานครั้งแรก (ยังไม่ตั้ง PIN)');
       e.pinTag.style.background = hasPin ? '#dcfce7' : '#fef3c7';
       e.pinTag.style.color = hasPin ? '#15803d' : '#92400e';
     }
@@ -486,7 +489,7 @@ const App = {
     if (pinInput) {
       pinInput.maxLength = isTestAccount ? 30 : 20;
       pinInput.setAttribute('inputmode', isTestAccount ? 'text' : 'numeric');
-      pinInput.placeholder = isTestAccount ? 'รหัสผ่านครู' : '••••••';
+      pinInput.placeholder = isTestAccount ? 'รหัสทดสอบ' : '••••••';
     }
     if (e.modeLogin) e.modeLogin.style.display = hasPin ? 'block' : 'none';
     if (e.modeRegister) e.modeRegister.style.display = hasPin ? 'none' : 'block';
@@ -658,8 +661,9 @@ const App = {
     const hintEl = document.getElementById('auth-teacher-first-time-hint');
     const defaultHintEl = document.getElementById('auth-teacher-default-hint');
     const secretInput = document.getElementById('auth-teacher-secret');
+    const isApproved = teacher && (!Store.isTeacherApproved || Store.isTeacherApproved(teacher));
 
-    if (teacher && teacher.needsFirstTimeSetup) {
+    if (teacher && teacher.needsFirstTimeSetup && isApproved) {
       if (hintEl) hintEl.style.display = 'block';
       if (defaultHintEl) defaultHintEl.style.display = 'none';
       if (secretInput) {
@@ -706,16 +710,17 @@ const App = {
       }
     };
 
-    // 1. ตรวจสอบข้อมูลใน Store ก่อน (รองรับทั้งครูหลัก และ นศ.ฝึกสอนที่บันทึกในเครื่อง)
+    // 1. ตรวจสอบข้อมูลใน Store ก่อน (รองรับทั้งครูหลัก และ นศ.ฝึกสอนที่ได้รับการอนุมัติแล้วในเครื่อง)
     const localTeacher = Store.getTeacherByEmail ? Store.getTeacherByEmail(identifier) : null;
-    if (localTeacher) {
+    const isLocalApproved = localTeacher ? (!Store.isTeacherApproved || Store.isTeacherApproved(localTeacher)) : false;
+    if (localTeacher && isLocalApproved) {
       if (localTeacher.needsFirstTimeSetup) {
         this.openFirstTimeSetupModal(localTeacher);
         return;
       }
-      const inputHash = Store.hashSecret(secret, 'teacher');
-      const targetHash = localTeacher.secretHash || Store.hashSecret(String(localTeacher.secret || '').trim(), 'teacher');
-      if (secret && (inputHash === targetHash || secret === String(localTeacher.secret).trim())) {
+      const verifyRes = secret ? await Store.verifyRecordSecret(localTeacher, secret) : { ok: false };
+      if (verifyRes.ok) {
+        if (verifyRes.legacy) await Store.upgradeTeacherSecret(localTeacher.id, secret);
         Store.setActiveTeacher(localTeacher.id);
         const isIntern = localTeacher.roleCategory === 'trainee' ||
                          (localTeacher.role && localTeacher.role.includes('ฝึกสอน')) ||
@@ -731,7 +736,7 @@ const App = {
           teacherRole: localTeacher.role,
           roleCategory: localTeacher.roleCategory || (isIntern ? 'trainee' : 'mentor'),
           isAdmin: !!localTeacher.isAdmin,
-          classes: localTeacher.classes && localTeacher.classes.length ? localTeacher.classes : allClasses,
+          classes: isIntern ? (Array.isArray(localTeacher.classes) ? localTeacher.classes : []) : (localTeacher.classes && localTeacher.classes.length ? localTeacher.classes : allClasses),
           loggedInAt: new Date().toISOString()
         };
         completeLogin(user, isIntern);
@@ -751,6 +756,10 @@ const App = {
 
     if (teacherRes && teacherRes.success) {
       if (teacherRes.needsSetup) {
+        if (teacherRes.teacher && Store.isTeacherApproved && !Store.isTeacherApproved(teacherRes.teacher)) {
+          alert('⏳ รอครูอนุมัติ: บัญชีนักศึกษาฝึกสอนนี้ต้องได้รับอนุมัติจากครูประจำวิชาก่อนจึงจะตั้งรหัสผ่านได้');
+          return;
+        }
         this.openFirstTimeSetupModal(teacherRes.teacher);
         return;
       }
@@ -775,11 +784,10 @@ const App = {
     }
 
     if (internRes) {
-      const allClasses = Store.getAllClasses ? [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')] : ['ม.1/1', 'ม.1/2'];
       // 3.1 กรณีได้รับการอนุมัติแล้ว (approved)
       if (internRes.status === 'success') {
         const p = internRes.profile || {};
-        const assignedClasses = (p.classes && p.classes.length) ? p.classes : allClasses;
+        const assignedClasses = Array.isArray(p.classes) ? p.classes : [];
         const user = {
           role: 'intern',
           internId: p.internId || identifier,
@@ -798,6 +806,7 @@ const App = {
           email: p.email || (identifier.includes('@') ? identifier : `${identifier}@intern.ppk.ac.th`),
           role: 'ครูนักศึกษาฝึกประสบการณ์วิชาชีพ',
           roleCategory: 'trainee',
+          status: 'approved',
           secret: secret,
           classes: assignedClasses,
           activeTeaching: true
@@ -806,30 +815,14 @@ const App = {
         return;
       }
 
-      // 3.2 กรณีนักศึกษาสมัครไว้แล้วแต่สถานะยังเป็น pending (รออนุมัติ)
-      // เมื่อตรวจพบ PIN ถูกต้อง ระบบจะทำการอนุมัติสิทธิ์เข้าใช้งานบนเครื่องให้ทันที!
+      // 3.2 กรณีนักศึกษาสมัครไว้แล้วแต่สถานะยังเป็น pending (รออนุมัติ) -> ห้ามเข้าสู่ระบบ
       if (internRes.code === 'pending') {
-        const user = {
-          role: 'intern',
-          internId: identifier,
-          name: internRes.name || `นศ.ฝึกสอน (${identifier})`,
-          classes: allClasses,
-          roleCategory: 'trainee',
-          loggedInAt: new Date().toISOString()
-        };
-        Store.addTeacher({
-          id: 'intern_' + identifier,
-          internId: identifier,
-          name: user.name,
-          email: identifier.includes('@') ? identifier : `${identifier}@intern.ppk.ac.th`,
-          role: 'ครูนักศึกษาฝึกประสบการณ์วิชาชีพ',
-          roleCategory: 'trainee',
-          secret: secret,
-          classes: allClasses,
-          activeTeaching: true
-        });
-        alert(`✅ ตรวจสอบพบข้อมูลการลงทะเบียนนักศึกษาฝึกสอนของคุณเรียบร้อยแล้ว!\nระบบได้อนุมัติและเปิดสิทธิ์การใช้งานให้ท่านทันที ยินดีต้อนรับครับ`);
-        completeLogin(user, true);
+        alert(`⏳ รอครูอนุมัติ: ${internRes.message || 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ'}`);
+        return;
+      }
+
+      if (internRes.code === 'rejected') {
+        alert(`⚠️ ${internRes.message || 'ครูไม่อนุมัติการลงทะเบียน'}`);
         return;
       }
 
@@ -846,7 +839,11 @@ const App = {
     }
 
     // 4. ตรวจสอบบัญชีท้องถิ่น Store.verifyTeacherLogin (Fallback)
-    const fallbackRes = Store.verifyTeacherLogin(identifier, secret);
+    const fallbackRes = await Store.verifyTeacherLogin(identifier, secret);
+    if (fallbackRes && (fallbackRes.code === 'pending' || fallbackRes.code === 'rejected')) {
+      alert(`⏳ ${fallbackRes.message || 'รอครูอนุมัติ'}`);
+      return;
+    }
     if (fallbackRes && fallbackRes.success) {
       if (fallbackRes.needsSetup) {
         this.openFirstTimeSetupModal(fallbackRes.teacher);
@@ -892,7 +889,7 @@ const App = {
     }, 200);
   },
 
-  handleSaveFirstTimeSetup() {
+  async handleSaveFirstTimeSetup() {
     const teacher = this.currentFirstTimeTeacher || Store.getTeacherByEmail('kouocking@gmail.com');
     if (!teacher) {
       alert('ไม่พบข้อมูลบัญชีผู้สอน กรุณาลองใหม่อีกครั้ง');
@@ -917,7 +914,7 @@ const App = {
       return;
     }
 
-    const res = Store.completeTeacherFirstTimeSetup(teacher.id, {
+    const res = await Store.completeTeacherFirstTimeSetup(teacher.id, {
       name: name,
       secret: secret,
       institution: inst
@@ -1044,8 +1041,8 @@ const App = {
     setVal('setting-dept-head', settings.departmentHead);
     setVal('setting-academic-head', settings.academicHead || 'นายกฤศ วงค์เรือง');
     setVal('setting-director-name', settings.directorName);
-    setVal('setting-teacher-email', teacherAcc.email || 'krumum.piano@gmail.com');
-    setVal('setting-teacher-secret', teacherAcc.secret || 'ppk1234');
+    setVal('setting-teacher-email', teacherAcc.email || '');
+    setVal('setting-teacher-secret', ''); // ไม่แสดง/ไม่เติมรหัสผ่านเดิม (เก็บเป็น hash) — เว้นว่าง = ไม่เปลี่ยน
 
     this.populatePinResetControls();
 
@@ -1105,7 +1102,7 @@ const App = {
     if (modal) modal.classList.remove('active');
   },
 
-  saveSettingsFromModal() {
+  async saveSettingsFromModal() {
     const getVal = (id) => (document.getElementById(id)?.value || '').trim();
 
     const appName = getVal('setting-app-name') || 'MusicSmart';
@@ -1136,9 +1133,9 @@ const App = {
     });
 
     if (teacherEmail || teacherSecret) {
-      Store.saveTeacherAccount({
-        email: teacherEmail || 'krumum.piano@gmail.com',
-        secret: teacherSecret || 'ppk1234',
+      await Store.saveTeacherAccount({
+        email: teacherEmail || Store.getTeacherAccount().email,
+        secret: teacherSecret, // ว่าง = คงรหัสเดิม; มีค่า = เก็บเป็น PBKDF2 hash
         name: teacherName || Store.getInstructor().name
       });
     }
@@ -1154,7 +1151,7 @@ const App = {
   },
 
   resetDefaultSettings() {
-    if (confirm('ต้องการคืนค่าการตั้งค่านวัตกรรมเป็นค่าเริ่มต้นตามหลักสูตร ม.1 (ศ21101) หรือไม่?')) {
+    if (confirm('ต้องการคืนค่าการตั้งค่านวัตกรรมเป็นค่าเริ่มต้นตามหลักสูตร ม.1 (' + (Store.getSubjectCode('ม.1') || 'ม.1') + ') หรือไม่?')) {
       localStorage.removeItem(STORAGE_KEYS.SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.TEACHER_ACCOUNT);
       this.applyAppSettings();
@@ -1186,7 +1183,7 @@ const App = {
     if (!target) return;
 
     this.state.activeSubjectId = target.id;
-    this.state.grade = target.grade === 'ม.1' ? 'M1' : (target.grade === 'ม.2' ? 'M2' : target.id);
+    this.state.grade = /^ม\.\d+$/.test(target.grade) ? Store.gradeKeyOf(target.grade) : target.id;
 
     // Update active tab styles
     this.renderCourseTabs();
@@ -1206,8 +1203,10 @@ const App = {
     const meta = Store.getSemesterMeta();
     const labelEl = document.getElementById('header-semester-label');
     if (labelEl) {
-      labelEl.textContent = meta.activeLabel || 'ภาคเรียนที่ 1/2569';
+      labelEl.textContent = Store.getSemesterInfo().label;
     }
+    const footCode = document.getElementById('footer-subject-code');
+    if (footCode) footCode.textContent = Store.getSubjectCode('ม.1');
 
     const banner = document.getElementById('archive-notification-banner');
     if (banner) {
@@ -1287,7 +1286,7 @@ const App = {
         pill.innerHTML = `
           <div class="today-slot-time">คาบที่ ${slot.periodNo} (${slot.time})</div>
           <div class="today-slot-class">${this.escapeHtml(slot.className)} <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">(${slot.subjCode || 'ดนตรีสากล'})</span></div>
-          <div style="font-size: 0.72rem; color: var(--ppk-navy); font-weight: 600; margin-top: 2px;">ห้อง ${slot.room || 'อส.5'}</div>
+          <div style="font-size: 0.72rem; color: var(--ppk-navy); font-weight: 600; margin-top: 2px;">ห้อง ${this.escapeHtml(slot.room || '-')}</div>
           ${assignInfo}
         `;
         pill.onclick = () => {
@@ -1300,6 +1299,24 @@ const App = {
   },
 
   // --- Role Switcher (Teacher vs Student View) ---
+  /** แสดงปุ่มคาลิมบ้า/โน้ต/เมโทรนอม เฉพาะคาบที่ วก.5 ใช้จริง (PeriodPolicy.tools)
+   *  นักเรียน: ทุกปุ่ม [data-tool] ตามคาบที่เลือก · ครู/ครูฝึก: เฉพาะการ์ดในหน้าแผนการสอน ([data-tool-scope=lesson]) ตามคาบที่เปิดอยู่ — เมนูเครื่องมือรวมของครูยังเปิดได้เสมอ */
+  applyPeriodTools() {
+    if (typeof document === 'undefined' || typeof PeriodPolicy === 'undefined' || !PeriodPolicy.tools) return;
+    const role = this.state.role;
+    let tl = null;
+    try {
+      if (role === 'student' && this.state.studentClass) tl = PeriodPolicy.tools(Store.gradeKeyOf(this.state.studentClass), this.state.studentPeriod);
+    } catch (e) { tl = null; }
+    let tlLesson = null;
+    try { if (role !== 'student') tlLesson = PeriodPolicy.tools(this.state.grade || 'M1', this.state.selectedPeriod); } catch (e) { tlLesson = null; }
+    document.querySelectorAll('[data-tool]').forEach(el => {
+      const t = el.getAttribute('data-tool');
+      const use = el.getAttribute('data-tool-scope') === 'lesson' ? tlLesson : tl;
+      el.style.display = (use && !use[t]) ? 'none' : '';
+    });
+  },
+
   switchRole(role, save = true) {
     const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
     if (role === 'teacher') {
@@ -1329,6 +1346,7 @@ const App = {
 
     this.state.role = role;
     if (save) Store.setActiveRole(role);
+    this.applyPeriodTools();
 
     const btnTeacher = document.getElementById('btn-role-teacher');
     const btnStudent = document.getElementById('btn-role-student');
@@ -1540,15 +1558,11 @@ const App = {
     if (classEl) classEl.textContent = className;
     if (noEl) noEl.textContent = student.no;
 
-    let subjText = 'ศ21102 ดนตรีสากล 1 (ม.1)';
-    let gradeKey = 'M1';
-    if (className === 'ม.1/14') {
-      subjText = 'AR21105 ดนตรีสากล (EP ม.1/14)';
-      gradeKey = 'M1';
-    } else if (className.startsWith('ม.2')) {
-      subjText = 'ศ22102 ดนตรีสากล 2 (ม.2)';
-      gradeKey = 'M2';
-    }
+    const gradeKey = Store.gradeKeyOf(className);
+    const periodCount = Store.getPeriodCount(gradeKey);
+    const minAttendance = Number(Store.getAppSettings().minAttendancePercent) || 0;
+    const subjInfo = Store.getCurrentSubject(className);
+    const subjText = subjInfo ? `${subjInfo.code} ${subjInfo.name}` : '-';
     if (subjEl) subjEl.textContent = subjText;
 
     const studentStatus = Store.getStudentStatus(studentId);
@@ -1594,7 +1608,7 @@ const App = {
     // 2. Metrics: Course Progress
     const sessions = Store.getAllSessions();
     let completedSessionsCount = 0;
-    for (let p = 1; p <= 20; p++) {
+    for (let p = 1; p <= periodCount; p++) {
       if (sessions[Store.getSessionKey(className, p)]) {
         completedSessionsCount++;
       }
@@ -1616,7 +1630,7 @@ const App = {
     let absentCount = 0;
     let leaveCount = 0;
 
-    for (let p = 1; p <= 20; p++) {
+    for (let p = 1; p <= periodCount; p++) {
       const sess = sessions[Store.getSessionKey(className, p)];
       if (sess && sess.attendance) {
         const att = sess.attendance[studentId];
@@ -1638,12 +1652,14 @@ const App = {
       attPctEl.textContent = `${attPct}%`;
       attPctEl.style.color = attPct >= 80 ? '#16a34a' : '#dc2626';
     }
+    const attFootnoteEl = document.getElementById('student-att-footnote');
+    if (attFootnoteEl) attFootnoteEl.textContent = `เกณฑ์เวลาเรียนขั้นต่ำ ${minAttendance}% ตามระเบียบ`;
     if (attStatusEl) {
-      if (attPct >= 80) {
+      if (attPct >= minAttendance) {
         attStatusEl.textContent = 'มีสิทธิ์สอบ';
         attStatusEl.className = 'badge-success';
       } else {
-        attStatusEl.textContent = 'เวลาเรียนไม่พอ (<80%)';
+        attStatusEl.textContent = `เวลาเรียนไม่พอ (<${minAttendance}%)`;
         attStatusEl.className = 'badge-danger';
       }
     }
@@ -1653,25 +1669,35 @@ const App = {
 
     // 4. Metrics: Score Summary Breakdown
     let totalScore = 0;
+    let maxPossible = 0;
     let scoredPeriodsCount = 0;
-    for (let p = 1; p <= 20; p++) {
+    for (let p = 1; p <= periodCount; p++) {
       const sess = sessions[Store.getSessionKey(className, p)];
       if (sess && sess.scores && sess.scores[studentId] !== undefined && sess.scores[studentId] !== null) {
         totalScore += Number(sess.scores[studentId]);
+        const pLesson = Store.getLesson ? Store.getLesson(gradeKey, p) : null;
+        const pMax = (pLesson && pLesson.assessment && pLesson.assessment.max_score > 0) ? Number(pLesson.assessment.max_score) : 0;
+        maxPossible += pMax;
         scoredPeriodsCount++;
       }
     }
-    const maxPossible = scoredPeriodsCount * 3;
-    const scorePct = maxPossible > 0 ? Math.round((totalScore / maxPossible) * 100) : 100;
+    const scorePct = maxPossible > 0 ? Math.round((totalScore / maxPossible) * 100) : 0;
     const scoreTextEl = document.getElementById('student-score-text');
     const scorePctEl = document.getElementById('student-score-pct');
     const theoryScoreEl = document.getElementById('score-theory-text');
     const practiceScoreEl = document.getElementById('score-practice-text');
 
-    if (scoreTextEl) scoreTextEl.textContent = `${totalScore} / ${maxPossible > 0 ? maxPossible : 3}`;
-    if (scorePctEl) scorePctEl.textContent = `${scorePct}%`;
+    if (scoreTextEl) scoreTextEl.textContent = maxPossible > 0 ? `${totalScore} / ${maxPossible}` : `0 / 80`;
+    if (scorePctEl) scorePctEl.textContent = maxPossible > 0 ? `${scorePct}%` : `รอประเมิน`;
     if (theoryScoreEl) theoryScoreEl.textContent = `${totalScore} คะแนน`;
     if (practiceScoreEl) practiceScoreEl.textContent = totalScore >= 2 ? 'ผ่านเกณฑ์ดีมาก' : (totalScore > 0 ? 'ผ่านเกณฑ์' : 'รอการประเมิน');
+
+    // ฉบับนักเรียน: ตัดขั้นตอนการสอน คำแนะนำครู รูบริกครู ออกก่อนสร้าง DOM
+    const lesson = RoleGuard.sanitizeLesson(Store.getLesson(gradeKey, this.state.studentPeriod));
+    const polL = (typeof PeriodPolicy !== 'undefined') ? PeriodPolicy.get(gradeKey, this.state.studentPeriod) : null;
+    const lbl = (typeof PeriodPolicy !== 'undefined' && PeriodPolicy.labels) ? PeriodPolicy.labels(gradeKey, this.state.studentPeriod) : null;
+    // คาบสอบ (กลาง/ปลายภาค) ไม่ใช่ "คะแนนเก็บของงาน" — ใช้ชนิดคาบจาก วก.5 ถ้ามี
+    const hasPeriodScore = polL ? !!polL.scored : !!(lesson && lesson.assessment && lesson.assessment.has_score && lesson.assessment.max_score > 0);
 
     // 5. To-Do List (Student assignments & remedial tasks)
     const todoListEl = document.getElementById('student-todo-list');
@@ -1681,7 +1707,7 @@ const App = {
       const todos = [];
 
       // Check remedial needed
-      for (let p = 1; p <= 20; p++) {
+      for (let p = 1; p <= periodCount; p++) {
         const sess = sessions[Store.getSessionKey(className, p)];
         if (sess && sess.attendance && (sess.attendance[studentId] === 'absent' || sess.attendance[studentId] === 'leave')) {
           const sc = sess.scores ? sess.scores[studentId] : 0;
@@ -1699,17 +1725,32 @@ const App = {
       }
 
       // Check current period assignment
+      const curLesson = Store.getLesson(gradeKey, this.state.studentPeriod);
       const currentPeriodKey = `${className}_p${this.state.studentPeriod}_${studentId}`;
       const curSub = allSubmissions[currentPeriodKey];
-      const st = this.studentTaskStatus(className, this.state.studentPeriod, !!curSub);
-      todos.push({
-        period: this.state.studentPeriod,
-        title: `แบบฝึกหัดคาบที่ ${this.state.studentPeriod}`,
-        subtitle: st.subtitle,
-        status: st.state,
-        statusLabel: st.label,
-        statusClass: st.cls
-      });
+      const polT = (typeof PeriodPolicy !== 'undefined') ? PeriodPolicy.get(gradeKey, this.state.studentPeriod) : null;
+      if (polT && polT.kind !== 'task') {
+        // วก.5 คาบนี้ไม่มีงานส่งและไม่มีสอบ (หรือเป็นคาบสอบที่มีการ์ดห้องสอบแยก) — ไม่แสดงรายการงาน
+      } else if (!hasPeriodScore && !curSub && !(polT && polT.kind === 'task')) {
+        todos.push({
+          period: this.state.studentPeriod,
+          title: `กิจกรรมคาบที่ ${this.state.studentPeriod}${curLesson && curLesson.topic ? ': ' + curLesson.topic : ''}`,
+          subtitle: (curLesson && curLesson.wk5 && curLesson.wk5.work && curLesson.wk5.work[0]) || 'ฝึกปฏิบัติในคาบเรียน (ไม่มีชิ้นงานบังคับส่ง)',
+          status: 'info',
+          statusLabel: 'ไม่เก็บคะแนน',
+          statusClass: 'badge-success'
+        });
+      } else {
+        const st = this.studentTaskStatus(className, this.state.studentPeriod, !!curSub);
+        todos.push({
+          period: this.state.studentPeriod,
+          title: `แบบฝึกหัดคาบที่ ${this.state.studentPeriod}`,
+          subtitle: st.subtitle,
+          status: st.state,
+          statusLabel: st.label,
+          statusClass: st.cls
+        });
+      }
 
       todos.forEach(t => {
         const item = document.createElement('div');
@@ -1732,7 +1773,7 @@ const App = {
       periodsContainer.innerHTML = '';
       const allSubmissions = Store.getAllSubmissions();
 
-      for (let p = 1; p <= 20; p++) {
+      for (let p = 1; p <= periodCount; p++) {
         const btn = document.createElement('button');
         btn.className = `student-period-btn ${p === this.state.studentPeriod ? 'active' : ''}`;
         const hasSession = !!sessions[Store.getSessionKey(className, p)];
@@ -1751,30 +1792,77 @@ const App = {
     }
 
     // 7. Render Workspace: Lesson Content & In-Page Submission Area
-    // ฉบับนักเรียน: ตัดขั้นตอนการสอน คำแนะนำครู รูบริกครู ออกก่อนสร้าง DOM
-    const lesson = RoleGuard.sanitizeLesson(Store.getLesson(gradeKey, this.state.studentPeriod));
     const badgePeriodEl = document.getElementById('student-workspace-period-badge');
     const titleEl = document.getElementById('student-workspace-title');
     const lessonTextEl = document.getElementById('student-lesson-text');
     const promptEl = document.getElementById('student-assignment-prompt');
+    const maxScoreEl = document.getElementById('student-assignment-max-score');
     const statusChipEl = document.getElementById('student-submission-status-chip');
     const textInput = document.getElementById('student-submission-text');
     const urlInput = document.getElementById('student-submission-url');
     const timestampEl = document.getElementById('student-submission-timestamp');
 
+    // คาบปฐมนิเทศ/เข้าร่วมกิจกรรม (ไม่เก็บคะแนน) อ่านจากชนิดการประเมินของบทเรียน ไม่ใช่เลขคาบ/ระดับชั้น
+    const isOrientation = lbl ? lbl.kind === 'orientation' : !!(lesson && lesson.assessment && lesson.assessment.type === 'participation');
     if (badgePeriodEl) badgePeriodEl.textContent = `คาบที่ ${this.state.studentPeriod}`;
     if (titleEl) titleEl.textContent = lesson?.topic || `เนื้อหาการเรียนรู้ คาบที่ ${this.state.studentPeriod}`;
 
     if (lessonTextEl) {
+      this.state._kmCtx = { role: 'student', className, studentId };
       lessonTextEl.innerHTML = this.buildStudentStudyGuideHTML(gradeKey, this.state.studentPeriod, lesson);
+      if (typeof KalimbaMedia !== 'undefined') { try { KalimbaMedia.mountAll(lessonTextEl); } catch (e) { console.error('KalimbaMedia', e); } }
+      if (typeof PeriodMedia !== 'undefined') { try { lessonTextEl.insertAdjacentHTML('beforeend', PeriodMedia.mountHTML(gradeKey, this.state.studentPeriod, { role: 'student' })); PeriodMedia.mountAll(lessonTextEl); } catch (e) { console.error('PeriodMedia', e); } }
+    }
+
+    this.applyPeriodTools();
+
+    // วก.5 กำหนดว่าคาบนี้มีงานส่ง/สอบหรือไม่ (PeriodPolicy อ่านจาก WK5_PLANS) — ไม่มีงานและไม่มีสอบ = ไม่แสดงกล่องส่งงาน
+    const pol = (typeof PeriodPolicy !== 'undefined') ? PeriodPolicy.get(gradeKey, this.state.studentPeriod) : null;
+    this.state._pol = pol;
+    const boxEl = document.getElementById('student-submission-box');
+    if (boxEl) boxEl.style.display = (pol && pol.kind !== 'task') ? 'none' : '';
+    const upEl = document.getElementById('student-upload-block');
+    if (upEl) upEl.style.display = (pol && !pol.fileUpload) ? 'none' : '';
+    if (pol && pol.kind !== 'task' && statusChipEl) statusChipEl.innerHTML = '';
+
+    if (maxScoreEl) {
+      if (hasPeriodScore) {
+        maxScoreEl.textContent = lbl ? lbl.max : `คะแนนเต็ม: ${lesson.assessment.max_score} คะแนน`;
+        maxScoreEl.style.background = '#fef3c7';
+        maxScoreEl.style.color = '#b45309';
+      } else {
+        maxScoreEl.textContent = lbl ? lbl.max : (isOrientation
+          ? 'ไม่เก็บคะแนน (ปฐมนิเทศ)'
+          : 'ไม่เก็บคะแนน (ตาม วก.5)');
+        maxScoreEl.style.background = '#e0f2fe';
+        maxScoreEl.style.color = '#0369a1';
+      }
     }
 
     if (promptEl) {
-      if (lesson?.assessment?.has_score) {
-        promptEl.textContent = `ภารกิจประจำคาบ: ปฏิบัติตามกิจกรรมการเรียนรู้ อธิบายความเข้าใจ หรือบันทึกผลการปฏิบัติเครื่องดนตรี (${lesson.topic})`;
+      if (hasPeriodScore) {
+        promptEl.innerHTML = this.buildStudentTaskPromptHTML(gradeKey, this.state.studentPeriod, lesson);
+      } else if (pol && pol.task && !pol.task.scored) {
+        promptEl.textContent = `ภารกิจคาบนี้ (ตาม วก.5 · ไม่เก็บคะแนน): ${pol.task.prompt}`;
+      } else if (isOrientation) {
+        promptEl.textContent = `ภารกิจปฐมนิเทศ (ไม่เก็บคะแนน): สำรวจแถบเมนูหลักของแอปพลิเคชัน MusicSmart (สามารถพิมพ์บันทึกเป้าหมายการเรียนดนตรีของตนเองไว้ด้านล่างได้ตามอัธยาศัย)`;
       } else {
-        promptEl.textContent = `ภารกิจ: บันทึกความเข้าใจ หรืออธิบายข้อคิดที่ได้จากการเรียนรู้ในคาบที่ ${this.state.studentPeriod}`;
+        promptEl.textContent = `บันทึกการเรียนรู้ประจำคาบที่ ${this.state.studentPeriod} (ไม่เก็บคะแนน): บันทึกความเข้าใจ หรือข้อสังเกตจากการฝึกปฏิบัติในชั้นเรียน`;
       }
+    }
+
+    // งานศึกษาค้นคว้าตามกลุ่ม (มิติ + หน้าที่ของนักเรียน) — แสดงเฉพาะคาบที่ วก.5 กำหนดทั้งมิติ/บทบาท/จำนวนกลุ่มครบ
+    const gtOld = document.getElementById('student-group-task'); if (gtOld) gtOld.remove();
+    if (promptEl && pol && pol.kind === 'task' && typeof MediaViews !== 'undefined' && MediaViews.hasGroupTask && MediaViews.hasGroupTask(this.state.studentPeriod)) {
+      promptEl.insertAdjacentHTML('afterend', MediaViews.groupTaskHTML(this.state.studentPeriod));
+    }
+
+    // เนื้อร้องใต้โน้ต + โหวตในกลุ่ม (คาบ 8–10 · นักเรียน)
+    const lyOld = document.getElementById('student-lyric-studio'); if (lyOld) lyOld.remove();
+    const lyAnchor = document.querySelector('#view-student .student-workspace-card') || promptEl;   // วางใต้การ์ดงาน (กว้างพอสำหรับมือถือ)
+    if (lyAnchor && typeof LyricStudio !== 'undefined' && LyricStudio.hasPeriod(this.state.studentPeriod)) {
+      lyAnchor.insertAdjacentHTML('afterend', '<div id="student-lyric-studio"></div>');
+      LyricStudio.mountStudent(document.getElementById('student-lyric-studio'), this.state.studentPeriod);
     }
 
     // Check submission state
@@ -1795,16 +1883,31 @@ const App = {
     } else {
       if (textInput) textInput.value = '';
       if (urlInput) urlInput.value = '';
-      if (timestampEl) timestampEl.textContent = 'ยังไม่ได้ส่งงานในคาบนี้';
-      if (statusChipEl) {
-        statusChipEl.innerHTML = `<span class="badge-warning" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">ยังไม่ได้ส่งงาน</span>`;
+      if (hasPeriodScore) {
+        if (timestampEl) timestampEl.textContent = 'ยังไม่ได้ส่งงานในคาบนี้';
+        if (statusChipEl) {
+          statusChipEl.innerHTML = `<span class="badge-warning" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">ยังไม่ได้ส่งงาน</span>`;
+        }
+      } else if (polL && polL.kind === 'task') {
+        // งานที่ วก.5 ให้ส่งในแอปแต่ไม่เก็บคะแนน
+        if (timestampEl) timestampEl.textContent = 'ยังไม่ได้ส่งงานในคาบนี้ (งานนี้ไม่เก็บคะแนน)';
+        if (statusChipEl) {
+          statusChipEl.innerHTML = `<span class="badge-warning" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">ยังไม่ได้ส่งงาน</span>`;
+        }
+      } else {
+        // คาบสอบ / คาบที่ วก.5 ไม่มีงานส่ง: ไม่แสดงป้าย "คาบฝึกทักษะ" (ไม่ใช่ข้อมูลจาก วก.5)
+        if (timestampEl) timestampEl.textContent = '';
+        const chipTxt = lbl && lbl.chip && lbl.chip !== 'submit' ? lbl.chip : (isOrientation ? 'คาบปฐมนิเทศ (ไม่ต้องส่งชิ้นงาน)' : '');
+        if (statusChipEl) {
+          statusChipEl.innerHTML = chipTxt ? `<span class="badge-success" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">${this.escapeHtml(chipTxt)}</span>` : '';
+        }
       }
     }
 
     // Two-way Teacher Feedback Loop in Student Portal
     const feedbackCard = document.getElementById('student-teacher-feedback-card');
     if (feedbackCard) {
-      if (sub && sub.teacherFeedback && sub.teacherFeedback.feedback) {
+      if (sub && sub.teacherFeedback && (sub.teacherFeedback.feedback || (sub.teacherFeedback.score !== null && sub.teacherFeedback.score !== undefined))) {
         feedbackCard.style.display = 'block';
         const tf = sub.teacherFeedback;
         feedbackCard.innerHTML = `
@@ -1824,13 +1927,11 @@ const App = {
             </div>
             ${tf.score !== null && tf.score !== undefined ? `
               <span class="badge-primary" style="font-size: 0.85rem; padding: 4px 10px; border-radius: 9999px; font-weight: 700;">
-                ⭐ คะแนนที่ได้รับ: ${tf.score} / 3
+                ⭐ คะแนนที่ได้รับ: ${tf.score} / ${(Store.getPeriodWeights(gradeKey, this.state.studentPeriod) || {}).total || ''}
               </span>
             ` : ''}
           </div>
-          <div class="teacher-feedback-speech">
-            "${this.escapeHtml(tf.feedback)}"
-          </div>
+          ${tf.feedback ? `<div class="teacher-feedback-speech">"${this.escapeHtml(tf.feedback)}"</div>` : ''}
         `;
       } else {
         feedbackCard.style.display = 'none';
@@ -1838,15 +1939,47 @@ const App = {
     }
 
     // Render Unit Quiz & Feldman Action Buttons
+    const quickBarEl = document.getElementById('student-assessment-quick-bar');
     const quizActionButtons = document.getElementById('student-quiz-action-buttons');
     const quizActionTitle = document.getElementById('student-quiz-action-title');
+    const curPeriod = this.state.studentPeriod;
+    if (quickBarEl) {
+      // คาบที่ 1 (ปฐมนิเทศ ม.1) ยังไม่เริ่มเรียนเนื้อหา จึงซ่อนแถบทำข้อสอบท้ายหน่วยเพื่อป้องกันการกดสอบจริงโดยไม่ตั้งใจ
+      const curPeriodLesson = Store.getLesson(gradeKey, curPeriod);
+      const polQ = (typeof PeriodPolicy !== 'undefined') ? PeriodPolicy.get(gradeKey, curPeriod) : null;
+      if (polQ) {
+        // วก.5 ไม่มีแบบทดสอบท้ายหน่วย: แสดงเฉพาะ "แบบทบทวนไม่นับคะแนน" ในคาบที่ วก.5 ระบุเท่านั้น (ข้อสอบจริงอยู่ในการ์ดห้องสอบกลาง/ปลายภาค)
+        quickBarEl.style.display = polQ.practiceQuiz ? 'flex' : 'none';
+      } else {
+        quickBarEl.style.display = (curPeriodLesson && curPeriodLesson.assessment && curPeriodLesson.assessment.type === 'participation') ? 'none' : 'flex';
+      }
+    }
+    if (typeof ExamClient !== 'undefined') ExamClient.mountStudent();
     if (quizActionButtons) {
-      const curPeriod = this.state.studentPeriod;
-      const unitNo = (curPeriod <= 4) ? 1 : (curPeriod <= 11) ? 2 : (curPeriod <= 15) ? 3 : 4;
-      const unitNames = { 1: 'พื้นฐานคาลิมบ้า', 2: 'ปฏิบัติรวมวงคาลิมบ้า', 3: 'รอบรู้วงดนตรีและวัฒนธรรม', 4: 'สุนทรียภาพแห่งการฟัง' };
+      const unitNo = (Store.getUnitNoForPeriod ? Store.getUnitNoForPeriod(gradeKey, curPeriod) : (lesson?.unit_no || ((curPeriod <= 7) ? 1 : (curPeriod <= 11) ? 2 : (curPeriod <= 15) ? 3 : 4)));
+      const unitNames = {
+        1: 'พื้นฐานโน้ตและทักษะปฏิบัติคาลิมบ้า',
+        2: 'บทเพลงและการประพันธ์เนื้อร้องสร้างสรรค์',
+        3: 'วงดนตรีไทยและวงดนตรีสากล',
+        4: 'การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม'
+      };
+      const unitTitle = lesson?.unit_name || unitNames[unitNo];
 
+      const polB = (typeof PeriodPolicy !== 'undefined') ? PeriodPolicy.get(gradeKey, curPeriod) : null;
+      if (polB) {
+        if (quizActionTitle) quizActionTitle.textContent = polB.practiceQuiz ? `ทบทวน: ${polB.practiceQuiz.label} (ไม่นับคะแนน)` : '';
+        const descEl = document.getElementById('student-quiz-action-desc');
+        if (descEl) descEl.textContent = polB.practiceQuiz ? `ตาม วก.5 คาบ ${curPeriod} · ทำซ้ำได้ ไม่เก็บคะแนน` : '';
+        if (polB.practiceQuiz) {
+          quizActionButtons.innerHTML = `<button class="btn-nav-action primary" onclick="PracticeQuiz.open(${polB.practiceQuiz.unit || unitNo})">🧪 ${this.escapeHtml(polB.practiceQuiz.label)} (ไม่นับคะแนน)</button>`;
+        } else quizActionButtons.innerHTML = '';
+        if (typeof StudentOutbox !== 'undefined') StudentOutbox.render();
+        if (typeof StudentNotices !== 'undefined') StudentNotices.render();
+        if (typeof StudentUpload !== 'undefined') StudentUpload.render();
+        return;
+      }
       if (quizActionTitle) {
-        quizActionTitle.textContent = `แบบทดสอบท้ายหน่วยที่ ${unitNo}: ${unitNames[unitNo]} (10 ข้อ)`;
+        quizActionTitle.textContent = `แบบทดสอบท้ายหน่วยที่ ${unitNo}: ${unitTitle} (10 ข้อ)`;
       }
 
       const attempt = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(studentId, unitNo) : null;
@@ -1871,15 +2004,17 @@ const App = {
         `;
       }
 
-      if (curPeriod >= 12 && curPeriod <= 15) {
+      // ปุ่มเครื่องมือ: แสดงเฉพาะคาบที่สื่อใน วก.5 ระบุจริง (ได้จากตารางเส้นทางสื่อ ไม่ฮาร์ดโค้ดช่วงคาบ)
+      const pTools = (typeof MediaViews !== 'undefined' && MediaViews.periodTools) ? MediaViews.periodTools(curPeriod) : { ensemble: null, feldman: false };
+      if (pTools.ensemble) {
         btnsHtml += `
-          <button class="btn-nav-action" style="background: #fdf2f8; color: #db2777; border-color: #fbcfe8; font-weight: 600;" onclick="EnsembleExplorer.openModal()" title="ห้องสำรวจวงดนตรีเสมือนจริง">
+          <button class="btn-nav-action" style="background: #fdf2f8; color: #db2777; border-color: #fbcfe8; font-weight: 600;" onclick="EnsembleExplorer.openModal('${pTools.ensemble}', null, ${curPeriod})" title="ห้องสำรวจวงดนตรีเสมือนจริง">
             🎺 สำรวจวงดนตรี
           </button>
         `;
       }
 
-      if (curPeriod >= 16) {
+      if (pTools.feldman) {
         btnsHtml += `
           <button class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 600;" onclick="FeldmanCriticism.openModal(${curPeriod}, '${studentId}')" title="เขียนใบวิจารณ์ผลงานดนตรี 4 ขั้นตอน และพล็อตกราฟอารมณ์ 2 มิติ">
             🎨 วิจารณ์ดนตรี Feldman
@@ -2031,21 +2166,16 @@ const App = {
     }
 
     const p = parseInt(period, 10);
-    const isM1 = (gradeKey === 'M1');
+    const aidIds = Array.isArray(lesson?.aids) ? lesson.aids : [];
 
     let html = `
-      <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-        <div>
-          <span style="background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px;">
-            หน่วยที่ ${lesson.unit_no}: ${this.escapeHtml(lesson.unit_name)}
-          </span>
-          <h3 style="margin: 0.4rem 0 0.2rem 0; font-size: 1.15rem; color: #1e3a8a; font-weight: 800;">
-            ${this.escapeHtml(lesson.topic)}
-          </h3>
-        </div>
-        <button class="btn-nav-action" style="font-size: 0.8rem; background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()">
-          🎼 สื่อโน้ตสากล & ผังคาลิมบ้า
-        </button>
+      <div style="margin-bottom: 1rem;">
+        <span style="background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px;">
+          หน่วยการเรียนรู้ที่ ${lesson.unit_no} เรื่อง ${this.escapeHtml(lesson.unit_name)}
+        </span>
+        <h3 style="margin: 0.4rem 0 0.2rem 0; font-size: 1.15rem; color: #1e3a8a; font-weight: 800;">
+          ${this.escapeHtml(lesson.topic)}
+        </h3>
       </div>
 
       <!-- K-P-A Goals -->
@@ -2062,15 +2192,39 @@ const App = {
     `;
 
     // --- Dynamic Period-Specific Interactive Learning Content ---
-    if (p === 1) {
-      // Period 1: Orientation
+    if (aidIds.includes('orientation')) {
+      // คาบปฐมนิเทศ (ระบุด้วย lesson.aids) — ข้อมูลทั้งหมดคำนวณจากข้อมูลบทเรียน/ตั้งค่า
+      const sum = Store.getCourseSummary(gradeKey);
+      const gInfo = Store.getGradeInfo(gradeKey) || {};
+      const subjLabel = [gInfo.code, gInfo.subjectName].filter(Boolean).join(' ');
+      const minAtt = Number(Store.getAppSettings().minAttendancePercent) || 0;
+      const needAtt = Math.ceil(sum.periods * minAtt / 100);
+      const esc = v => this.escapeHtml(String(v ?? ''));
+      const unitNames = sum.unitRows.map(u => esc(u.unit_name)).filter(Boolean).join(' • ');
+      const nextTopic = (Store.getLesson(gradeKey, p + 1) || {}).topic || '';
+      const scoreRowsHtml = sum.unitRows.map(u => `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">หน่วยที่ ${esc(u.unit_no)} ${esc(u.unit_name)}</td>
+                  <td style="padding: 6px; font-weight: 700; color: #2563eb;">${u.score} คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">คะแนนเก็บระหว่างภาคเรียน (คาบที่ ${u.periods.join(', ')})</td>
+                </tr>`).join('') + sum.examRows.map(e => `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">${esc(e.name)} (คาบที่ ${e.period})</td>
+                  <td style="padding: 6px; font-weight: 700; color: #2563eb;">${e.score} คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">แบบทดสอบผ่านระบบดิจิทัล MusicSmart</td>
+                </tr>`).join('') + `
+                <tr style="background: #eff6ff;">
+                  <td style="padding: 6px; font-weight: 700; text-align: left;">รวมทั้งสิ้น</td>
+                  <td style="padding: 6px; font-weight: 700; color: #1d4ed8;">${sum.total} คะแนน</td>
+                  <td style="padding: 6px; text-align: left;">เกณฑ์เวลาเรียนต้องไม่น้อยกว่า ${minAtt}% (เข้าเรียนอย่างน้อย ${needAtt} จาก ${sum.periods} คาบ)</td>
+                </tr>`;
       html += `
         <div style="background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
           <h4 style="margin: 0 0 0.5rem 0; color: #1e40af; font-size: 0.98rem; font-weight: 800; display: flex; align-items: center; gap: 0.4rem;">
-            <span>📢</span> ข้อมูลปฐมนิเทศรายวิชาและเกณฑ์คะแนน 100 คะแนนเต็ม
+            <span>📢</span> ข้อมูลปฐมนิเทศรายวิชา ${esc(subjLabel)} และเกณฑ์คะแนน ${sum.total} คะแนนเต็ม
           </h4>
           <div style="font-size: 0.86rem; color: #334155; line-height: 1.6; margin-bottom: 0.75rem;">
-            ยินดีต้อนรับสู่รายวิชาดนตรี ในภาคเรียนนี้จัดการเรียนรู้ 20 คาบ โดยใช้แอปพลิเคชัน <strong>MusicSmart</strong> ควบคู่การปฏิบัติเครื่องดนตรีคาลิมบ้า 17 คีย์
+            ยินดีต้อนรับสู่รายวิชา <strong>${esc(subjLabel)}${gInfo.level ? ' (ชั้น' + esc(gInfo.level) + ')' : ''}</strong> ตลอดภาคเรียนนี้เราจะได้เรียนรู้ทั้งหมด ${sum.unitCount} หน่วยการเรียนรู้ (${sum.periods} คาบเรียน) ผ่านระบบนิเวศดิจิทัล <strong>MusicSmart</strong>${unitNames ? ' ได้แก่ ' + unitNames : ''}
           </div>
 
           <!-- Score Table -->
@@ -2080,47 +2234,20 @@ const App = {
                 <tr>
                   <th style="padding: 6px;">หมวดการประเมิน</th>
                   <th style="padding: 6px;">สัดส่วน</th>
-                  <th style="padding: 6px;">รายละเอียดคะแนน</th>
+                  <th style="padding: 6px;">รายละเอียดการวัดและประเมินผล</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr style="border-bottom: 1px solid #e2e8f0;">
-                  <td style="padding: 6px; font-weight: 700; text-align: left;">1. คะแนนเก็บระหว่างภาคเรียน</td>
-                  <td style="padding: 6px; font-weight: 700; color: #2563eb;">80 คะแนน</td>
-                  <td style="padding: 6px; text-align: left;">ความรู้ K (30) + ปฏิบัติ P (30) + จิตพิสัย A (20)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-                  <td style="padding: 6px; font-weight: 700; text-align: left;">2. สอบวัดผลกลางภาค (คาบที่ 11)</td>
-                  <td style="padding: 6px; font-weight: 700; color: #d97706;">10 คะแนน</td>
-                  <td style="padding: 6px; text-align: left;">สอบทักษะปฏิบัติเดี่ยว/กลุ่ม 8 คะแนน + ข้อสอบทฤษฎี 2 คะแนน</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #e2e8f0;">
-                  <td style="padding: 6px; font-weight: 700; text-align: left;">3. สอบวัดผลปลายภาค (คาบที่ 19-20)</td>
-                  <td style="padding: 6px; font-weight: 700; color: #16a34a;">10 คะแนน</td>
-                  <td style="padding: 6px; text-align: left;">สอบปฏิบัติรวมวง 8 คะแนน + ข้อสอบทฤษฎี 2 คะแนน</td>
-                </tr>
-                <tr style="background: #f1f5f9; font-weight: 800; color: #0f172a;">
-                  <td style="padding: 6px; text-align: left;">รวมทั้งสิ้น</td>
-                  <td style="padding: 6px; color: #1e40af;">100 คะแนน</td>
-                  <td style="padding: 6px; text-align: left;">เกณฑ์เวลาเรียนต้องไม่น้อยกว่า 80% (16 จาก 20 คาบ)</td>
-                </tr>
-              </tbody>
+              <tbody>${scoreRowsHtml}</tbody>
             </table>
           </div>
 
-          <!-- Rules -->
-          <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 0.75rem; font-size: 0.82rem; color: #92400e;">
-            <strong>🔒 กฎและข้อตกลง 4 ข้อสำคัญในห้องปฏิบัติการดนตรี:</strong>
-            <ol style="margin: 0.35rem 0 0 0; padding-left: 1.25rem; line-height: 1.5;">
-              <li>ถือเครื่องคาลิมบ้าด้วยสองมือเสมอ และวางบนผ้ารองเครื่องประจำโต๊ะ ไม่วางซ้อนกัน</li>
-              <li>ห้ามดึง ดัด หรืองัดลิ่มเสียงเหล็กเด็ดขาด (หากเสียงเพี้ยนให้ใช้ค้อนจูนเสียงเคาะเบาๆ)</li>
-              <li>เมื่อได้ยินสัญญาณเคาะ Woodblock 3 จังหวะ ให้หยุดดีดทันทีและสบตาคุณครู</li>
-              <li>ตรวจเช็ค ทำความสะอาด และเก็บเครื่องดนตรีลงในซองกันกระแทกก่อนออกจากห้องเรียน</li>
-            </ol>
-          </div>
+          <div style="font-size: 0.78rem; color: #64748b;">ข้อมูลในกล่องนี้คำนวณจาก วก.5 ของรายวิชา (ผังโครงสร้างรายวิชาและเกณฑ์การวัดผล)</div>
         </div>
       `;
-    } else if (isM1 && p >= 2 && p <= 5) {
+    } else if (typeof KalimbaMedia !== 'undefined' && KalimbaMedia.hasKalimba(gradeKey, p)) {
+      // สื่อคาลิมบ้า (ผังลิ่ม + บรรทัด 5 เส้น + เมโทรนอม + เล่น) สร้างจากข้อมูลโน้ต — ไม่มีโน้ตเพลงฮาร์ดโค้ดในหน้า
+      html += KalimbaMedia.mountHTML(gradeKey, p, this.state._kmCtx || { role: 'student' });
+    } else if (aidIds.includes('staff-notes')) {
       // M.1 Periods 2-5: Basic Kalimba & Standard Staff Notation
       html += `
         <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
@@ -2164,28 +2291,22 @@ const App = {
           </div>
         </div>
       `;
-    } else if (isM1 && p >= 6 && p <= 8) {
-      // M.1 Song Practice (Mary & Twinkle)
+    } else if (aidIds.includes('song-practice')) {
+      // M.1: แบบฝึก/บทเพลงทั้งหมดมาจากข้อมูล วก.5 (KALIMBA_MEDIA) — ไม่มีเพลงฝังในโค้ด
+      // คาบที่มีโน้ตจะถูกจัดการที่ KalimbaMedia.hasKalimba ด้านบน; กรณีไม่มีรายการ ให้ชี้ไปห้องซ้อมจำลอง
       html += `
         <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
             <div style="font-weight: 800; color: #1e3a8a; font-size: 0.96rem;">
-              🐑 โน้ตเพลงฝึกซ้อมเดี่ยว: เพลงหนูมาลี (Mary Had a Little Lamb)
+              🎼 แบบฝึก/บทเพลงของคาบนี้ตาม วก.5
             </div>
             <button class="btn-nav-action primary" style="font-size: 0.78rem; padding: 4px 10px;" onclick="VirtualKalimba.openModal()">
-              ▶ ซ้อมในห้องซ้อมจำลอง (Virtual Kalimba)
+              ▶ เปิดห้องซ้อมจำลอง (Virtual Kalimba)
             </button>
-          </div>
-
-          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.85rem; font-family: monospace; font-size: 0.9rem; line-height: 1.7; overflow-x: auto;">
-            <div><strong>[ท่อน 1]</strong> | 3 &nbsp;2 &nbsp;1 &nbsp;2 | 3 &nbsp;3 &nbsp;3 &nbsp;- | 2 &nbsp;2 &nbsp;2 &nbsp;- | 3 &nbsp;5 &nbsp;5 &nbsp;- |</div>
-            <div style="color: #64748b;">เนื้อร้อง: | หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ลูก แมว เหมียว | ลูก แมว เหมียว |</div>
-            <div style="margin-top: 0.5rem;"><strong>[ท่อน 2]</strong> | 3 &nbsp;2 &nbsp;1 &nbsp;2 | 3 &nbsp;3 &nbsp;3 &nbsp;3 | 2 &nbsp;2 &nbsp;3 &nbsp;2 | 1 &nbsp;- &nbsp;- &nbsp;- |</div>
-            <div style="color: #64748b;">เนื้อร้อง: | หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ขน มัน ดู คล้าย | สำ &nbsp;ลี &nbsp;- &nbsp;- |</div>
           </div>
         </div>
       `;
-    } else if (!isM1 && p >= 5 && p <= 6) {
+    } else if (aidIds.includes('canon')) {
       // M.2 Canon / Round (Row Your Boat)
       html += `
         <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%); border: 1.5px solid #86efac; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
@@ -2218,9 +2339,9 @@ const App = {
           </div>
         </div>
       `;
-    } else if (p >= 12 && p <= 15) {
+    } else if (aidIds.some(a => a.startsWith('ensemble'))) {
       // Unit 3: Ensembles (Thai, Folk, Western)
-      const defaultCat = (p === 12 || p === 13) ? 'thai' : (p === 14 ? 'folk' : 'western');
+      const defaultCat = (aidIds.find(a => a.startsWith('ensemble:')) || 'ensemble:thai').split(':')[1];
       html += `
         <div style="background: linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%); border: 1.5px solid #f472b6; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
@@ -2232,7 +2353,7 @@ const App = {
                 🎺 ห้องสำรวจวงดนตรีเสมือนจริง (Interactive Ensemble Explorer)
               </h4>
             </div>
-            <button class="btn-nav-action primary" style="background: #db2777; border-color: #be185d; font-size: 0.85rem; padding: 6px 14px; font-weight: 700;" onclick="EnsembleExplorer.openModal('${defaultCat}')">
+            <button class="btn-nav-action primary" style="background: #db2777; border-color: #be185d; font-size: 0.85rem; padding: 6px 14px; font-weight: 700;" onclick="EnsembleExplorer.openModal('${defaultCat}', null, ${Number(p) || 0})">
               🚀 เปิดห้องสำรวจวงดนตรี
             </button>
           </div>
@@ -2241,7 +2362,7 @@ const App = {
           </p>
         </div>
       `;
-    } else if (p >= 16 && p <= 18) {
+    } else if (aidIds.includes('feldman')) {
       // Unit 4: Feldman Criticism & 2D Emotion Mapping
       html += `
         <div style="background: linear-gradient(135deg, #fdf4ff 0%, #ffffff 100%); border: 1.5px solid #e879f9; border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
@@ -2274,39 +2395,143 @@ const App = {
         </div>
       `;
       studentMedia.forEach((m) => {
-        const safeUrl = /^(https?:\/\/|academic\/|images\/|\.\/)/.test(m.url || '') ? m.url : '';
-        html += `
-          <div style="margin-bottom: 0.5rem; padding: 0.55rem 0.85rem; background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; border-radius: 6px; font-size: 0.86rem;">
-            ${safeUrl ? `<a href="${this.escapeHtml(safeUrl)}" target="_blank" rel="noopener" style="color: #0369a1; font-weight: 600;">${this.escapeHtml(m.title)}</a>` : `<span style="font-weight: 600; color: #0369a1;">${this.escapeHtml(m.title)}</span>`}
-          </div>
-        `;
+        html += (typeof MediaViews !== 'undefined') ? MediaViews.rowHTML(m, p, 'student', gradeKey) : '';
       });
     }
 
-    // --- Action Bar for Student ---
-    html += `
-      <div style="margin-top: 1.25rem; padding: 0.85rem; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-        <span style="font-size: 0.82rem; color: #475569; font-weight: 600;">
-          💡 เครื่องมือพร้อมเรียนประจำคาบ:
-        </span>
-        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #e0f2fe; color: #0369a1;" onclick="Metronome.open()">
-            🥁 เมโทรนอมเคาะจังหวะ
-          </button>
-          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #eff6ff; color: #1d4ed8;" onclick="VirtualKalimba.openModal()">
-            🎵 ซ้อมคาลิมบ้าจำลอง
-          </button>
-          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #fdf2f8; color: #be185d;" onclick="EnsembleExplorer.openModal()">
-            🎺 ห้องสำรวจวงดนตรี
-          </button>
-          <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #fef08a; color: #854d0e;" onclick="App.openMusicAidsModal()">
-            🎼 สื่อโน้ตสากล
-          </button>
+    // --- แถบปุ่มท้ายการ์ด: เฉพาะคาบปฐมนิเทศ และมีเฉพาะสื่อที่ระบุใน วก.5 ของคาบนั้น (คู่มือแอป + ผังโครงสร้างรายวิชา)
+    //     คาบอื่นไม่มีแถบเครื่องมือเสริม — ปุ่มเปิดสื่ออยู่ในรายการ "สื่อและเนื้อหาที่ต้องเรียน" ซึ่งมาจาก วก.5 แล้ว
+    if (aidIds.includes('orientation')) {
+      const _n = Store.getPeriodCount(gradeKey);
+      html += `
+        <div style="margin-top: 1.25rem; padding: 0.85rem; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <span style="font-size: 0.82rem; color: #475569; font-weight: 600;">
+            📌 เอกสารของคาบปฐมนิเทศ (ตาม วก.5):
+          </span>
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #e0f2fe; color: #0369a1;" onclick="App.openStudentMediaDoc('academic/media/musicsmart_guide.pdf', 'คู่มือการลงทะเบียนและแนะนำเมนูแอปพลิเคชัน MusicSmart', '${gradeKey}', ${Number(p)})">
+              📖 คู่มือใช้งานแอป
+            </button>
+            <button class="btn-nav-action" style="font-size: 0.78rem; padding: 4px 8px; background: #eff6ff; color: #1d4ed8;" onclick="App.openStudentMediaDoc('academic/wk3/course_syllabus.docx', 'ผังโครงสร้างรายวิชาและเกณฑ์การวัดผล', '${gradeKey}', ${Number(p)})">
+              📋 โครงสร้างรายวิชา ${_n} คาบ
+            </button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }
 
     return html;
+  },
+
+  // เมนูรวม (เมนูเครื่องมือ/แถบล่างมือถือ): ครู = ดูได้ทุกวง · นักเรียน = เฉพาะวงของคาบที่เรียนถึงแล้วตาม วก.5
+  openEnsemble(cat) {
+    if (typeof EnsembleExplorer === 'undefined') { alert('ห้องสำรวจวงดนตรียังโหลดไม่เสร็จ ลองรีเฟรชหน้าแล้วเปิดใหม่'); return; }
+    if (this.state.role === 'teacher' || this.state.role === 'intern') { EnsembleExplorer.openModal(cat || 'thai'); return; }
+    const cur = Number(this.state.studentPeriod) || 0;
+    const ps = EnsembleExplorer.periodsAvailable().filter(x => x <= cur);
+    if (!ps.length) { alert('ห้องสำรวจวงดนตรีใช้ในคาบ ' + EnsembleExplorer.periodsAvailable().join(', ') + ' (เปิดได้เมื่อเรียนถึงคาบนั้น)'); return; }
+    EnsembleExplorer.openModal(cat || 'thai', null, ps);
+  },
+
+  // เส้นทางสื่อ "ในแอป" (ไม่ใช่ไฟล์): ห้องสำรวจวงดนตรี / กระดานวิจารณ์ Feldman / รูบริก
+  isLessonMediaRoute(url) {
+    const u = String(url || '');
+    return /^ensemble\/(thai|folk|western)$/i.test(u) || /^rubric\//i.test(u) || /(^|\/)timbre_feldman\.html$/i.test(u);
+  },
+
+  openLessonMediaRoute(url, period) {
+    const u = String(url || '');
+    const em = /^ensemble\/(thai|folk|western)$/i.exec(u);
+    if (em) {
+      if (typeof EnsembleExplorer !== 'undefined') EnsembleExplorer.openModal(em[1].toLowerCase(), null, Number(period) || null);
+      else alert('ห้องสำรวจวงดนตรียังโหลดไม่เสร็จ ลองรีเฟรชหน้าแล้วเปิดใหม่');
+      return true;
+    }
+    if (/(^|\/)timbre_feldman\.html$/i.test(u)) {
+      // คาบ 16: เปิดกิจกรรมฟังเปรียบเทียบเสียง (มีปุ่มไปแบบฟอร์ม Feldman ฉบับส่งครู); ถ้าโหลดไม่สำเร็จให้เปิดแบบฟอร์ม Feldman ตรง ๆ
+      if (typeof TimbreListening !== 'undefined' && TimbreListening.openModal()) return true;
+      if (typeof FeldmanCriticism !== 'undefined') FeldmanCriticism.openModal(Number(period) || 16);
+      return true;
+    }
+    if (/^rubric\//i.test(u)) {
+      alert('รูบริกนี้ครูใช้ตอนให้คะแนน: เปิดจากปุ่ม 📊 ข้างชื่อนักเรียนในรายชื่อห้อง (เกณฑ์มาจาก วก.5 ของคาบนั้น)');
+      return true;
+    }
+    return false;
+  },
+
+  openStudentMediaDoc(url, title, gradeKey = 'M1', period = 1) {
+    const u = String(url || '');
+    if (u.includes('musicsmart_guide')) {
+      const body = `
+        <div style="font-size: 0.88rem; color: #1e293b; line-height: 1.65;">
+          <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 0.65rem 0.85rem; border-radius: 6px; margin-bottom: 0.85rem;">
+            <strong>1. การลงทะเบียนและเข้าสู่ระบบ (ครั้งแรก)</strong>
+            <ol style="margin: 0.35rem 0 0; padding-left: 1.2rem;">
+              <li>กรอก <strong>รหัสประจำตัวนักเรียน 5 หลัก</strong> ของตนเอง</li>
+              <li>ตรวจสอบชื่อ–นามสกุล และห้องเรียนให้ถูกต้อง</li>
+              <li>ตั้ง <strong>รหัส PIN 6 หลัก (ตัวเลข 0–9)</strong> ที่จำได้ง่ายและห้ามบอกผู้อื่น</li>
+              <li>กดปุ่ม <strong>"ติดตั้งทันที"</strong> บนแถบสีฟ้าด้านบน เพื่อติดตั้งแอป MusicSmart ลงบนหน้าจอโฮมของมือถือ</li>
+            </ol>
+          </div>
+          <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 0.65rem 0.85rem; border-radius: 6px; margin-bottom: 0.85rem;">
+            <strong>2. ส่วนประกอบหลักในหน้าพอร์ทัลนักเรียน</strong>
+            <ul style="margin: 0.35rem 0 0; padding-left: 1.2rem;">
+              <li><strong>แถบข้อมูลประจำตัว & เหรียญเกียรติยศ:</strong> แสดงชื่อ ห้อง เลขที่ สถานะเวลาเรียน และเหรียญรางวัลที่ปลดล็อก</li>
+              <li><strong>การ์ดสรุปผล 3 ด้าน:</strong> ความก้าวหน้า ${Store.getPeriodCount(gradeKey)} คาบ, สถิติเวลาเรียน (เกณฑ์ขั้นต่ำ ${Number(Store.getAppSettings().minAttendancePercent) || 0}%) และคะแนนเก็บสะสม</li>
+              <li><strong>สารบัญบทเรียน (${Store.getPeriodCount(gradeKey)} คาบ):</strong> กดเลือกคาบเรียนที่ 1–${Store.getPeriodCount(gradeKey)} เพื่อดูเนื้อหา ใบความรู้ และภารกิจประจำคาบ</li>
+              <li><strong>เครื่องมือฝึกซ้อมดนตรี:</strong> ปุ่ม 🥁 เมโทรนอม, 🎵 ซ้อมคาลิมบ้าจำลอง 17 คีย์ และ 🎼 สื่อโน้ตสากล</li>
+              <li><strong>พื้นที่ส่งงานในคาบเรียน:</strong> พิมพ์คำตอบ แนบไฟล์รูป/เสียง/วิดีโอ หรือวางลิงก์ส่งให้คุณครูได้โดยตรง</li>
+            </ul>
+          </div>
+        </div>
+      `;
+      if (typeof StudentPanels !== 'undefined') StudentPanels.show(title || 'คู่มือการใช้งาน MusicSmart', body);
+      return;
+    }
+
+    if (u.includes('course_syllabus') || u.includes('/wk3/')) {
+      const lessons = (typeof LESSONS_DATA !== 'undefined' && LESSONS_DATA[gradeKey]) ? LESSONS_DATA[gradeKey] : [];
+      const gi = Store.getGradeInfo(gradeKey) || {};
+      const cs = Store.getCourseSummary(gradeKey);
+      const rows = lessons.map(l => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 5px 6px; text-align: center; font-weight: 700;">คาบที่ ${l.period}</td>
+          <td style="padding: 5px 6px; text-align: center;">หน่วยที่ ${l.unit_no}</td>
+          <td style="padding: 5px 6px;">${this.escapeHtml(l.topic)}</td>
+          <td style="padding: 5px 6px; text-align: center; font-weight: 700; color: ${l.assessment?.max_score ? '#1d4ed8' : '#64748b'};">
+            ${l.assessment?.max_score ? l.assessment.max_score + ' คะแนน' : '<span style="font-weight:500;color:#64748b;">ไม่เก็บคะแนน</span>'}
+          </td>
+        </tr>
+      `).join('');
+      const body = `
+        <div style="font-size: 0.84rem; color: #1e293b; line-height: 1.55;">
+          <p style="margin: 0 0 0.6rem 0;">
+            <strong>รายวิชา ${this.escapeHtml([gi.code, gi.subjectName].filter(Boolean).join(' '))}</strong> • ${this.escapeHtml(gi.level || '')} • เวลาเรียน ${cs.periods} คาบ<br>
+            สัดส่วนคะแนนเต็ม <strong>${cs.total} คะแนน</strong> (คะแนนเก็บระหว่างภาค ${cs.collect}${cs.examRows.map(e => ' + ' + this.escapeHtml(e.name) + ' ' + e.score).join('')})
+          </p>
+          <div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
+              <thead style="background: #1e3a8a; color: #ffffff;">
+                <tr>
+                  <th style="padding: 6px; white-space: nowrap;">คาบ</th>
+                  <th style="padding: 6px; white-space: nowrap;">หน่วย</th>
+                  <th style="padding: 6px; text-align: left;">หัวข้อการเรียนรู้</th>
+                  <th style="padding: 6px; white-space: nowrap;">คะแนน</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      if (typeof StudentPanels !== 'undefined') StudentPanels.show(title || ('ผังโครงสร้างรายวิชา ' + (gi.code || '')), body);
+      return;
+    }
+
+    // สื่ออื่น ๆ: เปิดตามตารางประกาศ MEDIA_ROUTES เท่านั้น (ไม่มีโมดอลสำรองกลาง)
+    if (typeof MediaViews !== 'undefined') return MediaViews.open(u, period);
+    return false;
   },
 
   updateInstructorBadge() {
@@ -2368,8 +2593,8 @@ const App = {
     const inst = Store.getInstructor();
     const nameDisplay = document.getElementById('user-admin-name-display');
     const emailDisplay = document.getElementById('user-admin-email-display');
-    if (nameDisplay) nameDisplay.textContent = adminAcc.name || inst.name || 'นายพงศธร โพธิแก้ว';
-    if (emailDisplay) emailDisplay.innerHTML = `อีเมลล็อกอิน: <strong>${adminAcc.email || 'krumum.piano@gmail.com'}</strong>`;
+    if (nameDisplay) nameDisplay.textContent = adminAcc.name || inst.name || '-';
+    if (emailDisplay) emailDisplay.innerHTML = `อีเมลล็อกอิน: <strong>${this.escapeHtml(adminAcc.email || '-')}</strong>`;
     const adminAvBox = document.getElementById('user-admin-avatar-box');
     if (adminAvBox && typeof Store !== 'undefined' && Store.getTeacherAvatarUrl) {
       const avUrl = Store.getTeacherAvatarUrl('admin_primary');
@@ -2384,7 +2609,7 @@ const App = {
     if (confPassInput) confPassInput.value = '';
   },
 
-  handleAdminPasswordChange() {
+  async handleAdminPasswordChange() {
     const newPass = (document.getElementById('admin-new-password')?.value || '').trim();
     const confPass = (document.getElementById('admin-confirm-password')?.value || '').trim();
 
@@ -2392,8 +2617,8 @@ const App = {
       alert('⚠️ กรุณาระบุรหัสผ่านใหม่');
       return;
     }
-    if (newPass.length < 4) {
-      alert('⚠️ รหัสผ่านควรมีความยาวอย่างน้อย 4 ตัวอักษรขึ้นไป');
+    if (newPass.length < 8) {
+      alert('⚠️ รหัสผ่านใหม่ควรมีความยาวอย่างน้อย 8 ตัวอักษรขึ้นไป');
       return;
     }
     if (newPass !== confPass) {
@@ -2401,9 +2626,9 @@ const App = {
       return;
     }
 
-    const res = Store.changeAdminPassword(newPass);
+    const res = await Store.changeAdminPassword(newPass);
     if (res.success) {
-      alert(`✅ ${res.message}\nรหัสผ่านใหม่ของคุณครูคือ: ${newPass}`);
+      alert(`✅ ${res.message}\nระบบเก็บเฉพาะค่า hash ของรหัสผ่านใหม่ (ไม่แสดงรหัสซ้ำ กรุณาจดจำไว้)`);
       this.renderAdminProfileTab();
     } else {
       alert(`❌ ${res.message}`);
@@ -2445,7 +2670,7 @@ const App = {
               <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px; display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 <span>🏫 สังกัด: <strong>${t.institution || 'โรงเรียนพะเยาพิทยาคม'}</strong></span>
                 <span>📧 บัญชี: <strong>${t.email}</strong></span>
-                <span>🔑 รหัสผ่าน: ${t.needsFirstTimeSetup ? '<span style="color:#d97706; font-weight:700;">(รอตั้งรหัสครั้งแรก)</span>' : `<code>${t.secret || '****'}</code>`}</span>
+                <span>🔑 รหัสผ่าน: ${t.needsFirstTimeSetup ? '<span style="color:#d97706; font-weight:700;">(รอตั้งรหัสครั้งแรก)</span>' : `<code>••••••</code>`}</span>
               </div>
             </div>
           </div>
@@ -2478,7 +2703,7 @@ const App = {
     if (targetShow) {
       document.getElementById('new-teacher-name').value = '';
       document.getElementById('new-teacher-email').value = '';
-      document.getElementById('new-teacher-secret').value = '1234';
+      document.getElementById('new-teacher-secret').value = '';
       document.getElementById('new-teacher-institution').value = 'มหาวิทยาลัยพะเยา';
       document.getElementById('new-teacher-name').focus();
     }
@@ -2864,7 +3089,8 @@ const App = {
 
     const prog = Store.getClassProgress(this.state.selectedClass);
 
-    for (let p = 1; p <= 20; p++) {
+    const teacherPeriodCount = Store.getPeriodCount(Store.gradeKeyOf(this.state.selectedClass));
+    for (let p = 1; p <= teacherPeriodCount; p++) {
       const btn = document.createElement('button');
       btn.className = 'period-pill';
       if (p === this.state.selectedPeriod) btn.classList.add('active');
@@ -2961,6 +3187,7 @@ const App = {
       document.getElementById('kpa-p').textContent = '-';
       document.getElementById('kpa-a').textContent = '-';
       document.getElementById('steps-timeline').innerHTML = '<p style="color:var(--text-muted);">ยังไม่มีข้อมูลบทเรียนสำหรับคาบนี้</p>';
+      { const lbl = document.getElementById('steps-total-label'); if (lbl) lbl.textContent = ''; }
       document.getElementById('mentor-tips-text').textContent = 'ไม่มีคำแนะนำเพิ่มเติม';
       document.getElementById('media-list').innerHTML = '';
       return;
@@ -2978,6 +3205,10 @@ const App = {
 
     const timelineEl = document.getElementById('steps-timeline');
     timelineEl.innerHTML = '';
+    { // รวมเวลาในหัวข้อ = ผลรวมนาทีของขั้นตอนใน วก.5 คาบนี้ (ไม่ตั้งค่าตายตัว)
+      const tot = (lesson.steps || []).reduce((s, x) => s + (Number(x.duration || x.time_min) || 0), 0);
+      const lbl = document.getElementById('steps-total-label'); if (lbl) lbl.textContent = tot ? '(' + tot + ' นาที)' : '';
+    }
     (lesson.steps || []).forEach((step, idx) => {
       const item = document.createElement('div');
       item.className = 'timeline-step-row';
@@ -2990,48 +3221,58 @@ const App = {
       item.innerHTML = `
         <div class="timeline-step-badge">${duration} นาที</div>
         <div>
-          <div style="font-weight: 700; color: var(--ppk-navy-dark); font-size: 0.95rem;">${step.phase}</div>
-          <div style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.25rem;">${desc}</div>
+          <div style="font-weight: 700; color: var(--ppk-navy-dark); font-size: 0.95rem;">${this.escapeHtml(step.phase)}</div>
+          <div style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.25rem; white-space: pre-line;">${this.escapeHtml(desc)}</div>
         </div>
       `;
       timelineEl.appendChild(item);
     });
 
-    document.getElementById('mentor-tips-text').textContent = lesson.mentor_tips || lesson.mentor_tip || 'จัดการเรียนรู้ตามลำดับขั้น เน้นให้นักเรียนได้ลงมือฝึกปฏิบัติอย่างทั่วถึง';
+    const tipText = lesson.mentor_tips || lesson.mentor_tip || ''; // ไม่มีใน วก.5 → ไม่แสดง (แสดงเฉพาะที่ครูพิมพ์เอง)
+    document.getElementById('mentor-tips-text').textContent = tipText;
+    const tipBox = document.getElementById('mentor-tips-container');
+    if (tipBox) tipBox.style.display = tipText ? '' : 'none';
+
+    // ข้อที่ วก.5 เขียนขัดกันเอง → ให้ครูยืนยัน (ไม่เลือกให้เงียบ ๆ และไม่แสดงให้นักเรียน)
+    {
+      let cf = document.getElementById('wk5-confirm-box');
+      const list = (typeof PeriodPolicy !== 'undefined' && PeriodPolicy.conflicts) ? PeriodPolicy.conflicts(this.state.grade, lesson.period) : [];
+      if (!list.length) { if (cf) cf.remove(); }
+      else {
+        if (!cf) { cf = document.createElement('div'); cf.id = 'wk5-confirm-box'; (tipBox || timelineEl).parentNode.insertBefore(cf, tipBox || timelineEl.nextSibling); }
+        cf.style.cssText = 'margin-top:1rem;padding:0.75rem 1rem;background:#fff7ed;border:1.5px solid #fdba74;border-radius:8px;font-size:0.86rem;color:#7c2d12;line-height:1.6;';
+        cf.innerHTML = list.map(c => `<div><strong>⚠ ครูต้องยืนยัน — วก.5 คาบที่ ${c.period} ระบุสัดส่วนคะแนน ${c.total} คะแนนไม่ตรงกัน 2 ที่</strong><br>
+          • ในขั้นกิจกรรม: ${c.activityParts.map(q => this.escapeHtml(q.name) + ' (' + q.pts + ')').join(', ')}<br>
+          • ในตารางรูบริก: ด้านความรู้ (K) ${c.rubricWeights.k} · ทักษะ (P) ${c.rubricWeights.p} · คุณลักษณะ (A) ${c.rubricWeights.a}<br>
+          <span style="color:#9a3412;">ตอนนี้ระบบให้คะแนนตามตารางรูบริก (K/P/A) ไปก่อน — แจ้งว่าจะใช้แบบใด แล้วค่อยแก้ วก.5 ให้ตรงกัน (นักเรียนไม่เห็นข้อนี้)</span></div>`).join('');
+      }
+    }
 
     const mediaListEl = document.getElementById('media-list');
     mediaListEl.innerHTML = '';
     const mediaItems = lesson.media || lesson.media_links || [];
     mediaItems.forEach(m => {
-      const btn = document.createElement('a');
-      btn.className = 'btn-nav-action';
-      const url = m.url || '#';
-      if (url.startsWith('academic/')) {
-        btn.href = 'javascript:void(0)';
-        btn.onclick = (e) => {
-          e.preventDefault();
-          if (url.includes('/wk5/')) {
-            const num = url.match(/\d+/);
-            const period = num ? parseInt(num[0], 10) : lesson.period;
-            App.openAcademicDocsForPeriod(period);
-          } else if (url.includes('/media/')) {
-            const num = url.match(/ผ(\d+)/) || url.match(/\d+/);
-            const period = num ? parseInt(num[1] || num[0], 10) : lesson.period;
-            App.openAcademicDocsModal('media', `media_${String(period).padStart(2, '0')}`);
-          } else if (url.includes('/eval/')) {
-            App.openAcademicDocsModal('eval');
-          } else {
-            App.openAcademicDocsModal('wk3');
-          }
-        };
-      } else {
-        btn.href = url;
-        btn.target = '_blank';
-      }
-      btn.textContent = `📄 ${m.title} (${m.type})`;
-      mediaListEl.appendChild(btn);
+      const holder = document.createElement('div');
+      holder.innerHTML = (typeof MediaViews !== 'undefined') ? MediaViews.rowHTML(m, lesson.period, 'teacher', this.state.grade) : '';
+      while (holder.firstChild) mediaListEl.appendChild(holder.firstChild);
     });
 
+    let kmEl = document.getElementById('km-teacher-media');
+    if (!kmEl && mediaListEl && mediaListEl.parentNode) { kmEl = document.createElement('div'); kmEl.id = 'km-teacher-media'; mediaListEl.parentNode.insertBefore(kmEl, mediaListEl.nextSibling); }
+    if (kmEl) {
+      kmEl.innerHTML = (typeof KalimbaMedia !== 'undefined') ? KalimbaMedia.mountHTML(this.state.grade, lesson.period, { role: 'teacher', className: this.state.selectedClass }) : '';
+      if (kmEl.innerHTML && typeof KalimbaMedia !== 'undefined') { try { KalimbaMedia.mountAll(kmEl); } catch (e) { console.error('KalimbaMedia', e); } }
+      if (typeof PeriodMedia !== 'undefined') { try { kmEl.insertAdjacentHTML('beforeend', PeriodMedia.mountHTML(this.state.grade, lesson.period, { role: 'teacher' })); PeriodMedia.mountAll(kmEl); } catch (e) { console.error('PeriodMedia', e); } }
+    }
+
+    // เนื้อร้องใต้โน้ต + โหวตในกลุ่ม (คาบ 8–10 · ครู)
+    const lyTOld = document.getElementById('lyric-teacher-panel'); if (lyTOld) lyTOld.remove();
+    if (kmEl && typeof LyricStudio !== 'undefined' && this.state.grade === 'M1' && LyricStudio.hasPeriod(lesson.period)) {
+      kmEl.insertAdjacentHTML('afterend', '<div id="lyric-teacher-panel"></div>');
+      LyricStudio.mountTeacher(document.getElementById('lyric-teacher-panel'), lesson.period, this.state.selectedClass);
+    }
+
+    this.applyPeriodTools();
     this.updateTimerDisplay();
   },
 
@@ -3158,7 +3399,8 @@ const App = {
         const att = this.state.attendance[s.student_id] || 'present';
         const isAbsent = att === 'absent' || att === 'truant';
         if (!isWithdrawn && !isAbsent) {
-          this.state.scores[s.student_id] = score;
+          const pts = Store.recordUniformLevel(s.student_id, className, this.state.selectedPeriod, score);
+          if (pts !== null) this.state.scores[s.student_id] = pts;
         }
       }
     });
@@ -3493,17 +3735,13 @@ const App = {
       }
     });
     const pct = eligibleTotal > 0 ? Math.round((presentCount / eligibleTotal) * 100) : 100;
-    const defaultOutcomes = `นักเรียนเข้าเรียน ${presentCount}/${eligibleTotal} คน (ร้อยละ ${pct}) ปฏิบัติกิจกรรมการเรียนรู้ดนตรีได้ตามเป้าหมาย`;
     return {
       sessionData: {
         instructor: Store.getInstructor(),
         attendance: { ...this.state.attendance },
         scores: { ...this.state.scores },
-        reflection: existing?.reflection?.outcomes ? existing.reflection : {
-          outcomes: defaultOutcomes,
-          problems: existing?.reflection?.problems || 'ไม่มีปัญหาและอุปสรรค',
-          solutions: existing?.reflection?.solutions || 'ดำเนินการจัดการเรียนรู้ตามแผนปกติ'
-        },
+        // ผลหลังการสอนต้องมาจากครูเท่านั้น (ไม่เติมข้อความอัตโนมัติ) เก็บค่าที่ครูกรอกไว้เดิม
+        reflection: existing?.reflection ? { ...existing.reflection } : { outcomes: '', problems: '', solutions: '' },
         handoverNote: existing?.handoverNote || `เช็คชื่อเรียบร้อยแล้ว (มาเรียน ${presentCount}/${eligibleTotal} คน${absentCount > 0 ? ' ขาด/หนี ' + absentCount + ' คน' : ''})`
       },
       presentCount,
@@ -3578,15 +3816,46 @@ const App = {
     }
 
     const className = this.state.selectedClass;
-    const students = this.getClassStudents(className);
+    const allStudents = this.getClassStudents(className);
     const statuses = Store.getAllStudentStatuses();
     const grid = document.getElementById('students-scoring-grid');
     if (!grid) return;
     grid.innerHTML = '';
+    // ตัวกรองรายชื่อสำหรับให้คะแนนหน้างาน: ค้นชื่อ/เลขที่ + ยังไม่ให้คะแนน/ให้แล้ว
+    const flt = this.state.scoreFilter || (this.state.scoreFilter = { q: '', mode: 'all' });
+    const hasScore = (s) => { const v = this.state.scores[s.student_id]; return v !== undefined && v !== ''; };
+    const students = allStudents.filter(s => {
+      if (flt.mode === 'todo' && hasScore(s)) return false;
+      if (flt.mode === 'done' && !hasScore(s)) return false;
+      if (flt.q) {
+        const hay = [s.no, s.nickname, s.prefix, s.first_name, s.last_name, s.student_id].join(' ').toLowerCase();
+        if (hay.indexOf(String(flt.q).toLowerCase()) < 0) return false;
+      }
+      return true;
+    });
+    let fbar = document.getElementById('score-filter-bar');
+    if (!fbar) {
+      fbar = document.createElement('div');
+      fbar.id = 'score-filter-bar';
+      fbar.className = 'score-filter-bar';
+      grid.parentNode.insertBefore(fbar, grid);
+      fbar.addEventListener('input', (e) => { if (e.target && e.target.id === 'score-filter-q') { this.state.scoreFilter.q = e.target.value; this._renderScoreList(); } });
+    }
+    if (!fbar.querySelector('#score-filter-q')) {
+      fbar.innerHTML = '<input id="score-filter-q" type="search" placeholder="ค้นชื่อ / เลขที่" aria-label="ค้นหานักเรียน"/>' +
+        [['all', 'ทั้งหมด'], ['todo', 'ยังไม่ให้คะแนน'], ['done', 'ให้แล้ว']].map(m => '<button type="button" class="score-filter-chip" data-mode="' + m[0] + '">' + m[1] + '</button>').join('') +
+        '<span id="score-filter-count" style="font-size:0.8rem;color:var(--text-muted);margin:0 0 6px 4px;"></span>';
+      fbar.querySelectorAll('.score-filter-chip').forEach(btn => btn.addEventListener('click', () => { this.state.scoreFilter.mode = btn.getAttribute('data-mode'); this._renderScoreList(); }));
+    }
+    fbar.querySelectorAll('.score-filter-chip').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-mode') === flt.mode));
+    const qEl = fbar.querySelector('#score-filter-q'); if (qEl && qEl.value !== flt.q) qEl.value = flt.q;
+    const cEl = fbar.querySelector('#score-filter-count'); if (cEl) cEl.textContent = students.length + ' / ' + allStudents.length + ' คน';
 
-    const unitNo = (this.state.selectedPeriod <= 4) ? 1 : (this.state.selectedPeriod <= 11) ? 2 : (this.state.selectedPeriod <= 15) ? 3 : 4;
+    const unitNo = Store.getUnitNoForPeriod ? Store.getUnitNoForPeriod(this.state.selectedClass, this.state.selectedPeriod) : ((this.state.selectedPeriod <= 7) ? 1 : (this.state.selectedPeriod <= 11) ? 2 : (this.state.selectedPeriod <= 15) ? 3 : 4);
     const isGroupMode = this.state.rosterViewMode === 'group';
 
+    const selGrade = Store.gradeKeyOf(this.state.selectedClass);
+    const selPeriod = this.state.selectedPeriod;
     const renderStudentScoreRow = (s, isCompact = false) => {
       const st = statuses[s.student_id] || { status: 'active' };
       const isWithdrawn = st.status === 'withdrawn' || st.status === 'transferred';
@@ -3634,9 +3903,7 @@ const App = {
         <div style="display: flex; align-items: center; gap: 0.35rem;">
           ${!isWithdrawn ? `
             <div class="score-buttons-group">
-              <button class="btn-score-choice ${currentScore === 3 ? 'active-3' : ''}" style="${isCompact ? 'width:28px;height:28px;font-size:0.8rem;' : ''}" onclick="App.setStudentScore('${s.student_id}', 3)" title="ให้คะแนน 3 (ดีเยี่ยม)">3</button>
-              <button class="btn-score-choice ${currentScore === 2 ? 'active-2' : ''}" style="${isCompact ? 'width:28px;height:28px;font-size:0.8rem;' : ''}" onclick="App.setStudentScore('${s.student_id}', 2)" title="ให้คะแนน 2 (ผ่านเกณฑ์)">2</button>
-              <button class="btn-score-choice ${currentScore === 1 ? 'active-1' : ''}" style="${isCompact ? 'width:28px;height:28px;font-size:0.8rem;' : ''}" onclick="App.setStudentScore('${s.student_id}', 1)" title="ให้คะแนน 1 (ปรับปรุง)">1</button>
+            ${this._levelButtonsHtml(s.student_id, currentScore, isCompact, selGrade, selPeriod)}
             </div>
             <button class="btn-nav-action" style="padding: ${isCompact ? '0.25rem 0.45rem' : '0.35rem 0.55rem'}; font-size: ${isCompact ? '0.74rem' : '0.78rem'};" onclick="RubricMatrix.openScoringModal('${s.student_id}')" title="เปิดตารางรูบริก 4 ระดับคุณภาพ">
               📊
@@ -3668,9 +3935,10 @@ const App = {
             <div class="group-pod-actions">
               <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">ให้ทั้งกลุ่ม:</span>
               <div class="group-batch-scoring-bar">
-                <button class="group-batch-score-btn score-3" onclick="App.batchScoreGroup(${g}, 3)" title="ให้คะแนน 3 ทั้งกลุ่ม">3</button>
-                <button class="group-batch-score-btn score-2" onclick="App.batchScoreGroup(${g}, 2)" title="ให้คะแนน 2 ทั้งกลุ่ม">2</button>
-                <button class="group-batch-score-btn score-1" onclick="App.batchScoreGroup(${g}, 1)" title="ให้คะแนน 1 ทั้งกลุ่ม">1</button>
+                <button class="group-batch-score-btn score-3" onclick="App.batchScoreGroup(${g}, 4)" title="ให้ระดับ 4 ทั้งกลุ่ม">4</button>
+                <button class="group-batch-score-btn score-3" onclick="App.batchScoreGroup(${g}, 3)" title="ให้ระดับ 3 ทั้งกลุ่ม">3</button>
+                <button class="group-batch-score-btn score-2" onclick="App.batchScoreGroup(${g}, 2)" title="ให้ระดับ 2 ทั้งกลุ่ม">2</button>
+                <button class="group-batch-score-btn score-1" onclick="App.batchScoreGroup(${g}, 1)" title="ให้ระดับ 1 ทั้งกลุ่ม">1</button>
               </div>
             </div>
           </div>
@@ -3690,6 +3958,45 @@ const App = {
         grid.appendChild(renderStudentScoreRow(s, false));
       });
     }
+  },
+
+  // ปุ่มระดับ 4/3/2/1 (คะแนน = น้ำหนัก × ระดับ ÷ 4 ตาม วก.5) คาบสอบไม่มีปุ่ม คะแนนมาจากระบบสอบ
+  _levelButtonsHtml(studentId, currentScore, isCompact, grade, period) {
+    if (Store.isExamPeriod(grade, period)) {
+      return `<span style="font-size:0.74rem;color:#64748b;">${currentScore !== undefined && currentScore !== '' ? 'คะแนนสอบ ' + currentScore : 'คะแนนจากระบบสอบ'}</span>`;
+    }
+    const active = (currentScore !== undefined && currentScore !== '') ? Store.pointsToLevel(grade, period, currentScore) : null;
+    const style = isCompact ? 'width:28px;height:28px;font-size:0.8rem;' : '';
+    return `<div class="score-buttons-group">` + [4, 3, 2, 1].map(lv => {
+      const pts = Store.levelPoints(grade, period, lv);
+      const title = pts === null ? 'ไม่มีคะแนนในคาบนี้' : `ระดับ ${lv} = ${pts} คะแนน`;
+      return `<button class="btn-score-choice ${active === lv ? 'active-' + lv : ''}" style="${style}" onclick="App.setStudentLevel('${studentId}', ${lv})" title="${title}">${lv}</button>`;
+    }).join('') + `</div>`;
+  },
+
+  setStudentLevel(studentId, level) {
+    const pts = Store.recordUniformLevel(studentId, this.state.selectedClass, this.state.selectedPeriod, level);
+    if (pts === null) return;
+    this.state.scores[studentId] = pts;
+    this.renderAssessmentTab();
+  },
+
+  batchLevelAll(level) {
+    const className = this.state.selectedClass;
+    this.getClassStudents(className).forEach(s => {
+      if (!Store.isStudentWithdrawn(s.student_id) && this.state.attendance[s.student_id] !== 'absent') {
+        const pts = Store.recordUniformLevel(s.student_id, className, this.state.selectedPeriod, level);
+        if (pts !== null) this.state.scores[s.student_id] = pts;
+      }
+    });
+    this.renderAssessmentTab();
+  },
+
+  _renderScoreList() {
+    const q = document.getElementById('score-filter-q'); const had = q && document.activeElement === q;
+    this.renderAssessmentTab();
+    const q2 = document.getElementById('score-filter-q');
+    if (had && q2) { q2.focus(); try { q2.setSelectionRange(q2.value.length, q2.value.length); } catch (e) {} }
   },
 
   setStudentScore(studentId, score) {
@@ -3757,6 +4064,11 @@ const App = {
     const period = this.state.selectedPeriod;
     const students = this.getClassStudents(className);
     const allSubs = Store.getAllSubmissions();
+    if (typeof KalimbaDevices !== 'undefined') { try { KalimbaDevices.ingestSubmissions(allSubs); } catch (e) { console.error('KalimbaDevices', e); } }
+    const taskT = Store.getPeriodTask(Store.gradeKeyOf(className), period);
+    const taskMax = taskT.max || 0;
+    const scoreDisabledAttr = taskT.canScore ? '' : ' disabled';
+    const scoreLabelText = taskT.canScore ? `คะแนน (0-${taskMax}):` : (taskT.exam ? `คะแนนสอบ (${taskMax}) มาจากระบบสอบ:` : 'ไม่เก็บคะแนนรายชิ้น:');
     const listEl = document.getElementById('teacher-submissions-list');
     const summaryEl = document.getElementById('submissions-filter-summary');
     const badgeEl = document.getElementById('tab-badge-submissions');
@@ -3764,6 +4076,7 @@ const App = {
     if (!listEl) return;
     listEl.innerHTML = '';
     this.renderDueDateBar(className, period, listEl);
+    this.renderKalimbaDeviceBar(className, period, listEl);
 
     let submittedCount = 0;
     const allItems = [];
@@ -3852,7 +4165,7 @@ const App = {
         const subContentHtml = `
           <div style="background: #f1f5f9; padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; line-height: 1.6; color: #1e293b;">
             <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 4px;">เนื้อหาที่นักเรียนส่ง:</div>
-            <div style="white-space: pre-wrap;">${this.escapeHtml(sub.content || '(ไม่มีข้อความ)')}</div>
+            <div style="white-space: pre-wrap;">${this.escapeHtml(this._stripKalimbaMark(sub.content) || '(ไม่มีข้อความ)')}</div>
             ${sub.fileName ? `<div style="margin-top: 6px; font-size: 0.82rem; font-weight: 600; color: #0284c7;">📎 ไฟล์แนบ: ${this.escapeHtml(sub.fileName)}</div>` : ''}
             ${this.submissionLinksHtml(sub.url)}
             <div style="font-size: 0.72rem; color: #059669; margin-top: 6px;">ส่งเมื่อ: ${this.escapeHtml(sub.submittedAt)}${sub.source === 'student_device' ? ' • 📱 ส่งจากมือถือนักเรียน' : ''}${sub.late ? ' <span class="badge-danger" style="font-size:0.7rem;padding:1px 6px;border-radius:4px;">ส่งช้า</span>' : ''}</div>
@@ -3874,6 +4187,7 @@ const App = {
             </div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
               <span class="badge-success">ส่งงานแล้ว ✅</span>
+              ${this._kalimbaDeviceBadge(className, period, s.student_id, sub)}
               ${hasFeedback ? '<span class="badge-primary">ให้คำแนะนำแล้ว ⭐</span>' : ''}
             </div>
           </div>
@@ -3889,8 +4203,8 @@ const App = {
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
               <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 0.82rem; font-weight: 600; color: #1e40af;">คะแนน (0-3):</span>
-                <input type="number" id="feedback-score-${s.student_id}" min="0" max="3" step="1" value="${currentScore}" style="width: 65px; padding: 0.3rem 0.5rem; border: 1px solid #93c5fd; border-radius: 4px; font-weight: 700; text-align: center;">
+                <span style="font-size: 0.82rem; font-weight: 600; color: #1e40af;">${scoreLabelText}</span>
+                <input type="number" id="feedback-score-${s.student_id}" min="0" max="${taskMax}" step="0.5" value="${currentScore}"${scoreDisabledAttr} style="width: 65px; padding: 0.3rem 0.5rem; border: 1px solid #93c5fd; border-radius: 4px; font-weight: 700; text-align: center;">
               </div>
               <button class="btn-nav-action primary" style="padding: 0.4rem 0.85rem; font-size: 0.82rem;" onclick="App.saveStudentFeedback('${className}', ${period}, '${s.student_id}')">
                 💾 บันทึกคำแนะนำ & คะแนน
@@ -3930,8 +4244,8 @@ const App = {
               <textarea id="feedback-text-${s.student_id}" class="form-textarea" rows="2" style="background: #ffffff; width: 100%; font-size: 0.85rem; box-sizing: border-box;" placeholder="พิมพ์คำแนะนำ หรือข้อความเตือนให้นักเรียนส่งงาน...">${hasFeedback ? this.escapeHtml(sub.teacherFeedback.feedback) : ''}</textarea>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span style="font-size: 0.8rem; font-weight: 600; color: #1e40af;">คะแนน (0-3):</span>
-                  <input type="number" id="feedback-score-${s.student_id}" min="0" max="3" step="1" value="${currentScore}" style="width: 60px; padding: 0.25rem 0.4rem; border: 1px solid #93c5fd; border-radius: 4px; font-weight: 700; text-align: center;">
+                  <span style="font-size: 0.8rem; font-weight: 600; color: #1e40af;">${scoreLabelText}</span>
+                  <input type="number" id="feedback-score-${s.student_id}" min="0" max="${taskMax}" step="0.5" value="${currentScore}"${scoreDisabledAttr} style="width: 60px; padding: 0.25rem 0.4rem; border: 1px solid #93c5fd; border-radius: 4px; font-weight: 700; text-align: center;">
                 </div>
                 <button class="btn-nav-action primary" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;" onclick="App.saveStudentFeedback('${className}', ${period}, '${s.student_id}')">
                   💾 บันทึก
@@ -3946,13 +4260,97 @@ const App = {
     this.renderPracticeRecordings(className, period, listEl);
   },
 
+  // --- ภารกิจประจำคาบ (นักเรียน): ข้อความมาจาก วก.5 'ภาระงาน' ของคาบนั้นโดยตรง ---
+  buildStudentTaskPromptHTML(gradeKey, period, lesson) {
+    const t = Store.getPeriodTask(gradeKey, period);
+    const esc = s => this.escapeHtml(String(s));
+    if (t.exam) {
+      return `<b>คาบสอบ (${t.max} คะแนน):</b> ทำข้อสอบในระบบสอบเมื่อครูเปิดให้สอบเท่านั้น — ไม่ต้องส่งชิ้นงานในช่องนี้`;
+    }
+    let h = `<b>ภารกิจประจำคาบ (${t.max} คะแนน) ตามแผนการจัดการเรียนรู้ วก.5:</b>`;
+    if (!t.work.length) h += '<br>(ครูยังไม่ได้ระบุภาระงานของคาบนี้ในแผน วก.5)';
+    t.work.forEach((w, i) => { h += `<br>${i + 1}. ${esc(w)}`; });
+    const wt = t.weights || {};
+    const parts = [];
+    if (wt.k) parts.push(`ความรู้ ${wt.k}`);
+    if (wt.p) parts.push(`ทักษะ ${wt.p}`);
+    if (wt.a) parts.push(`เจตคติ ${wt.a}`);
+    if (parts.length) h += `<br><span style="color:#64748b;">การให้คะแนน: ${parts.join(' • ')} คะแนน</span>`;
+    const label = { text: 'ข้อความ', video: 'คลิปวิดีโอ (อัปโหลดไฟล์หรือแนบลิงก์)', file: 'ไฟล์/ภาพ', link: 'ลิงก์' };
+    if (t.kinds.length > 1) h += `<br><span style="color:#64748b;">ส่งได้: ${t.kinds.map(k => label[k] || k).join(' / ')}</span>`;
+    return h;
+  },
+
+  // สถานะของสื่อในคาบ (สร้างจาก tools/curriculum/build_kalimba_media.js — ตรวจไฟล์จริงตอน build)
+  mediaStatusOf(gradeKey, period, m) {
+    try {
+      const ms = (typeof KALIMBA_MEDIA !== 'undefined' && KALIMBA_MEDIA.mediaStatus && KALIMBA_MEDIA.mediaStatus[gradeKey]) || {};
+      const list = ms[period] || ms[String(period)] || [];
+      return list.find(x => x.title === m.title && String(x.url || '') === String(m.url || '')) || null;
+    } catch (e) { return null; }
+  },
+
+  mediaStatusChipHTML(gradeKey, period, m, defaultLabel) {
+    const st = this.mediaStatusOf(gradeKey, period, m);
+    const map = {
+      in_app: ['เปิดในแอป', '#e0f2fe', '#0369a1'],
+      file: ['คลิกเปิดอ่าน', '#e0f2fe', '#0369a1'],
+      generated: ['ดูสื่อแบบโต้ตอบด้านบน', '#dcfce7', '#166534'],
+      external: ['ต้องใช้อินเทอร์เน็ต', '#e0f2fe', '#0369a1'],
+      missing_file: ['ยังไม่มีไฟล์ (ครูกำลังจัดเตรียม)', '#fef3c7', '#92400e'],
+      dead_link: ['ลิงก์ใช้ไม่ได้ (รอครูแก้)', '#fee2e2', '#991b1b'],
+      no_link: ['ยังไม่มีลิงก์', '#fef3c7', '#92400e']
+    };
+    const e = st && map[st.status] ? map[st.status] : [defaultLabel || 'คลิกเปิดอ่าน', '#e0f2fe', '#0369a1'];
+    return `<span style="font-size: 0.76rem; background: ${e[1]}; color: ${e[2]}; padding: 2px 8px; border-radius: 4px; white-space: nowrap;">${e[0]}</span>`;
+  },
+
+  // ตัดมาร์กเกอร์ "[[เครื่องคาลิมบ้า:N]]" ที่ใช้พาเลขเครื่องไปกับงาน ออกจากข้อความที่แสดง
+  _stripKalimbaMark(content) {
+    if (typeof KalimbaDevices !== 'undefined') return KalimbaDevices.parseContent(content).content;
+    return String(content || '');
+  },
+
+  _kalimbaDeviceBadge(className, period, studentId, sub) {
+    if (typeof KalimbaDevices === 'undefined') return '';
+    const dev = KalimbaDevices.getDevice(className, period, studentId) || (sub && sub.deviceNo) || '';
+    if (!dev) return '';
+    return `<span class="badge-neutral" style="font-size:0.75rem;background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:4px;">🔢 เครื่อง ${this.escapeHtml(String(dev))}</span>`;
+  },
+
+  // แถบ "หมายเลขเครื่องคาลิมบ้า" ในหน้าตรวจงาน (เฉพาะคาบที่มีคาลิมบ้า)
+  renderKalimbaDeviceBar(className, period, listEl) {
+    if (typeof KalimbaDevices === 'undefined' || typeof KalimbaMedia === 'undefined') return;
+    if (!KalimbaMedia.hasKalimba(this.state.grade, period)) return;
+    const rows = KalimbaDevices.rowsFor(className, period, '');
+    const filled = rows.filter(r => r.device).length;
+    const dup = Object.keys(KalimbaDevices.conflicts(className, period)).length;
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;padding:0.6rem 0.9rem;margin-bottom:0.75rem;background:#fefce8;border:1px solid #fde68a;border-radius:8px;font-size:0.85rem;';
+    bar.innerHTML = `<span>🔢 <b>หมายเลขเครื่องคาลิมบ้า</b> คาบที่ ${period}: กรอกแล้ว ${filled}/${rows.length} คน${dup ? ` • <span style="color:#b91c1c;">เลขซ้ำ ${dup} หมายเลข</span>` : ''}</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'btn-nav-action';
+    btn.style.cssText = 'font-size:0.8rem;padding:4px 10px;';
+    btn.textContent = 'เปิดตาราง / ค้นหา / ส่งออก CSV';
+    btn.onclick = () => KalimbaDevices.openTeacherView({ className, period });
+    bar.appendChild(btn);
+    listEl.appendChild(bar);
+  },
+
   saveStudentFeedback(className, period, studentId) {
     const textEl = document.getElementById(`feedback-text-${studentId}`);
     const scoreEl = document.getElementById(`feedback-score-${studentId}`);
     const feedbackText = textEl ? textEl.value.trim() : '';
-    const scoreVal = scoreEl ? scoreEl.value : null;
+    const scoreVal = (scoreEl && !scoreEl.disabled) ? scoreEl.value : null;
 
     Store.saveSubmissionTeacherFeedback(className, period, studentId, feedbackText, scoreVal);
+    const fr = Store._lastFeedbackResult || {};
+    if (fr.hasScore && !fr.ok) {
+      const why = { over_max: `คะแนนเกินคะแนนเต็มของคาบนี้ (เต็ม ${fr.max}) — บันทึกเฉพาะคำแนะนำ ยังไม่บันทึกคะแนน`, invalid: 'คะแนนไม่ถูกต้อง — บันทึกเฉพาะคำแนะนำ', exam_period: 'คาบสอบ: คะแนนมาจากระบบสอบ ไม่บันทึกด้วยมือ', no_score_period: 'คาบนี้ไม่เก็บคะแนน', save_failed: 'บันทึกคะแนนไม่สำเร็จ' };
+      alert('⚠️ ' + (why[fr.reason] || 'ไม่บันทึกคะแนน'));
+      this.renderSubmissionsTab();
+      return;
+    }
     // นศ.ฝึกสอน: คะแนนต้องรอครูพี่เลี้ยงอนุมัติ
     if (typeof InternMode !== 'undefined' && InternMode.isActive()) {
       if (scoreVal !== null && scoreVal !== '') InternMode.proposeGrades(className, period, { [studentId]: scoreVal }, feedbackText);
@@ -4211,9 +4609,85 @@ const App = {
   // --- Semester Lifecycle & Archive Modal ---
   openSemesterModal() {
     const meta = Store.getSemesterMeta();
-    document.getElementById('active-semester-display-title').textContent = meta.activeLabel;
+    document.getElementById('active-semester-display-title').textContent = Store.getSemesterInfo().label;
+    const info = Store.getSemesterInfo();
+    const yEl = document.getElementById('new-term-year-input'); if (yEl) yEl.value = info.year;
+    const tEl = document.getElementById('new-term-no-select'); if (tEl) tEl.value = info.term;
+    this.renderTermConfigForm();
+    if (typeof ExamClient !== 'undefined') ExamClient.mountTeacher();
     this.renderArchivedSemestersList();
     document.getElementById('modal-semester').classList.add('active');
+  },
+
+  // --- ตั้งค่าปีการศึกษา/ภาคเรียน/รหัสวิชา (term-config) ---
+  renderTermConfigForm() {
+    const host = document.getElementById('term-config-calendar');
+    if (!host) return;
+    const cfg = Store.getTermConfig();
+    const info = Store.getSemesterInfo();
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const now = document.getElementById('term-config-now');
+    if (now) {
+      const srcTxt = info.source === 'override' ? 'ตามที่ครูบังคับ (override)' : (info.projected ? 'ต่อปฏิทินอัตโนมัติจากปีก่อน — ควรตรวจวันเริ่ม/จบ' : 'ตามปฏิทินที่ตั้งไว้');
+      now.innerHTML = '<strong>' + esc(info.label) + '</strong> • รหัสวิชา ม.1 = <strong>' + esc(Store.getSubjectCode('ม.1') || '—') + '</strong> • ม.2 = <strong>' + esc(Store.getSubjectCode('ม.2') || '—') + '</strong> • ' + srcTxt + (cfg.calendarStatus ? '<br><span style="color:#b45309;">⚠ ' + esc(cfg.calendarStatus) + '</span>' : '');
+    }
+    host.innerHTML = cfg.terms.map(t => this._termRowHtml(t)).join('');
+    const set = (id, v) => { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = !!v; else el.value = v == null ? '' : v; } };
+    set('tc-prefix-m1', cfg.subjectPrefixByGrade['ม.1']); set('tc-prefix-m2', cfg.subjectPrefixByGrade['ม.2']);
+    set('tc-code-override-m1', (cfg.subjectCodeOverride || {})['ม.1']); set('tc-code-override-m2', (cfg.subjectCodeOverride || {})['ม.2']);
+    set('tc-override-enabled', cfg.override.enabled); set('tc-override-year', cfg.override.year); set('tc-override-term', cfg.override.term || 1); set('tc-override-until', cfg.override.until);
+    set('tc-auto-rollover', cfg.autoRollover);
+  },
+  _readTermConfigForm() {
+    const cfg = Store.getTermConfig();
+    const rows = Array.from(document.querySelectorAll('#term-config-calendar .tc-row'));
+    cfg.terms = rows.map(r => ({ year: r.querySelector('.tc-year').value, term: r.querySelector('.tc-term').value, start: r.querySelector('.tc-start').value, end: r.querySelector('.tc-end').value }));
+    const v = (id) => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    const c = (id) => { const el = document.getElementById(id); return !!(el && el.checked); };
+    cfg.subjectPrefixByGrade = { 'ม.1': v('tc-prefix-m1'), 'ม.2': v('tc-prefix-m2') };
+    cfg.subjectCodeOverride = {};
+    if (v('tc-code-override-m1')) cfg.subjectCodeOverride['ม.1'] = v('tc-code-override-m1');
+    if (v('tc-code-override-m2')) cfg.subjectCodeOverride['ม.2'] = v('tc-code-override-m2');
+    cfg.override = { enabled: c('tc-override-enabled'), year: v('tc-override-year') ? Number(v('tc-override-year')) : null, term: Number(v('tc-override-term')) || null, until: v('tc-override-until') || null };
+    cfg.autoRollover = c('tc-auto-rollover');
+    cfg.calendarStatus = '';
+    return cfg;
+  },
+  _termRowHtml(t) {
+    const e = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;');
+    return '<div class="tc-row" style="display:grid;grid-template-columns:90px 90px 1fr 1fr 36px;gap:0.4rem;margin-bottom:0.35rem;align-items:center;">' +
+      '<input class="form-input tc-year" type="number" value="' + e(t.year) + '" aria-label="ปีการศึกษา">' +
+      '<select class="form-select tc-term" aria-label="ภาคเรียน">' + [1, 2, 3].map(n => '<option value="' + n + '"' + (n === t.term ? ' selected' : '') + '>ภาค ' + n + '</option>').join('') + '</select>' +
+      '<input class="form-input tc-start" type="date" value="' + e(t.start) + '" aria-label="วันเริ่ม">' +
+      '<input class="form-input tc-end" type="date" value="' + e(t.end) + '" aria-label="วันสิ้นสุด">' +
+      '<button type="button" class="btn-nav-action" onclick="this.parentNode.remove()" title="ลบแถว">&times;</button></div>';
+  },
+  addTermConfigRow() {
+    const host = document.getElementById('term-config-calendar');
+    if (!host) return;
+    const rows = Array.from(host.querySelectorAll('.tc-row'));
+    const lastRow = rows[rows.length - 1];
+    const ly = lastRow ? Number(lastRow.querySelector('.tc-year').value) : Store.getSemesterInfo().year;
+    const lt = lastRow ? Number(lastRow.querySelector('.tc-term').value) : 1;
+    host.insertAdjacentHTML('beforeend', this._termRowHtml({ year: lt === 1 ? ly : ly + 1, term: lt === 1 ? 2 : 1, start: '', end: '' }));
+  },
+  saveTermConfigForm() {
+    const cfg = this._readTermConfigForm();
+    const bad = cfg.terms.find(t => !t.start || !t.year);
+    if (bad) { alert('กรุณากรอกปีการศึกษาและวันเริ่มต้นของทุกแถว'); return; }
+    if (cfg.override.enabled && (!cfg.override.year || !cfg.override.term)) { alert('เปิดบังคับภาคเรียน ต้องระบุปีและภาคเรียน'); return; }
+    Store.saveTermConfig(cfg);
+    try { Store.autoRolloverIfNeeded(); Store.applyTermToStaticData(); } catch (e) { console.warn(e); }
+    this.updateSemesterBadge();
+    this.renderTermConfigForm();
+    const m = document.getElementById('term-config-msg'); if (m) { m.textContent = '✅ บันทึกแล้ว — ระบบใช้ ' + Store.getSemesterInfo().label; }
+    if (typeof this.renderDashboard === 'function') this.renderDashboard();
+  },
+  resetTermConfigForm() {
+    if (!confirm('คืนค่าปฏิทินภาคเรียนและคำนำหน้ารหัสวิชาเป็นค่าเริ่มต้น?')) return;
+    Store.remove('ppk_term_config');
+    this.renderTermConfigForm();
+    this.updateSemesterBadge();
   },
 
   closeSemesterModal() {
@@ -4360,16 +4834,16 @@ const App = {
     // Dynamically update Timetable Modal Header from AppSettings / Timetable config
     const teacherName = (settings && settings.teacherName) || tt.teacherName || 'คุณครูพงศธร โพธิแก้ว';
     const schoolName = (settings && settings.schoolName) || tt.school || 'โรงเรียนพะเยาพิทยาคม';
-    const term = (settings && settings.academicTerm) || tt.term || 'ภาคเรียนที่ 2/2569';
+    const term = Store.getSemesterInfo().shortLabel;
     const dept = (settings && settings.department) || 'กลุ่มสาระการเรียนรู้ศิลปะ (สาระดนตรี)';
 
     const ttTitleEl = document.getElementById('timetable-modal-title');
     if (ttTitleEl) {
-      ttTitleEl.textContent = `ตารางสอน ${tt.teacherCode || '612'} ${teacherName} ${term} ${schoolName}`;
+      ttTitleEl.textContent = `ตารางสอน ${tt.teacherCode || ''} ${teacherName} ${term} ${schoolName}`;
     }
     const ttSubEl = document.getElementById('timetable-modal-sub');
     if (ttSubEl) {
-      ttSubEl.innerHTML = `${this.escapeHtml(dept)} • ห้องปฏิบัติการดนตรี: <strong>${this.escapeHtml(tt.room || 'อส.5')}</strong> • ออกให้ ณ วันที่ ${this.escapeHtml(tt.date || '20.10.2569')}`;
+      ttSubEl.innerHTML = `${this.escapeHtml(dept)} • ห้องปฏิบัติการดนตรี: <strong>${this.escapeHtml(tt.room || '-')}</strong> • ออกให้ ณ วันที่ ${this.escapeHtml(tt.date || '-')}`;
     }
 
     const table = document.getElementById('timetable-editor-table');
@@ -4471,20 +4945,13 @@ const App = {
           } else if (isActivity) {
             cellContent = `<div class="tt-cell-activity">${this.escapeHtml(currentVal)}</div>`;
           } else if (currentVal) {
-            let subj = 'ศ21102';
-            let shortClass = currentVal.replace('ม.', '');
-            if (currentVal === 'ม.1/14') {
-              subj = 'AR21105';
-              shortClass = 'M.1/14';
-            } else if (currentVal.startsWith('ม.2/')) {
-              subj = 'ศ22102';
-              shortClass = currentVal.replace('ม.', '');
-            }
+            const subj = Store.getCurrentSubject(currentVal).code;
+            const shortClass = currentVal.replace('ม.', '');
             cellContent = `
               <div class="tt-cell-box ${cellClassExtra}" style="cursor: pointer; position: relative;" onclick="App.onTimetableCellClick('${d.key}', ${p.no}, '${currentVal}')" title="แตะเพื่อเลือก: มอบหมาย นศ.ฝึกสอน/คำแนะนำนิเทศ หรือเข้าห้องเรียน">
                 <div class="tt-subj">${subj}</div>
                 <div class="tt-class">${shortClass}</div>
-                <div class="tt-room">อส.5</div>
+                <div class="tt-room">${this.escapeHtml(Store.getTimetableMeta().room)}</div>
                 ${traineeBadge}
               </div>
             `;
@@ -4496,9 +4963,9 @@ const App = {
           selectHtml += `<option value="">(ว่าง)</option>`;
           selectHtml += `<option value="พักเที่ยง" ${isLunch ? 'selected' : ''}>พักเที่ยง</option>`;
 
-          selectHtml += `<optgroup label="วิชา ศ21102 (ดนตรี ม.1)">`;
+          selectHtml += `<optgroup label="วิชา ${Store.getSubjectCode('ม.1')} (ดนตรี ม.1)">`;
           m1Classes.forEach(c => {
-            selectHtml += `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c} (ศ21102)</option>`;
+            selectHtml += `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c} (${Store.getSubjectCode('ม.1')})</option>`;
           });
           selectHtml += `</optgroup>`;
 
@@ -4506,9 +4973,9 @@ const App = {
           selectHtml += `<option value="ม.1/14" ${currentVal === 'ม.1/14' ? 'selected' : ''}>ม.1/14 (AR21105)</option>`;
           selectHtml += `</optgroup>`;
 
-          selectHtml += `<optgroup label="วิชา ศ22102 (ดนตรี ม.2)">`;
+          selectHtml += `<optgroup label="วิชา ${Store.getSubjectCode('ม.2')} (ดนตรี ม.2)">`;
           m2Classes.forEach(c => {
-            selectHtml += `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c} (ศ22102)</option>`;
+            selectHtml += `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c} (${Store.getSubjectCode('ม.2')})</option>`;
           });
           selectHtml += `</optgroup>`;
 
@@ -4570,12 +5037,12 @@ const App = {
   },
 
   resetToOfficialTimetable() {
-    if (confirm('ต้องการคืนค่าเป็น "ตารางสอนทางการ 612 ภาคเรียนที่ 2/2569 โรงเรียนพะเยาพิทยาคม" (ห้อง อส.5) หรือไม่?')) {
+    if (confirm(`ต้องการคืนค่าเป็น "ตารางสอนทางการ ${Store.getTimetableMeta().teacherCode} ${Store.getSemesterInfo().shortLabel} ${Store.getAppSettings().schoolName}" (ห้อง ${Store.getTimetableMeta().room}) หรือไม่?`)) {
       Store.setOfficialTimetable();
       this.state.timetableMode = 'official';
       this.openTimetableModal('official');
       this.renderTodaySchedule();
-      alert('✅ คืนค่าตารางสอนทางการ ภาคเรียนที่ 2/2569 เรียบร้อยแล้ว');
+      alert(`✅ คืนค่าตารางสอนทางการ ${Store.getSemesterInfo().shortLabel} เรียบร้อยแล้ว`);
     }
   },
 
@@ -4883,7 +5350,7 @@ const App = {
   // --- Make-up Assessment Dialog ---
   checkMakeupsBanner() {
     const className = this.state.selectedClass;
-    const pending = Store.getPendingMakeups(className);
+    const pending = Store.getPendingMakeups(className).concat(Store.getPendingExamMakeups ? Store.getPendingExamMakeups(className) : []);
     const banner = document.getElementById('makeup-alert-banner');
     if (banner) {
       if (pending.length > 0) {
@@ -4901,7 +5368,8 @@ const App = {
     const listEl = document.getElementById('makeup-students-list');
     listEl.innerHTML = '';
 
-    if (pending.length === 0) {
+    const examPending = Store.getPendingExamMakeups ? Store.getPendingExamMakeups(className) : [];
+    if (pending.length === 0 && examPending.length === 0) {
       listEl.innerHTML = '<div style="color:var(--text-muted); font-size:0.9rem;">ไม่มีนักเรียนค้างสอบในห้องนี้</div>';
     } else {
       pending.forEach(item => {
@@ -4917,6 +5385,7 @@ const App = {
             </div>
           </div>
           <div style="display: flex; gap: 0.35rem;">
+            <button class="btn-score-choice" onclick="App.handleMakeupScore('${className}', ${item.period}, '${item.student.student_id}', 4)">4</button>
             <button class="btn-score-choice" onclick="App.handleMakeupScore('${className}', ${item.period}, '${item.student.student_id}', 3)">3</button>
             <button class="btn-score-choice" onclick="App.handleMakeupScore('${className}', ${item.period}, '${item.student.student_id}', 2)">2</button>
             <button class="btn-score-choice" onclick="App.handleMakeupScore('${className}', ${item.period}, '${item.student.student_id}', 1)">1</button>
@@ -4925,12 +5394,23 @@ const App = {
         listEl.appendChild(row);
       });
     }
+    if (examPending.length > 0) {
+      const box = document.createElement('div');
+      box.className = 'student-card';
+      box.style.display = 'block';
+      box.innerHTML = '<div style="font-weight:700;color:var(--ppk-navy-dark);">คาบสอบ (กลางภาค/ปลายภาค): ขาด/ลา ' + examPending.length + ' คน</div>' +
+        '<div style="font-size:0.8rem;color:var(--text-muted);margin:0.25rem 0;">คาบสอบให้คะแนนจากข้อสอบออนไลน์ ไม่ใช้ปุ่มระดับ 1-4 — ให้เปิดสอบชดเชยที่แผง "ข้อสอบ" (ปุ่มอนุญาตสอบซ้ำ/เปิดสอบ) คะแนนจะเข้าช่อง K อัตโนมัติเมื่อนักเรียนส่งข้อสอบ</div>' +
+        examPending.map(function (it) { return '<div style="font-size:0.85rem;">คาบที่ ' + it.period + ' • เลขที่ ' + it.student.no + ' ' + (it.student.first_name || '') + ' ' + (it.student.last_name || '') + ' (' + it.reason + ')</div>'; }).join('');
+      listEl.appendChild(box);
+    }
 
     document.getElementById('modal-makeup').classList.add('active');
   },
 
-  handleMakeupScore(className, period, studentId, score) {
-    Store.saveMakeupScore(className, period, studentId, score);
+  handleMakeupScore(className, period, studentId, level) {
+    const pts = Store.recordUniformLevel(studentId, className, period, level);   // ระดับ 1-4 -> คะแนนตามน้ำหนัก วก.5
+    if (pts === null) return;
+    Store.saveMakeupScore(className, period, studentId, pts);
     this.openMakeupModal();
     this.checkMakeupsBanner();
     this.renderAssessmentTab();
@@ -4983,9 +5463,13 @@ const App = {
 
     const existing = Store.getSession(className, period);
     document.getElementById('refl-handover-note').value = existing?.handoverNote || '';
-    document.getElementById('refl-outcomes').value = existing?.reflection?.outcomes || `นักเรียนร้อยละ ${pct} สามารถปฏิบัติตามกิจกรรมการเรียนรู้ได้ตามเป้าหมาย`;
+    document.getElementById('refl-outcomes').value = existing?.reflection?.outcomes || '';
     document.getElementById('refl-problems').value = existing?.reflection?.problems || '';
     document.getElementById('refl-solutions').value = existing?.reflection?.solutions || '';
+    document.getElementById('refl-teacher-date').value = existing?.reflection?.teacherDate || '';
+    document.getElementById('refl-admin-opinion').value = existing?.reflection?.adminOpinion || '';
+    document.getElementById('refl-admin-name').value = existing?.reflection?.adminName || '';
+    document.getElementById('refl-admin-date').value = existing?.reflection?.adminDate || '';
 
     document.getElementById('modal-reflection').classList.add('active');
   },
@@ -5010,7 +5494,26 @@ const App = {
     }
   },
 
+  // แท็บ "บทเพลง" ในสื่อช่วยสอน: รายการแบบฝึก/บทเพลง ม.1 ตาม วก.5 (ข้อมูลจาก KALIMBA_MEDIA + โน้ตครู)
+  renderAidsSongs() {
+    const box = document.getElementById('aids-m1-songs');
+    if (!box) return;
+    const esc = s => this.escapeHtml(String(s == null ? '' : s));
+    const list = (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.buildSongList) ? VirtualKalimba.buildSongList() : [];
+    if (!list.length) { box.innerHTML = '<div style="padding:1rem;color:#64748b;">ยังไม่มีข้อมูลแบบฝึกจาก วก.5</div>'; return; }
+    box.innerHTML = '<div style="font-weight:800;color:#1e3a8a;margin-bottom:0.5rem;">🎼 แบบฝึกและบทเพลง ม.1 (ตาม วก.5 แยกตามคาบ)</div>' + list.map(g => `
+      <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:0.8rem;margin-bottom:0.7rem;">
+        <div style="font-weight:700;color:#334155;margin-bottom:0.35rem;">คาบที่ ${g.period}</div>
+        ${g.items.map(it => `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:4px 0;border-top:1px dashed #e2e8f0;">
+          <div><strong>${esc(it.title)}</strong>${it.draft ? ' <span style="font-size:0.72rem;color:#92400e;">(' + esc(it.draft) + ')</span>' : ''}
+            <div style="font-family:monospace;font-size:0.85rem;color:#475569;">${(it.notes || []).map(n => esc(n.th || '')).join(' ') || '— ยังไม่มีโน้ต รอครูใส่ —'}</div></div>
+          <button type="button" class="btn-nav-action primary" style="font-size:0.78rem;padding:4px 10px;" onclick="VirtualKalimba.openModal(); VirtualKalimba.populateSongsSelect('${esc(it.id)}')">▶ ซ้อม</button>
+        </div>`).join('')}
+      </div>`).join('');
+  },
+
   switchMusicAidsTab(tab) {
+    if (tab === 'songs') this.renderAidsSongs();
     const tabs = ['staff', 'kalimba', 'songs', 'rhythm'];
     tabs.forEach(t => {
       const pane = document.getElementById(`pane-aids-${t}`);
@@ -5061,12 +5564,16 @@ const App = {
     const outcomes = document.getElementById('refl-outcomes').value.trim();
     const problems = document.getElementById('refl-problems').value.trim();
     const solutions = document.getElementById('refl-solutions').value.trim();
+    const teacherDate = document.getElementById('refl-teacher-date').value.trim();
+    const adminOpinion = document.getElementById('refl-admin-opinion').value.trim();
+    const adminName = document.getElementById('refl-admin-name').value.trim();
+    const adminDate = document.getElementById('refl-admin-date').value.trim();
 
     const sessionData = {
       instructor: Store.getInstructor(),
       attendance: this.state.attendance,
       scores: this.state.scores,
-      reflection: { outcomes, problems, solutions },
+      reflection: { outcomes, problems, solutions, teacherDate, adminOpinion, adminName, adminDate },
       handoverNote
     };
 
@@ -5275,35 +5782,44 @@ const App = {
     const className = document.getElementById('export-class-select').value;
     const sessions = Store.getAllSessions();
     const settings = Store.getAppSettings ? Store.getAppSettings() : null;
-    const schoolName = (settings && settings.schoolName) || 'โรงเรียนพะเยาพิทยาคม';
+    const schoolName = (settings && settings.schoolName) || '';
+    const sem = Store.getSemesterInfo();
+    const gradeKey = Store.gradeKeyOf(className);
+    const periodCount = Store.getPeriodCount(gradeKey);
+    const subject = Store.getCurrentSubject ? Store.getCurrentSubject(className) : null;
 
     let text = `=======================================================\n`;
-    text += `สรุปบันทึกหลังการจัดการเรียนรู้ (แบบฟอร์ม วก.5)\n`;
-    text += `${schoolName} • ห้อง ${className}\n`;
+    text += `บันทึกผลหลังการสอน (วก.5 หน้า 4)\n`;
+    text += `${schoolName} • ห้อง ${className} • ${sem.label}\n`;
+    if (subject) text += `รายวิชา ${subject.name} รหัส ${subject.code}\n`;
     text += `=======================================================\n\n`;
 
     let found = 0;
-    for (let p = 1; p <= 20; p++) {
+    for (let p = 1; p <= periodCount; p++) {
       const key = Store.getSessionKey(className, p);
       const s = sessions[key];
-      if (s) {
+      const r = s && s.reflection;
+      if (r && (r.outcomes || r.problems || r.solutions || r.adminOpinion)) {
         found++;
-        text += `[ คาบที่ ${p} ] วันที่: ${s.dateStr} | ผู้สอน: ${s.instructor.name} (${s.instructor.role})\n`;
-        text += `• ผลการจัดการเรียนรู้: ${s.reflection.outcomes || '-'}\n`;
-        text += `• ปัญหาและอุปสรรค: ${s.reflection.problems || '-'}\n`;
-        text += `• แนวทางแก้ไข: ${s.reflection.solutions || '-'}\n`;
-        if (s.handoverNote) text += `• บันทึกส่งต่องาน: ${s.handoverNote}\n`;
+        const lesson = Store.getLesson(gradeKey, p);
+        const inst = s.instructor || {};
+        text += `[ แผนการจัดการเรียนรู้ที่ ${p} ] เรื่อง: ${(lesson && lesson.wk5 && lesson.wk5.topic) || (lesson && lesson.topic) || '-'}\n`;
+        text += `วันที่: ${s.dateStr || '-'} | ผู้สอน: ${inst.name || '-'}\n`;
+        text += `• ผลการเรียนรู้ของนักเรียน: ${r.outcomes || '-'}\n`;
+        text += `• ปัญหาที่เกิดขึ้นในระหว่างการจัดการเรียนรู้: ${r.problems || '-'}\n`;
+        text += `• แนวทางการแก้ปัญหาหรือปรับปรุงแผนฯ ครั้งต่อไป (Action plan): ${r.solutions || '-'}\n`;
+        text += `• ความคิดเห็นของฝ่ายบริหาร: ${r.adminOpinion || '-'}\n`;
         text += `-------------------------------------------------------\n`;
       }
     }
 
     if (found === 0) {
-      alert(`ยังไม่มีบันทึกหลังสอนสำหรับห้อง ${className} ครับ`);
+      alert(`ยังไม่มีบันทึกผลหลังการสอนที่ครูกรอกสำหรับห้อง ${className} ครับ`);
       return;
     }
 
     navigator.clipboard.writeText(text).then(() => {
-      alert(`📋 คัดลอกบันทึกหลังสอนของห้อง ${className} จำนวน ${found} คาบ ลงใน Clipboard เรียบร้อยแล้ว!\nสามารถนำไปกดวาง (Ctrl+V) ในเอกสาร Word วก.5 ได้ทันทีครับ`);
+      alert(`📋 คัดลอกบันทึกผลหลังการสอนของห้อง ${className} จำนวน ${found} คาบ ลงใน Clipboard เรียบร้อยแล้ว\nสามารถนำไปวางในเอกสาร วก.5 ได้ทันทีครับ`);
     }).catch(() => {
       alert(text);
     });
@@ -5342,9 +5858,7 @@ const App = {
     if (forceGrade) {
       this.state.academicGrade = forceGrade;
     } else if (!this.state.academicGrade) {
-      const isM2 = (this.state.selectedGrade === 'M2') ||
-                   (this.state.selectedClass && String(this.state.selectedClass).includes('2'));
-      this.state.academicGrade = isM2 ? 'M2' : 'M1';
+      this.state.academicGrade = this._resolveAcademicGrade();
     }
     if (typeof ACADEMIC_DOCS_BY_GRADE !== 'undefined' && ACADEMIC_DOCS_BY_GRADE[this.state.academicGrade]) {
       ACADEMIC_DOCS = ACADEMIC_DOCS_BY_GRADE[this.state.academicGrade];
@@ -5365,9 +5879,15 @@ const App = {
     if (period === null) {
       period = this.state.selectedPeriod || 1;
     }
-    const isM2 = (this.state.selectedGrade === 'M2') ||
-                 (this.state.selectedClass && String(this.state.selectedClass).includes('2'));
-    this.openAcademicDocsModal('wk5', period, isM2 ? 'M2' : 'M1');
+    this.openAcademicDocsModal('wk5', period, this._resolveAcademicGrade());
+  },
+
+  // ระดับชั้นของเอกสารวิชาการ: ตามห้องที่เลือก -> ระดับที่เลือกอยู่ -> ระดับแรกที่มีเอกสาร
+  _resolveAcademicGrade() {
+    const fromClass = Store.gradeKeyOf(this.state.selectedClass);
+    if (fromClass) return fromClass;
+    if (this.state.selectedGrade) return this.state.selectedGrade;
+    return (typeof ACADEMIC_DOCS_BY_GRADE !== 'undefined' && Object.keys(ACADEMIC_DOCS_BY_GRADE)[0]) || '';
   },
 
   closeAcademicDocsModal() {
@@ -5404,10 +5924,10 @@ const App = {
     gradeSwitchWrap.style.cssText = 'display:inline-flex; gap:4px; background:#e2e8f0; padding:3px; border-radius:8px; margin-right:10px; vertical-align:middle;';
     gradeSwitchWrap.innerHTML = `
       <button type="button" onclick="App.switchAcademicGrade('M1')" style="border:none; padding:4px 10px; border-radius:6px; font-family:inherit; font-size:0.8rem; font-weight:700; cursor:pointer; background:${curGrade === 'M1' ? '#1e3a8a' : 'transparent'}; color:${curGrade === 'M1' ? '#fff' : '#334155'};">
-        🎵 ม.1 ดนตรี 1 (ศ21102 • 79 ไฟล์)
+        🎵 ม.1 ดนตรี 1 (${Store.getSubjectCode('ม.1')} • 79 ไฟล์)
       </button>
       <button type="button" onclick="App.switchAcademicGrade('M2')" style="border:none; padding:4px 10px; border-radius:6px; font-family:inherit; font-size:0.8rem; font-weight:700; cursor:pointer; background:${curGrade === 'M2' ? '#1e3a8a' : 'transparent'}; color:${curGrade === 'M2' ? '#fff' : '#334155'};">
-        🎶 ม.2 ดนตรี 2 (ศ22102 • 79 ไฟล์)
+        🎶 ม.2 ดนตรี 2 (${Store.getSubjectCode('ม.2')} • 79 ไฟล์)
       </button>
     `;
     selectorContainer.appendChild(gradeSwitchWrap);
@@ -5417,9 +5937,10 @@ const App = {
       const badgeSpan = document.createElement('span');
       badgeSpan.className = 'badge-primary';
       badgeSpan.style.cssText = 'font-size: 0.85rem; padding: 4px 10px; border-radius: 4px;';
-      badgeSpan.textContent = curGrade === 'M2'
-        ? '📖 ศ22102 ดนตรี 2 (ชั้น ม.2) • โครงสร้างรายวิชา 20 คาบ (4 หน่วย × 20 + กลางภาค 10 + ปลายภาค 10 = 100 คะแนน)'
-        : '📖 ศ21102 ดนตรี 1 (ชั้น ม.1) • โครงสร้างรายวิชา 20 คาบ (0.5 หน่วยกิต)';
+      const gInfo = Store.getGradeInfo(curGrade);
+      badgeSpan.textContent = gInfo
+        ? `📖 ${gInfo.code} ${gInfo.subjectName} (ชั้น ${gInfo.short}) • โครงสร้างรายวิชา ${Store.getPeriodCount(curGrade)} คาบ`
+        : '📖 โครงสร้างรายวิชา';
       selectorContainer.appendChild(badgeSpan);
     } else if (tabKey === 'wk4') {
       const units = ACADEMIC_DOCS.wk4 || [];
@@ -5576,8 +6097,9 @@ const App = {
     const settings = Store.getAppSettings ? Store.getAppSettings() : null;
     const schoolName = (settings && settings.schoolName) || 'โรงเรียนพะเยาพิทยาคม';
     const deptName = (settings && settings.department) || 'กลุ่มสาระการเรียนรู้ศิลปะ (สาระดนตรี)';
-    const curGrade = this.state.academicGrade || 'M1';
-    const subjStr = curGrade === 'M2' ? 'รายวิชา ดนตรี 2 (ศ22102) ชั้นมัธยมศึกษาปีที่ 2' : 'รายวิชา ดนตรี 1 (ศ21102) ชั้นมัธยมศึกษาปีที่ 1';
+    const curGrade = this.state.academicGrade || this._resolveAcademicGrade();
+    const gInfo = Store.getGradeInfo(curGrade);
+    const subjStr = gInfo ? `รายวิชา ${gInfo.subjectName} (${gInfo.code}) ชั้น${gInfo.level}` : '';
 
     let html = '';
     const titleText = docObj.title || docObj.topic || docObj.unit_name || docObj.filename || '';
@@ -5691,7 +6213,7 @@ const App = {
 
     const titleEl = document.getElementById('modal-lesson-editor-title');
     if (titleEl) {
-      titleEl.textContent = `✏️ ปรับแต่งแผนการสอน (${g === 'M1' ? 'ม.1 ศ21101/ศ21102' : 'ม.2 ศ22101/ศ22102'} / คาบที่ ${p})`;
+      titleEl.textContent = `✏️ ปรับแต่งแผนการสอน (${(Store.getGradeInfo(g) || {}).short || g} ${(Store.getGradeInfo(g) || {}).code || ''} / คาบที่ ${p})`;
     }
 
     document.getElementById('editor-lesson-grade').value = g;
@@ -5744,6 +6266,9 @@ const App = {
 
     // Mentor Tips
     document.getElementById('editor-mentor-tips').value = lesson.mentor_tips || lesson.mentor_tip || '';
+
+    // วก.5 fields (แสดงค่าปัจจุบันที่ผสานแล้ว ช่องที่ไม่มีข้อมูลเว้นว่าง)
+    this._fillWk5Editor(lesson.wk5 || {});
 
     this.recalcEditorTotalDuration();
 
@@ -5814,6 +6339,73 @@ const App = {
     }
   },
 
+  // --- วก.5 lesson-editor helpers ---
+  _wk5FieldMap(w) {
+    const o = w.objectives || {};
+    const a = w.assessment || {};
+    const ac = w.activities || {};
+    const act = k => ({ minutes: ac[k] && ac[k].minutes !== undefined && ac[k].minutes !== null ? String(ac[k].minutes) : '', items: (ac[k] && Array.isArray(ac[k].items)) ? ac[k].items.map(String) : [] });
+    return {
+      'standards': w.standards || [], 'key-concept': w.key_concept || '', 'content': w.content || [],
+      'obj-k': o.k || [], 'obj-p': o.p || [], 'obj-a': o.a || [],
+      'competencies': w.competencies || [], 'work': w.work || [],
+      'assess-k': a.k || '', 'assess-p': a.p || '', 'assess-a': a.a || '',
+      'tools': w.tools || [],
+      'act-intro': act('intro'), 'act-teach': act('teach'), 'act-wrap': act('wrap')
+    };
+  },
+
+  _fillWk5Editor(w) {
+    const m = this._wk5FieldMap(w);
+    Object.keys(m).forEach(id => {
+      const v = m[id];
+      if (id.startsWith('act-')) {
+        const t = document.getElementById('editor-wk5-' + id);
+        const mn = document.getElementById('editor-wk5-' + id + '-min');
+        if (t) t.value = v.items.join('\n');
+        if (mn) mn.value = v.minutes;
+      } else {
+        const el = document.getElementById('editor-wk5-' + id);
+        if (el) el.value = Array.isArray(v) ? v.join('\n') : String(v || '');
+      }
+    });
+  },
+
+  // อ่านค่าจากฟอร์ม แล้วเก็บเฉพาะช่องที่ต่างจากแผนมาตรฐาน (ช่องที่ไม่แก้จะตามข้อมูลต้นทางต่อไป)
+  _collectWk5Editor(grade, period) {
+    const lines = id => String(document.getElementById('editor-wk5-' + id)?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const txt = id => String(document.getElementById('editor-wk5-' + id)?.value || '').trim();
+    const num = id => String(document.getElementById('editor-wk5-' + id + '-min')?.value || '').trim();
+    const form = {
+      'standards': lines('standards'), 'key-concept': txt('key-concept'), 'content': lines('content'),
+      'obj-k': lines('obj-k'), 'obj-p': lines('obj-p'), 'obj-a': lines('obj-a'),
+      'competencies': lines('competencies'), 'work': lines('work'),
+      'assess-k': txt('assess-k'), 'assess-p': txt('assess-p'), 'assess-a': txt('assess-a'),
+      'tools': lines('tools')
+    };
+    ['intro', 'teach', 'wrap'].forEach(k => { form['act-' + k] = { minutes: num('act-' + k), items: lines('act-' + k) }; });
+    const base = this._wk5FieldMap(Store.getWk5Plan(grade, period) || {});
+    const norm = v => {
+      if (Array.isArray(v)) return JSON.stringify(v.map(s => String(s).trim()).filter(Boolean));
+      if (v && typeof v === 'object') return JSON.stringify({ minutes: String(v.minutes ?? '').trim(), items: (v.items || []).map(s => String(s).trim()).filter(Boolean) });
+      return String(v || '').trim();
+    };
+    const changed = id => norm(form[id]) !== norm(base[id]);
+    const out = {};
+    if (changed('standards')) out.standards = form['standards'];
+    if (changed('key-concept')) out.key_concept = form['key-concept'];
+    if (changed('content')) out.content = form['content'];
+    ['k', 'p', 'a'].forEach(x => { if (changed('obj-' + x)) (out.objectives = out.objectives || {})[x] = form['obj-' + x]; });
+    if (changed('competencies')) out.competencies = form['competencies'];
+    if (changed('work')) out.work = form['work'];
+    ['k', 'p', 'a'].forEach(x => { if (changed('assess-' + x)) (out.assessment = out.assessment || {})[x] = form['assess-' + x]; });
+    if (changed('tools')) out.tools = form['tools'];
+    ['intro', 'teach', 'wrap'].forEach(k => {
+      if (changed('act-' + k)) (out.activities = out.activities || {})[k] = { minutes: form['act-' + k].minutes === '' ? '' : Number(form['act-' + k].minutes), items: form['act-' + k].items };
+    });
+    return out;
+  },
+
   saveLessonEditorModal() {
     const grade = document.getElementById('editor-lesson-grade').value || 'M1';
     const period = Number(document.getElementById('editor-lesson-period').value || 1);
@@ -5865,7 +6457,8 @@ const App = {
       steps,
       duration_min: totalDuration || 50,
       media,
-      mentor_tips: mentorTips
+      mentor_tips: mentorTips,
+      wk5: this._collectWk5Editor(grade, period)
     };
 
     Store.saveCustomLesson(grade, period, customData);
@@ -5883,7 +6476,7 @@ const App = {
       this.renderCurriculumHubCards(grade);
     }
 
-    alert(`✅ บันทึกและปรับแต่งแผนการสอน (${grade === 'M1' ? 'ม.1' : 'ม.2'} คาบที่ ${period}) เรียบร้อยแล้ว!\nระบบได้อัปเดตเวลานาฬิกา T-PACE และส่งซิงค์คู่ขนานขึ้น Google Sheets ให้โดยอัตโนมัติครับ`);
+    alert(`✅ บันทึกและปรับแต่งแผนการสอน (${(Store.getGradeInfo(grade) || {}).short || grade} คาบที่ ${period}) เรียบร้อยแล้ว!\nระบบได้อัปเดตเวลานาฬิกา T-PACE และส่งซิงค์คู่ขนานขึ้น Google Sheets ให้โดยอัตโนมัติครับ`);
   },
 
   resetCurrentLessonModal() {

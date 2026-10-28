@@ -17,10 +17,10 @@ const OfficialForms = {
 
     if (className) {
       this.activeClass = className;
-      this.activeGrade = className.startsWith('ม.2') ? 'M2' : 'M1';
+      this.activeGrade = Store.gradeKeyOf(className);
     } else if (typeof App !== 'undefined') {
       this.activeClass = App.state.selectedClass || 'ม.1/1';
-      this.activeGrade = this.activeClass.startsWith('ม.2') ? 'M2' : 'M1';
+      this.activeGrade = Store.gradeKeyOf(this.activeClass);
     }
 
     if (period) this.activePeriod = parseInt(period, 10);
@@ -61,8 +61,8 @@ const OfficialForms = {
       gradeSel.className = 'form-select';
       gradeSel.style.minWidth = '220px';
       [
-        { val: 'M1', label: 'มัธยมศึกษาปีที่ 1 (ศ21101 ดนตรี 1)' },
-        { val: 'M2', label: 'มัธยมศึกษาปีที่ 2 (ศ22102 ดนตรี 2)' }
+        { val: 'M1', label: `มัธยมศึกษาปีที่ 1 (${Store.getSubjectCode('ม.1')} ดนตรี 1)` },
+        { val: 'M2', label: `มัธยมศึกษาปีที่ 2 (${Store.getSubjectCode('ม.2')} ดนตรี 2)` }
       ].forEach(g => {
         const opt = document.createElement('option');
         opt.value = g.val;
@@ -84,8 +84,8 @@ const OfficialForms = {
       gradeSel.className = 'form-select';
       gradeSel.style.minWidth = '160px';
       [
-        { val: 'M1', label: 'ม.1 (ศ21101)' },
-        { val: 'M2', label: 'ม.2 (ศ22102)' }
+        { val: 'M1', label: `ม.1 (${Store.getSubjectCode('ม.1')})` },
+        { val: 'M2', label: `ม.2 (${Store.getSubjectCode('ม.2')})` }
       ].forEach(g => {
         const opt = document.createElement('option');
         opt.value = g.val;
@@ -136,7 +136,7 @@ const OfficialForms = {
 
     classSel.onchange = (e) => {
       this.activeClass = e.target.value;
-      this.activeGrade = this.activeClass.startsWith('ม.2') ? 'M2' : 'M1';
+      this.activeGrade = Store.gradeKeyOf(this.activeClass);
       this.renderActiveSheet();
     };
     container.appendChild(classSel);
@@ -146,8 +146,8 @@ const OfficialForms = {
       const periodSel = document.createElement('select');
       periodSel.className = 'form-select';
       periodSel.style.minWidth = '180px';
-      const grade = this.activeClass.startsWith('ม.1') ? 'M1' : 'M2';
-      for (let p = 1; p <= 20; p++) {
+      const grade = Store.gradeKeyOf(this.activeClass);
+      for (let p = 1; p <= Store.getPeriodCount(grade); p++) {
         const opt = document.createElement('option');
         opt.value = p;
         const lesson = Store.getLesson ? Store.getLesson(grade, p) : null;
@@ -194,8 +194,8 @@ const OfficialForms = {
       academicHeadRole: "รองผู้อำนวยการกลุ่มบริหารงานวิชาการ"
     };
     const instructor = Store.getInstructor ? Store.getInstructor() : { name: 'นายพงศธร โพธิแก้ว', role: 'ครูผู้สอน' };
-    const currentSubject = Store.getCurrentSubject ? Store.getCurrentSubject(className) : { code: 'ศ21101', name: 'ดนตรี 1' };
-    const semesterMeta = Store.getSemesterMeta ? Store.getSemesterMeta() : { activeLabel: 'ภาคเรียนที่ 2 ปีการศึกษา 2569' };
+    const currentSubject = Store.getCurrentSubject ? Store.getCurrentSubject(className) : { code: Store.getSubjectCode('ม.1'), name: 'ดนตรี 1' };
+    const semesterMeta = { activeLabel: Store.getSemesterInfo().label };
 
     const gradeCounts = { 4: 0, 3.5: 0, 3: 0, 2.5: 0, 2: 0, 1.5: 0, 1: 0, 0: 0 };
     let passedCount = 0;
@@ -204,11 +204,13 @@ const OfficialForms = {
     // Pull real sessions to compute empirical attendance & performance
     const allSessions = Store.getAllSessions ? Store.getAllSessions() : {};
     let taughtPeriodsCount = 0;
-    for (let p = 1; p <= 20; p++) {
+    const periodTotal = Store.getPeriodCount(Store.gradeKeyOf(className));
+    for (let p = 1; p <= periodTotal; p++) {
       const key = Store.getSessionKey ? Store.getSessionKey(className, p) : `${className}_P${p}`;
       if (allSessions[key]) taughtPeriodsCount++;
     }
 
+    const kpaTotals = Store.getKPATotals(Store.gradeKeyOf(className));
     const studentRows = students.map((s) => {
       const isWithdrawn = Store.isStudentWithdrawn(s.student_id);
       const isPdpa = Store.getStudentPdpaConsent ? Store.getStudentPdpaConsent(s.student_id) : false;
@@ -234,79 +236,31 @@ const OfficialForms = {
         `;
       }
 
-      // 1. Empirical Attendance & Single-Source Formative Score Calculation
+      // คะแนนทั้งหมดมาจากคะแนนรายคาบที่บันทึกจริง (K/P/A ตามน้ำหนัก วก.5) ไม่มีค่าสมมติ
       let studentAttended = 0;
-      let sumRubricScores = 0;
-      let rubricCount = 0;
-
-      for (let p = 1; p <= 20; p++) {
+      for (let p = 1; p <= periodTotal; p++) {
         const key = Store.getSessionKey ? Store.getSessionKey(className, p) : `${className}_P${p}`;
         const sess = allSessions[key];
-        const rub = Store.getStudentRubric ? Store.getStudentRubric(s.student_id, p) : null;
-
         if (sess) {
           const att = sess.attendance ? sess.attendance[s.student_id] : 'present';
           if (att === 'present' || att === 'late' || att === 'activity') studentAttended++;
         }
-
-        // Prevent double-counting when both session score and rubric breakdown exist for the same period
-        if (sess && sess.scores && sess.scores[s.student_id] !== undefined && sess.scores[s.student_id] !== null) {
-          sumRubricScores += Number(sess.scores[s.student_id]);
-          rubricCount++;
-        } else if (rub && rub.scaledScore !== undefined) {
-          sumRubricScores += Number(rub.scaledScore);
-          rubricCount++;
-        }
       }
-
-      let attHours = 20;
-      let attPct = 100;
+      let attHours = '-';
+      let attPct = '-';
       if (taughtPeriodsCount > 0) {
-        attHours = Math.round((studentAttended / taughtPeriodsCount) * 20);
+        attHours = Math.round((studentAttended / taughtPeriodsCount) * periodTotal);
         attPct = Math.round((studentAttended / taughtPeriodsCount) * 100);
       }
 
-      // 2. Real Knowledge (K) Score (max 26 pts from 4 units)
-      let sumQuizScores = 0;
-      let quizCount = 0;
-      for (let u = 1; u <= 4; u++) {
-        const qAttempt = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, u) : null;
-        const uMaxK = (u <= 2) ? 5 : 8;
-        if (qAttempt) {
-          sumQuizScores += (qAttempt.score / 10) * uMaxK;
-          quizCount++;
-        } else {
-          const rawQ = localStorage.getItem(`music_quiz_grade_${s.student_id}_u${u}`);
-          if (rawQ !== null) {
-            sumQuizScores += (Number(rawQ) / 10) * uMaxK;
-            quizCount++;
-          }
-        }
-      }
-      // If quiz attempts exist use them; otherwise scale from practice
-      let kScore = quizCount > 0 ? Math.round(sumQuizScores * (4 / quizCount)) : (rubricCount > 0 ? Math.round((sumRubricScores / (rubricCount * 3)) * 26) : 22);
-      kScore = Math.min(26, Math.max(0, kScore));
-
-      // 3. Real Practice (P) Score (max 34 pts from Kalimba rubrics & lessons)
-      let pScore = rubricCount > 0 ? Math.round((sumRubricScores / (rubricCount * 3)) * 34) : 29;
-      pScore = Math.min(34, Math.max(0, pScore));
-
-      // 4. Real Attitude (A) Score (max 20 pts)
-      let aScore = Math.min(20, Math.max(10, Math.round((attPct / 100) * 20)));
-
-      const formativeTotal = kScore + pScore + aScore; // max 80
-
-      // 5. Midterm Exam (max 10 pts from units 1-2)
-      const u1Quiz = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, 1) : null;
-      const u2Quiz = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, 2) : null;
-      let midtermExam = (u1Quiz && u2Quiz) ? Math.round(((u1Quiz.score + u2Quiz.score) / 20) * 10) : Math.min(10, Math.round((formativeTotal / 80) * 10));
-
-      // 6. Final Exam (max 10 pts from units 3-4)
-      const u3Quiz = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, 3) : null;
-      const u4Quiz = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, 4) : null;
-      let finalScore = (u3Quiz && u4Quiz) ? Math.round(((u3Quiz.score + u4Quiz.score) / 20) * 10) : Math.min(10, Math.round((formativeTotal / 80) * 10));
-
-      const totalScore = formativeTotal + midtermExam + finalScore; // max 100
+      const kpa = Store.getStudentKPA(s.student_id, className);
+      const kScore = kpa.K;
+      const pScore = kpa.P;
+      const aScore = kpa.A;
+      const formativeTotal = kpa.formative;
+      const midtermExam = kpa.midterm === null ? 0 : kpa.midterm;   // คาบสอบกลางภาค (ผลสอบจริง)
+      const finalScore = kpa.final === null ? 0 : kpa.final;        // คาบสอบปลายภาค (ผลสอบจริง)
+      const totalScore = Math.round((formativeTotal + midtermExam + finalScore) * 100) / 100;
 
       // Determine Grade
       let grade = '0';
@@ -375,18 +329,18 @@ const OfficialForms = {
             <th rowspan="2" style="width: 22%;">ชื่อ - นามสกุล</th>
             <th rowspan="2" style="width: 7%;">PDPA</th>
             <th rowspan="2" style="width: 8%;">เวลาเรียน</th>
-            <th colspan="4" style="width: 23%;">คะแนนระหว่างเรียน 4 หน่วย (80)</th>
-            <th rowspan="2" style="width: 6%;">กลางภาค (10)</th>
-            <th rowspan="2" style="width: 6%;">ปลายภาค (10)</th>
-            <th rowspan="2" style="width: 6%;">รวม (100)</th>
+            <th colspan="4" style="width: 23%;">คะแนนระหว่างเรียน 4 หน่วย (${kpaTotals.formative})</th>
+            <th rowspan="2" style="width: 6%;">กลางภาค (${kpaTotals.midterm})</th>
+            <th rowspan="2" style="width: 6%;">ปลายภาค (${kpaTotals.final})</th>
+            <th rowspan="2" style="width: 6%;">รวม (${kpaTotals.total})</th>
             <th rowspan="2" style="width: 4%;">เกรด</th>
             <th rowspan="2" style="width: 7%;">คุณลักษณะ</th>
           </tr>
           <tr>
-            <th style="font-size: 10px;">K (26)</th>
-            <th style="font-size: 10px;">P (34)</th>
-            <th style="font-size: 10px;">A (20)</th>
-            <th style="font-size: 10px;">รวม (80)</th>
+            <th style="font-size: 10px;">K (${kpaTotals.K})</th>
+            <th style="font-size: 10px;">P (${kpaTotals.P})</th>
+            <th style="font-size: 10px;">A (${kpaTotals.A})</th>
+            <th style="font-size: 10px;">รวม (${kpaTotals.formative})</th>
           </tr>
         </thead>
         <tbody>
@@ -463,7 +417,7 @@ const OfficialForms = {
   },
 
   // ========================================================================
-  // 2. วก.5: แบบบันทึกผลหลังการจัดการเรียนรู้ (A4) - Dynamic & No Hardcoding
+  // 2. วก.5: แผนการจัดการเรียนรู้ + บันทึกผลหลังการสอน (A4 4 หน้า ตามแบบฟอร์มโรงเรียน) - ข้อมูลจากแผน/ตั้งค่า ไม่ฮาร์ดโค้ด
   // ========================================================================
   buildWK5HTML(className = 'ม.1/1', period = 1) {
     if (typeof period === 'undefined' || !period) {
@@ -478,234 +432,227 @@ const OfficialForms = {
       period = parseInt(className, 10);
       className = typeof temp === 'string' && temp.startsWith('ม.') ? temp : 'ม.1/1';
     }
-    const grade = className.startsWith('ม.1') ? 'M1' : 'M2';
+    const grade = Store.gradeKeyOf(className) || 'M1';
+    const gradeNo = Store.gradeNumberOf(className);
     const lesson = Store.getLesson ? Store.getLesson(grade, period) : null;
+    const w = (lesson && lesson.wk5) || {};
     const session = Store.getSession ? Store.getSession(className, period) : null;
-    const settings = Store.getAppSettings ? Store.getAppSettings() : {
-      schoolName: "โรงเรียนพะเยาพิทยาคม",
-      department: "กลุ่มสาระการเรียนรู้ศิลปะ (สาระดนตรี)",
-      departmentHead: "นายอุดม ไชยวุฒิ",
-      departmentHeadRole: "หัวหน้ากลุ่มสาระการเรียนรู้ศิลปะ",
-      academicHead: "นายกฤศ วงค์เรือง",
-      academicHeadRole: "รองผู้อำนวยการกลุ่มบริหารงานวิชาการ",
-      directorName: "ว่าที่ร้อยตรีญาณบดินทร์ อินเตชะ",
-      directorRole: "ผู้อำนวยการโรงเรียนพะเยาพิทยาคม",
-      innovationName: "รูปแบบการจัดการเรียนรู้เชิงรุก T-PACE Framework ร่วมกับแอปพลิเคชัน MusicSmart"
+    const refl = (session && session.reflection) || {};
+    const settings = Store.getAppSettings ? Store.getAppSettings() : {};
+    const instructor = Store.getInstructor ? Store.getInstructor() : { name: '' };
+    const subject = Store.getCurrentSubject ? Store.getCurrentSubject(className) : null;
+    const sem = Store.getSemesterInfo();
+    const crit = Store.getWk5Criteria();
+    const esc = s => this.escapeHtml(s);
+
+    // ---- helpers (ค่าว่างแสดงเป็นเส้นประแบบเดียวกับแบบฟอร์มต้นฉบับ) ----
+    const dots = (n = 20) => '.'.repeat(n);
+    const fill = (v, n = 20) => {
+      const t = (v === null || v === undefined) ? '' : String(v).trim();
+      return t ? `<span style="font-weight:600;">${esc(t)}</span>` : dots(n);
     };
-    const instructor = Store.getInstructor ? Store.getInstructor() : { name: 'นายพงศธร โพธิแก้ว' };
-    const currentSubject = Store.getCurrentSubject ? Store.getCurrentSubject(className) : { code: 'ศ21101', name: 'ดนตรี 1' };
-    const students = Store.getStudents(className) || [];
-    const activeCount = students.filter(s => !Store.isStudentWithdrawn(s.student_id)).length || 1;
-
-    // Real Attendance stats
-    let present = 0, absent = 0, leave = 0, late = 0;
-    const hasAttendance = !!(session && session.attendance);
-    if (hasAttendance) {
-      Object.values(session.attendance).forEach(val => {
-        if (val === 'present') present++;
-        else if (val === 'absent') absent++;
-        else if (val === 'leave') leave++;
-        else if (val === 'late') late++;
-      });
-    } else {
-      present = activeCount;
-    }
-    const attPct = Math.round(((present + late) / activeCount) * 100);
-
-    // Real Rubric evaluation stats (Dynamic calculation from actual student records)
-    let passedK = 0, passedP = 0, passedA = 0;
-    let scoredCount = 0;
-    students.forEach(s => {
-      const rub = Store.getStudentRubric ? Store.getStudentRubric(s.student_id, period) : null;
-      if (rub && rub.breakdown) {
-        scoredCount++;
-        if ((rub.breakdown[0] || 0) >= 3) passedK++;
-        if ((rub.breakdown[1] || 0) >= 3) passedP++;
-        if ((rub.breakdown[2] || 0) >= 3) passedA++;
+    const dotBlock = (rows = 3) => Array.from({ length: rows }, () =>
+      `<div style="line-height:1.9;color:#334155;overflow:hidden;white-space:nowrap;">${dots(200)}</div>`).join('');
+    const para = (text, rows = 3) => {
+      const t = String(text || '').trim();
+      return t ? `<div style="line-height:1.65;text-align:justify;text-indent:1cm;">${esc(t)}</div>` : dotBlock(rows);
+    };
+    const numbered = (items, prefix, minRows) => {
+      const list = (items || []).filter(Boolean);
+      const rows = list.map((t, i) => `<div style="padding-left:1.1cm;text-indent:-1.1cm;line-height:1.6;">${prefix ? `${prefix}${i + 1} ` : `${i + 1}. `}${esc(t)}</div>`);
+      for (let i = list.length; i < (minRows || 0); i++) {
+        rows.push(`<div style="line-height:1.7;color:#334155;">${prefix ? `${prefix}${i + 1} ` : `${i + 1}. `}${dots(90)}</div>`);
       }
-    });
+      return rows.join('');
+    };
+    const bullets = text => {
+      const parts = String(text || '').split(/\s*•\s*/).map(s => s.trim()).filter(Boolean);
+      if (!parts.length) return '';
+      return esc(parts[0]) + parts.slice(1).map(s => `<div style="padding-left:0.6cm;text-indent:-0.35cm;">• ${esc(s)}</div>`).join('');
+    };
+    const heading = t => `<div style="font-size:13.5px;font-weight:700;margin:0.7rem 0 0.2rem;">${esc(t)}</div>`;
+    const orgLine = `<div style="font-size:13px;font-weight:700;text-align:left;margin-bottom:0.5rem;">งานพัฒนาหลักสูตรและงานนิเทศพัฒนาบุคลากร กลุ่มบริหารวิชาการ โรงเรียนพะเยาพิทยาคม</div>`;
+    const pageStyle = 'page-break-after:always;break-after:page;';
+    const sep = n => `<div class="wk5-page-sep" style="text-align:center;color:#94a3b8;font-size:11px;border-top:1px dashed #94a3b8;margin:0.75rem 0;padding-top:2px;">— จบหน้า ${n} —</div>`;
 
-    const hasRealRubric = scoredCount > 0;
-    const pctK = hasRealRubric ? `${Math.round((passedK / scoredCount) * 100)}%` : '—';
-    const pctP = hasRealRubric ? `${Math.round((passedP / scoredCount) * 100)}%` : '—';
-    const pctA = hasRealRubric ? `${Math.round((passedA / scoredCount) * 100)}%` : '—';
-    const displayCountK = hasRealRubric ? `${passedK} / ${scoredCount}` : `— / ${activeCount}`;
-    const displayCountP = hasRealRubric ? `${passedP} / ${scoredCount}` : `— / ${activeCount}`;
-    const displayCountA = hasRealRubric ? `${passedA} / ${scoredCount}` : `— / ${activeCount}`;
+    // ---- ข้อมูลทั่วไป ----
+    const periodMin = Number(settings.periodMinutes) || 50;
+    const mins = Number(lesson && lesson.duration_min) || 0;
+    const hours = mins ? Math.round((mins / periodMin) * 100) / 100 : '';
+    const timeText = mins ? `${hours} ชั่วโมง (${mins} นาที)` : '';
+    const subjectName = subject && subject.name ? String(subject.name).replace(/\s*\(.*?\)\s*$/, '') : '';
+    const subjectCode = subject && subject.code ? subject.code : '';
+    const group = w.subject_group || String(settings.department || '').replace(/^กลุ่มสาระการเรียนรู้\s*/, '');
+    const levelText = w.level || '';
+    const unitNo = w.unit_no || (lesson && lesson.unit_no) || '';
+    const unitName = (lesson && (lesson.unit_name || lesson.unitName)) || w.unit_name || '';
+    const topic = w.topic || (lesson && lesson.topic) || '';
 
-    // Reflections from real session (Leave blank with dotted lines if untaught)
-    const outcomes = session?.reflection?.outcomes || '';
-    const problems = session?.reflection?.problems || '';
-    const solutions = session?.reflection?.solutions || '';
+    let dd = '', mm = '', yy = '';
+    if (session && session.timestamp) {
+      try {
+        const parts = new Intl.DateTimeFormat('th-TH-u-ca-buddhist', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })
+          .formatToParts(new Date(session.timestamp));
+        dd = (parts.find(p => p.type === 'day') || {}).value || '';
+        mm = (parts.find(p => p.type === 'month') || {}).value || '';
+        yy = (parts.find(p => p.type === 'year') || {}).value || '';
+      } catch (e) { /* ปล่อยว่าง */ }
+    }
 
-    const dottedLines = `
-      <div style="color: #64748b; font-size: 13px; line-height: 2.2; letter-spacing: 1px;">
-        ........................................................................................................................................................................................................................<br>
-        ........................................................................................................................................................................................................................<br>
-        ........................................................................................................................................................................................................................
+    // ---- หน้า 1 ----
+    const ob = w.objectives || { k: [], p: [], a: [] };
+    const aList = (ob.a || []).filter(Boolean);
+    const page1 = `
+      <div class="wk5-page" style="${pageStyle}">
+        ${orgLine}
+        <div style="text-align:center;font-size:15px;font-weight:700;">แผนการจัดการเรียนรู้ที่ ${fill(period, 6)}</div>
+        <div style="margin-top:0.4rem;line-height:1.9;font-size:13px;">
+          <div>กลุ่มสาระการเรียนรู้ ${fill(group, 24)} &nbsp; ระดับ${levelText ? esc(levelText) : 'มัธยมศึกษาตอน' + dots(10)} &nbsp; โรงเรียนพะเยาพิทยาคม</div>
+          <div>รายวิชา ${fill(subjectName, 24)} &nbsp; รหัสวิชา ${fill(subjectCode, 10)} &nbsp; ชั้นมัธยมศึกษาปีที่ ${fill(gradeNo, 4)} &nbsp; ภาคเรียนที่ ${fill(sem.term, 4)} &nbsp; ปีการศึกษา ${fill(sem.year, 8)}</div>
+          <div>หน่วยการเรียนรู้ที่ ${fill(unitNo, 6)} &nbsp; เรื่อง ${fill(topic, 40)}</div>
+          <div>เวลา ${fill(timeText, 12)} &nbsp; สอนวันที่ ${fill(dd, 6)} เดือน ${fill(mm, 12)} พ.ศ. ${fill(yy, 8)}</div>
+          <div>ผู้สอน ${fill(instructor.name, 30)}</div>
+        </div>
+
+        ${heading('มาตรฐานการเรียนรู้และตัวชี้วัด')}
+        ${(w.standards || []).length ? w.standards.map(s => `<div style="padding-left:0.6cm;text-indent:-0.6cm;line-height:1.6;">${esc(s)}</div>`).join('') : dotBlock(2)}
+        ${heading('สาระสำคัญ')}
+        ${para(w.key_concept, 2)}
+        ${heading('สาระการเรียนรู้')}
+        ${(w.content || []).length ? (w.content.length > 1 ? numbered(w.content, '', 0) : para(w.content[0], 3)) : dotBlock(3)}
+        ${heading('จุดประสงค์การเรียนรู้')}
+        <div style="font-weight:600;">1. ด้านความรู้</div>
+        ${numbered(ob.k, '1.', 2)}
+        <div style="font-weight:600;margin-top:0.2rem;">2. ด้านทักษะกระบวนการ</div>
+        ${numbered(ob.p, '2.', 2)}
+        <div style="font-weight:600;margin-top:0.2rem;">3. ด้านคุณลักษณะอันพึงประสงค์</div>
+        ${aList.length ? aList.map(t => `<div style="padding-left:0.6cm;line-height:1.6;">${esc(t)}</div>`).join('') : dotBlock(1)}
+        ${heading('สมรรถนะสำคัญของผู้เรียน')}
+        ${numbered(w.competencies, '1.', 2)}
+        <div style="text-align:right;font-size:11px;margin-top:0.5rem;">วก.5</div>
       </div>
+      ${sep(1)}
     `;
 
-    return `
-      <div class="gov-sheet-header">
-        <div style="font-size: 14px; font-weight: 700; color: #000; text-align: left; margin-bottom: 0.75rem;">
-          งานพัฒนาหลักสูตรและงานนิเทศพัฒนาบุคลากร กลุ่มบริหารวิชาการ โรงเรียนพะเยาพิทยาคม
+    // ---- หน้า 2 ----
+    const act = w.activities || {};
+    let counter = 0;
+    const stageHtml = (stage, label) => {
+      const minsTxt = stage && stage.minutes ? stage.minutes : dots(8);
+      const items = (stage && stage.items) || [];
+      const body = items.length ? items.map(raw => {
+        counter++;
+        const txt = String(raw).replace(/^[A-Z]\s*-\s*\d+\.\s*/, '').replace(/^\d+(\.\d+)*\s+/, '');
+        return `<div style="padding-left:0.8cm;text-indent:-0.8cm;line-height:1.55;margin-bottom:2px;">${counter}. ${bullets(txt)}</div>`;
+      }).join('') : `<div style="line-height:1.8;color:#334155;">${dotBlock(2)}</div>`;
+      return `<div style="font-weight:600;margin-top:0.35rem;">${label} (${minsTxt} นาที)</div>${body}`;
+    };
+    const asm = w.assessment || {};
+    const asmLine = t => (t ? `<div style="padding-left:1cm;text-indent:-0.7cm;line-height:1.6;">${esc(t)}</div>` : dotBlock(1));
+    const page2 = `
+      <div class="wk5-page" style="${pageStyle}">
+        ${orgLine}
+        ${heading('ชิ้นงาน/ภาระงาน')}
+        ${(w.work || []).length ? numbered(w.work, '', 0) : dotBlock(1)}
+        ${heading('กิจกรรมการเรียนรู้')}
+        <div style="font-size:11.5px;">
+          ${stageHtml(act.intro, 'ขั้นนำเข้าสู่บทเรียน')}
+          ${stageHtml(act.teach, 'ขั้นสอน')}
+          ${stageHtml(act.wrap, 'ขั้นสรุปบทเรียน')}
         </div>
-        <div style="text-align: center; margin-bottom: 0.75rem;">
-          <div style="font-size: 16px; font-weight: 700; color: #000;">
-            แบบฟอร์ม วก.5: บันทึกผลหลังการสอน แผนการจัดการเรียนรู้ที่ ${period}
-          </div>
-          <div style="font-size: 14px; color: #000; margin-top: 3px;">
-            รายวิชา ${this.escapeHtml(currentSubject.name)} รหัส ${this.escapeHtml(currentSubject.code)} ชั้นมัธยมศึกษาปีที่ ${className.startsWith('ม.2') ? '2' : '1'} ภาคเรียนที่ ${currentSubject.code.endsWith('2') ? '2' : '1'} ปีการศึกษา 2569
-          </div>
-          <div style="font-size: 14px; color: #000; margin-top: 2px;">
-            เรื่อง ${this.escapeHtml(lesson?.topic || 'บทเรียนดนตรี')} &nbsp;&nbsp;&nbsp;&nbsp; เวลา 1 ชั่วโมง (50 นาที)
-          </div>
+        ${heading('สื่อ / แหล่งเรียนรู้')}
+        <div style="font-size:12px;">${numbered(w.media, '', 3)}</div>
+        ${heading('การวัดและประเมินผล')}
+        <div style="font-size:12px;">
+          <div style="font-weight:600;">1. ด้านความรู้</div>${asmLine(asm.k)}
+          <div style="font-weight:600;margin-top:0.2rem;">2. ด้านทักษะกระบวนการ</div>${asmLine(asm.p)}
+          <div style="font-weight:600;margin-top:0.2rem;">3. ด้านคุณลักษณะอันพึงประสงค์</div>${asmLine(asm.a)}
         </div>
+        ${heading('เครื่องมือวัด')}
+        <div style="font-size:12px;">${numbered(w.tools, '', 3)}</div>
       </div>
+      ${sep(2)}
+    `;
 
-      <!-- Plan Meta Banner -->
-      <div style="border: 1px solid #000; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 12.5px; line-height: 1.5; background: #fafafa;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
-          <div><strong>ห้องเรียน:</strong> ${className} (${activeCount} คน)</div>
-          <div><strong>การเข้าเรียน:</strong> ${hasAttendance ? `มาเรียน ${present + late} คน (${attPct}%)` : 'ยังไม่ได้บันทึกเวลาเรียน'}</div>
-          <div><strong>วันที่สอน:</strong> ${session?.dateStr || '............/............/............'}</div>
-        </div>
-      </div>
-
-      <!-- Section 1: Outcomes -->
-      <div style="margin-top: 1.25rem;">
-        <div style="font-size: 14px; font-weight: 700; color: #000; margin-bottom: 0.35rem;">
-          ผลการเรียนรู้ของนักเรียน
-        </div>
-        
-        <table class="gov-print-table" style="width: 100%; font-size: 12px; margin-bottom: 0.5rem; border-collapse: collapse;">
+    // ---- หน้า 3 ----
+    const rub = (w.rubric || []).slice(0, 5);
+    const rubRows = [];
+    for (let i = 0; i < 5; i++) {
+      const r = rub[i];
+      const cell = v => `<td style="border:1px solid #000;padding:4px 5px;vertical-align:top;font-size:11px;">${v ? esc(v) : dots(8)}</td>`;
+      rubRows.push(`<tr>
+        <td style="border:1px solid #000;padding:4px 5px;vertical-align:top;font-size:11.5px;">${i + 1}. ${r ? esc(r.label) : dots(24)}</td>
+        <td style="border:1px solid #000;padding:4px 5px;text-align:center;vertical-align:top;">${r && r.weight ? esc(r.weight) : dots(6)}</td>
+        ${cell(r && r.levels && r.levels[4])}${cell(r && r.levels && r.levels[3])}${cell(r && r.levels && r.levels[2])}${cell(r && r.levels && r.levels[1])}
+      </tr>`);
+    }
+    const page3 = `
+      <div class="wk5-page" style="${pageStyle}">
+        ${orgLine}
+        ${heading('เกณฑ์การประเมิน')}
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead>
-            <tr style="background: #f1f5f9;">
-              <th style="width: 38%; border: 1px solid #000; padding: 4px 6px;">ด้านการประเมิน (K-P-A)</th>
-              <th style="width: 22%; text-align: center; border: 1px solid #000; padding: 4px 6px;">เกณฑ์ที่กำหนด</th>
-              <th style="width: 22%; text-align: center; border: 1px solid #000; padding: 4px 6px;">จำนวนผู้ผ่านเกณฑ์</th>
-              <th style="width: 18%; text-align: center; border: 1px solid #000; padding: 4px 6px;">ร้อยละ</th>
+            <tr style="background:#f1f5f9;">
+              <th rowspan="2" style="border:1px solid #000;padding:4px;width:24%;">ประเด็นการประเมิน</th>
+              <th rowspan="2" style="border:1px solid #000;padding:4px;width:9%;">น้ำหนักคะแนน</th>
+              <th colspan="4" style="border:1px solid #000;padding:4px;">ระดับคุณภาพ</th>
+            </tr>
+            <tr style="background:#f1f5f9;">
+              ${[4, 3, 2, 1].map(n => `<th style="border:1px solid #000;padding:4px;width:16.75%;">${n}</th>`).join('')}
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td style="border: 1px solid #000; padding: 4px 6px;"><strong>ด้านความรู้ (K):</strong> เข้าใจองค์ประกอบและทฤษฎีดนตรี</td>
-              <td style="text-align: center; border: 1px solid #000; padding: 4px 6px;">ระดับดี (ร้อยละ 80 ขึ้นไป)</td>
-              <td style="text-align: center; font-weight: 600; border: 1px solid #000; padding: 4px 6px;">${displayCountK}</td>
-              <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 4px 6px;">${pctK}</td>
-            </tr>
-            <tr>
-              <td style="border: 1px solid #000; padding: 4px 6px;"><strong>ด้านทักษะกระบวนการ (P):</strong> ปฏิบัติจังหวะและทักษะดนตรี</td>
-              <td style="text-align: center; border: 1px solid #000; padding: 4px 6px;">ระดับ 3 (ดี) ขึ้นไป</td>
-              <td style="text-align: center; font-weight: 600; border: 1px solid #000; padding: 4px 6px;">${displayCountP}</td>
-              <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 4px 6px;">${pctP}</td>
-            </tr>
-            <tr>
-              <td style="border: 1px solid #000; padding: 4px 6px;"><strong>ด้านคุณลักษณะอันพึงประสงค์ (A):</strong> มีวินัย มุ่งมั่น ดูแลรักษาเครื่อง</td>
-              <td style="text-align: center; border: 1px solid #000; padding: 4px 6px;">ระดับ 3 (ดี) ขึ้นไป</td>
-              <td style="text-align: center; font-weight: 600; border: 1px solid #000; padding: 4px 6px;">${displayCountA}</td>
-              <td style="text-align: center; font-weight: 700; border: 1px solid #000; padding: 4px 6px;">${pctA}</td>
-            </tr>
-          </tbody>
+          <tbody>${rubRows.join('')}</tbody>
         </table>
-
-        <div style="font-size: 13px; line-height: 1.6; text-indent: 1.5cm; text-align: justify; margin-top: 0.35rem;">
-          ${outcomes ? this.escapeHtml(outcomes) : dottedLines}
+        ${heading('เกณฑ์การตัดสิน')}
+        <div style="line-height:1.8;font-size:13px;">
+          ${crit.levels.map(l => `<div>ระดับ ${l.level} &nbsp; หมายถึง &nbsp; มีระดับคุณภาพ${esc(l.label)}</div>`).join('')}
         </div>
+        ${heading('เกณฑ์การผ่าน')}
+        <div style="font-size:13px;">${esc(crit.passText)}</div>
       </div>
+      ${sep(3)}
+    `;
 
-      <!-- Section 2: Problems -->
-      <div style="margin-top: 1.25rem;">
-        <div style="font-size: 14px; font-weight: 700; color: #000; margin-bottom: 0.35rem;">
-          ปัญหาที่เกิดขึ้นในระหว่างการจัดการเรียนรู้
+    // ---- หน้า 4 ----
+    const page4 = `
+      <div class="wk5-page">
+        ${orgLine}
+        <div style="font-size:14px;font-weight:700;">บันทึกผลหลังการสอน &nbsp; แผนการจัดการเรียนรู้ที่ ${fill(period, 6)}</div>
+        <div style="font-size:12.5px;line-height:1.8;">
+          รายวิชา ${fill(subjectName, 20)} รหัส ${fill(subjectCode, 10)} ชั้นมัธยมศึกษาปีที่ ${fill(gradeNo, 4)} ภาคเรียนที่ ${fill(sem.term, 4)} ปีการศึกษา ${fill(sem.year, 8)}<br>
+          เรื่อง ${fill(topic, 40)} &nbsp; เวลา ${fill(timeText, 12)}
         </div>
-        <div style="font-size: 13px; line-height: 1.6; text-indent: 1.5cm; text-align: justify;">
-          ${problems ? this.escapeHtml(problems) : dottedLines}
-        </div>
-      </div>
 
-      <!-- Section 3: Action Plan -->
-      <div style="margin-top: 1.25rem;">
-        <div style="font-size: 14px; font-weight: 700; color: #000; margin-bottom: 0.35rem;">
-          แนวทางการแก้ปัญหาหรือปรับปรุงแผนการจัดการเรียนรู้ครั้งต่อไป (Action plan)
-        </div>
-        <div style="font-size: 13px; line-height: 1.6; text-indent: 1.5cm; text-align: justify;">
-          ${solutions ? this.escapeHtml(solutions) : dottedLines}
-        </div>
-      </div>
+        ${heading('ผลการเรียนรู้ของนักเรียน')}
+        <div style="font-size:13px;">${para(refl.outcomes, 4)}</div>
+        ${heading('ปัญหาที่เกิดขึ้นในระหว่างการจัดการเรียนรู้')}
+        <div style="font-size:13px;">${para(refl.problems, 4)}</div>
+        ${heading('แนวทางการแก้ปัญหาหรือปรับปรุงแผนการจัดการเรียนรู้ครั้งต่อไป (Action plan)')}
+        <div style="font-size:13px;">${para(refl.solutions, 4)}</div>
 
-      <!-- Instructor Signature -->
-      <div style="margin-top: 2rem; display: flex; justify-content: flex-end; page-break-inside: avoid;">
-        <div style="text-align: center; font-size: 13px;">
-          <div style="margin-bottom: 2.75rem;">ลงชื่อ ........................................................... ครูผู้สอน</div>
-          <div style="font-weight: 700;">(${this.escapeHtml(instructor.name)})</div>
-          <div style="color: #475569; margin-top: 2px;">ตำแหน่ง ครู</div>
-          <div style="color: #64748b; font-size: 12px; margin-top: 4px;">............/............/............</div>
-        </div>
-      </div>
-
-      <!-- Administrative Review -->
-      <div style="margin-top: 1.5rem; border: 1px solid #000; padding: 0.75rem 1rem; page-break-inside: avoid;">
-        <div style="font-size: 13.5px; font-weight: 700; margin-bottom: 0.5rem;">
-          ความคิดเห็นของฝ่ายบริหาร:
-        </div>
-        <div style="font-size: 13px; line-height: 1.8; color: #334155;">
-          ........................................................................................................................................................................................................................<br>
-          ........................................................................................................................................................................................................................
-        </div>
-        <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
-          <div style="text-align: center; font-size: 13px;">
-            <div style="margin-bottom: 2.5rem;">ลงชื่อ ...........................................................</div>
-            <div style="font-weight: 700;">(${this.escapeHtml(settings.directorName || 'ว่าที่ร้อยตรีญาณบดินทร์ อินเตชะ')})</div>
-            <div style="color: #475569; margin-top: 2px;">${this.escapeHtml(settings.directorRole || 'ผู้อำนวยการโรงเรียนพะเยาพิทยาคม')}</div>
-            <div style="color: #64748b; font-size: 12px; margin-top: 4px;">............/............/............</div>
+        <div style="margin-top:1.5rem;display:flex;justify-content:flex-end;page-break-inside:avoid;">
+          <div style="text-align:center;font-size:13px;">
+            <div style="margin-bottom:0.6rem;">ลงชื่อ ${dots(36)} ครูผู้สอน</div>
+            <div>(${instructor.name ? `<span style="font-weight:600;">${esc(instructor.name)}</span>` : dots(30)})</div>
+            <div style="margin-top:0.4rem;">${refl.teacherDate ? esc(refl.teacherDate) : dots(12) + '/' + dots(12) + '/' + dots(12)}</div>
           </div>
         </div>
-      </div>
 
-      <!-- Section 5: Administrative Review & Approval Hierarchy (3-Tier) -->
-      <div style="margin-top: 1.5rem; border: 1px solid #000; padding: 0.75rem 1rem; page-break-inside: avoid;">
-        <div style="font-size: 13px; font-weight: 700; margin-bottom: 0.75rem;">
-          ความคิดเห็นและการรับรองของฝ่ายบริหาร:
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; font-size: 11px; line-height: 1.6;">
-          <div style="border-right: 1px dashed #ccc; padding-right: 0.75rem;">
-            <div style="font-weight: 700; margin-bottom: 4px;">1. หัวหน้ากลุ่มสาระการเรียนรู้ศิลปะ</div>
-            <div>[ &nbsp; ] แผนการสอนและกิจกรรมสอดคล้องตามมาตรฐานหลักสูตร</div>
-            <div>[ &nbsp; ] T-PACE ส่งเสริม Active Learning</div>
-            <div style="text-align: center; margin-top: 2.5rem;">
-              <div>ลงชื่อ......................................................</div>
-              <div style="font-weight: 700;">(${this.escapeHtml(settings.departmentHead)})</div>
-              <div style="color: #475569;">${this.escapeHtml(settings.departmentHeadRole || 'หัวหน้ากลุ่มสาระการเรียนรู้ศิลปะ')}</div>
-            </div>
-          </div>
-
-          <div style="border-right: 1px dashed #ccc; padding-right: 0.75rem;">
-            <div style="font-weight: 700; margin-bottom: 4px;">2. กลุ่มบริหารงานวิชาการ</div>
-            <div>[ &nbsp; ] การวัดประเมินผลอิงมาตรฐาน (Rubrics) ครบถ้วน</div>
-            <div>[ &nbsp; ] มีบันทึก CAR ต่อยอด วPA</div>
-            <div style="text-align: center; margin-top: 2.5rem;">
-              <div>ลงชื่อ......................................................</div>
-              <div style="font-weight: 700;">(${this.escapeHtml(settings.academicHead || 'นายกฤศ วงค์เรือง')})</div>
-              <div style="color: #475569;">${this.escapeHtml(settings.academicHeadRole || 'รองผู้อำนวยการกลุ่มบริหารงานวิชาการ')}</div>
-            </div>
-          </div>
-
-          <div>
-            <div style="font-weight: 700; margin-bottom: 4px;">3. ผู้อำนวยการสถานศึกษา</div>
-            <div>[ &nbsp; ] อนุมัติให้นำไปใช้จัดการเรียนรู้ได้</div>
-            <div>[ &nbsp; ] สมควรเผยแพร่เป็นแบบอย่างที่ดี</div>
-            <div style="text-align: center; margin-top: 2.5rem;">
-              <div>ลงชื่อ......................................................</div>
-              <div style="font-weight: 700;">(${this.escapeHtml(settings.directorName)})</div>
-              <div style="color: #475569;">${this.escapeHtml(settings.directorRole || 'ผู้อำนวยการสถานศึกษา')}</div>
+        <div style="margin-top:1.5rem;border:1px solid #000;padding:0.75rem 1rem;page-break-inside:avoid;">
+          <div style="font-size:13.5px;font-weight:700;margin-bottom:0.3rem;">ความคิดเห็นของฝ่ายบริหาร</div>
+          <div style="font-size:13px;">${para(refl.adminOpinion, 3)}</div>
+          <div style="margin-top:1rem;display:flex;justify-content:flex-end;">
+            <div style="text-align:center;font-size:13px;">
+              <div style="margin-bottom:0.6rem;">ลงชื่อ ${dots(36)}</div>
+              <div>(${refl.adminName ? `<span style="font-weight:600;">${esc(refl.adminName)}</span>` : dots(30)})</div>
+              <div style="margin-top:0.4rem;">${refl.adminDate ? esc(refl.adminDate) : dots(12) + '/' + dots(12) + '/' + dots(12)}</div>
             </div>
           </div>
         </div>
       </div>
     `;
+
+    return page1 + page2 + page3 + page4;
   },
 
   // ========================================================================
@@ -778,9 +725,10 @@ const OfficialForms = {
       return `<div style="text-align: center; padding: 3rem; color: #64748b;">ไม่พบข้อมูลแบบฟอร์ม วก.4 สำหรับหน่วยที่ ${unitNo} ระดับชั้น ${grade}</div>`;
     }
 
-    const code = grade === 'M2' ? 'ศ22102' : 'ศ21101';
-    const subName = grade === 'M2' ? 'ดนตรี 2' : 'ดนตรี 1';
-    const gradeName = grade === 'M2' ? 'มัธยมศึกษาปีที่ 2' : 'มัธยมศึกษาปีที่ 1';
+    const gInfo = Store.getGradeInfo(grade) || {};
+    const code = gInfo.code || '';
+    const subName = gInfo.subjectName || '';
+    const gradeName = gInfo.level || '';
 
     return `
       <div class="gov-sheet-header">
@@ -943,6 +891,7 @@ const OfficialForms = {
             font-weight: 700;
             text-align: center;
           }
+          .wk5-page-sep { display: none; }
           .row-withdrawn {
             color: #64748b;
             font-style: italic;

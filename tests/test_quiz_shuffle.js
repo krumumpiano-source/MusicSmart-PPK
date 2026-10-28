@@ -50,7 +50,7 @@ for (let u = 1; u <= 4; u++) {
 // 3. Test Full Exam Simulation: Answering 10/10 correct
 const unit1 = QUIZZES_DATA.units[0];
 QuizEngine.state.unitNo = 1;
-QuizEngine.state.studentId = '35994';
+QuizEngine.state.studentId = '90001';
 QuizEngine.state.sessionQuestions = QuizEngine.generateSessionQuestions(unit1);
 QuizEngine.state.answers = {};
 QuizEngine.state.elapsedSeconds = 125;
@@ -68,7 +68,7 @@ assert.strictEqual(QuizEngine.state.lastResult.shuffled, true, 'Result must be f
 console.log('✓ Full exam 10/10 simulation passed');
 
 // 4. Test Stored Result Retrieval
-const savedAttempt = QuizEngine.getStudentAttempt('35994', 1);
+const savedAttempt = QuizEngine.getStudentAttempt('90001', 1);
 assert(savedAttempt, 'Saved attempt must exist in storage');
 assert.strictEqual(savedAttempt.score, 10, 'Saved attempt score must be 10');
 console.log('✓ Storage persistence and retrieval passed');

@@ -1,0 +1,120 @@
+{
+ "piphat_hard": {
+  "file": "media/m1/p12/piphat_hard.jpg",
+  "alt": "วงปี่พาทย์ไทย (กรุงเทพฯ)",
+  "title": "(Piphat ensemble in Bangkok, Thailand) - DPLA - 8e8d06deb7efe72879836062e8e37c2c.jpg",
+  "license": "CC BY 4.0",
+  "author": "Sherwin John Carlquist",
+  "page": "https://commons.wikimedia.org/wiki/File:%28Piphat_ensemble_in_Bangkok%2C_Thailand%29_-_DPLA_-_8e8d06deb7efe72879836062e8e37c2c.jpg",
+  "source": "Wikimedia Commons",
+  "period": 12
+ },
+ "string_ensemble": {
+  "file": "media/m1/p12/string_ensemble.jpg",
+  "alt": "ภาพถ่ายเก่า (พ.ศ. 2473/2474) วงดนตรีไทยที่เน้นเครื่องสาย: ซออู้ จะเข้ ขลุ่ย ซอด้วง ระนาดเอก ฆ้องวง ระนาดทุ้ม โทน รำมะนา ฉิ่ง",
+  "title": "Khrueang Mahori Piphat (1930, p. 43).jpg",
+  "license": "Public domain",
+  "author": "ไม่ทราบผู้สร้าง (หนังสือ พ.ศ. 2473/2474)",
+  "page": "https://commons.wikimedia.org/wiki/File:Khrueang_Mahori_Piphat_%281930%2C_p._43%29.jpg",
+  "source": "Wikimedia Commons",
+  "period": 12,
+  "teacherNote": "ภาพถ่ายเก่าจากหนังสือ พ.ศ. 2473/2474 คำบรรยายบน Commons: วงดนตรีไทยที่ \"เน้นเครื่องสาย\" (ซออู้ จะเข้ ขลุ่ย ซอด้วง + ระนาดเอก ฆ้องวง ระนาดทุ้ม โทน รำมะนา ฉิ่ง) — ไม่ได้ระบุว่าเป็น \"เครื่องสายผสมเครื่องคู่\" โดยตรง ครูโปรดยืนยันว่าใช้ประกอบวงนี้ได้ หรือเตรียมภาพของโรงเรียนแทน (ภาพเดิมที่ผิดคือภาพแผ่นเครื่องสายแยกชิ้นถูกถอดออกแล้ว)"
+ },
+ "lanna_salor": {
+  "file": "media/m1/p12/lanna_salor.jpg",
+  "alt": "ดนตรีพื้นบ้านลับแล (จ.อุตรดิตถ์): นักดนตรีเล่นเครื่องสี เครื่องดีด และขลุ่ย ณ พิพิธภัณฑ์ท้องถิ่นวัดคุ้งตะเภา",
+  "title": "Traditional Laplae folk music 2.JPG",
+  "license": "CC BY-SA 3.0",
+  "author": "เทวประภาส มากคล้าย",
+  "page": "https://commons.wikimedia.org/wiki/File:Traditional_Laplae_folk_music_2.JPG",
+  "source": "Wikimedia Commons",
+  "period": 12,
+  "teacherNote": "Commons ระบุว่าเป็น \"ดนตรีพื้นบ้านลับแล จ.อุตรดิตถ์\" ไม่ได้ระบุว่าเป็นวงสะล้อ ซอ ซึง ของล้านนา/พะเยา ภาพนี้เป็นตัวอย่างวงดนตรีพื้นบ้านภาคเหนือเท่านั้น ครูโปรดยืนยัน หรือเตรียมภาพวงสะล้อซอซึงของโรงเรียน/พะเยาแทน"
+ },
+ "ponglang": {
+  "file": "media/m1/p12/ponglang.jpg",
+  "alt": "โปงลาง (ระนาดไม้แขวนของภาคอีสาน)",
+  "title": "Pong lang (Thai xylophone).jpg",
+  "license": "CC BY-SA 2.0",
+  "author": "Ross Robinson",
+  "page": "https://commons.wikimedia.org/wiki/File:Pong_lang_%28Thai_xylophone%29.jpg",
+  "source": "Wikimedia Commons",
+  "period": 12,
+  "teacherNote": "ภาพนี้เป็นตัวโปงลาง (เครื่องดนตรี) ที่จัดแสดงในพิพิธภัณฑ์ ไม่ใช่ภาพทั้งวง — ถ้าครูมีภาพวงโปงลางจริงของโรงเรียน/ท้องถิ่น แนะนำให้ใช้แทน"
+ },
+ "klong_yao": {
+  "file": "media/m1/p12/klong_yao.jpg",
+  "alt": "ขบวนกลองยาว",
+  "title": "Klong Yao Parade 2.jpg",
+  "license": "CC BY-SA 4.0",
+  "author": "B20180",
+  "page": "https://commons.wikimedia.org/wiki/File:Klong_Yao_Parade_2.jpg",
+  "source": "Wikimedia Commons",
+  "period": 12
+ },
+ "orchestra": {
+  "file": "media/m1/p14/orchestra.jpg",
+  "alt": "วงออร์เคสตรากับคณะขับร้องประสานเสียง (Bothell, สหรัฐฯ)",
+  "title": "BothellsOrchestraPerformingMessiah.JPG",
+  "license": "CC BY-SA 3.0",
+  "author": "Peterbacon",
+  "page": "https://commons.wikimedia.org/wiki/File:BothellsOrchestraPerformingMessiah.JPG",
+  "source": "Wikimedia Commons",
+  "period": 14
+ },
+ "concert_band": {
+  "file": "media/m1/p14/concert_band.jpg",
+  "alt": "วงเครื่องเป่า (Concert band)",
+  "title": "Bjergsted blåseensemble.jpg",
+  "license": "CC BY-SA 4.0",
+  "author": "Rafaele",
+  "page": "https://commons.wikimedia.org/wiki/File:Bjergsted_bl%C3%A5seensemble.jpg",
+  "source": "Wikimedia Commons",
+  "period": 14
+ },
+ "string_quartet": {
+  "file": "media/m1/p14/string_quartet.jpg",
+  "alt": "นักดนตรีเครื่องสายตะวันตกสามคน (ไวโอลิน 2 เชลโล 1) ในวง North Sea String Quartet แสดงริมถนนที่เทศกาล Rudolstadt (ภาพเห็น 3 ใน 4 คน)",
+  "title": "North Sea String Quartet 01.jpg",
+  "license": "CC BY-SA 4.0",
+  "author": "Schorle",
+  "page": "https://commons.wikimedia.org/wiki/File:North_Sea_String_Quartet_01.jpg",
+  "source": "Wikimedia Commons",
+  "period": 14,
+  "teacherNote": "ภาพเห็นนักดนตรี 3 คน (ไวโอลิน 2 เชลโล 1) ไม่เห็นวิโอลา และมีป้ายเตือนสิทธิ์บุคคลของ Commons (เห็นใบหน้าบุคคลจริง) — ครูโปรดพิจารณาว่าเหมาะกับห้องเรียนหรือไม่ หรือเปลี่ยนเป็นภาพอื่น"
+ },
+ "jazz_band": {
+  "file": "media/m1/p14/jazz_band.jpg",
+  "alt": "วงแจ๊สบิ๊กแบนด์",
+  "title": "P. Mauriat Jazz Band Summer Live 20190713a.jpg",
+  "license": "CC0",
+  "author": "玄史生 (Xuanshisheng)",
+  "page": "https://commons.wikimedia.org/wiki/File:P._Mauriat_Jazz_Band_Summer_Live_20190713a.jpg",
+  "source": "Wikimedia Commons",
+  "period": 14
+ },
+ "pop_rock": {
+  "file": "media/m1/p14/pop_rock.jpg",
+  "alt": "วงป็อป-ร็อก (วงร็อกบนเวทีเทศกาล)",
+  "title": "The Norwegian rock band TNT at Sweden Rock Festival 2023.jpg",
+  "license": "CC BY-SA 4.0",
+  "author": "Aphasia83",
+  "page": "https://commons.wikimedia.org/wiki/File:The_Norwegian_rock_band_TNT_at_Sweden_Rock_Festival_2023.jpg",
+  "source": "Wikimedia Commons",
+  "period": 14
+ },
+ "mahori": {
+  "file": "media/m1/p12/mahori.jpg",
+  "alt": "ภาพถ่ายเก่า (พ.ศ. 2473/2474) วงดนตรีไทยของสตรี 12 คน: จะเข้ ขลุ่ย ระนาดเอก ระนาดเอกทอง ฆ้องวงใหญ่/เล็ก ซอสามสาย ระนาดทุ้ม โทน รำมะนา ฉิ่ง",
+  "title": "Khrueang Mahori Piphat (1930, p. 39).jpg",
+  "license": "Public domain",
+  "author": "ไม่ทราบผู้สร้าง (หนังสือ พ.ศ. 2473/2474)",
+  "page": "https://commons.wikimedia.org/wiki/File:Khrueang_Mahori_Piphat_%281930%2C_p._39%29.jpg",
+  "source": "Wikimedia Commons",
+  "period": 12,
+  "teacherNote": "ภาพถ่ายเก่าจากหนังสือ \"เครื่องมโหรีปี่พาทย์\" พ.ศ. 2473/2474 คำบรรยายบน Commons เรียกว่า \"วงดนตรีไทยขนาดใหญ่\" ที่มีทั้งเครื่องสาย (จะเข้ ซอสามสาย) ขลุ่ย ระนาด ฆ้องวง โทน รำมะนา ฉิ่ง — องค์ประกอบใกล้เคียงวงมโหรี แต่ Commons ไม่ได้เขียนคำว่า \"มโหรี\" ครูโปรดยืนยัน หรือเตรียมภาพของโรงเรียนแทน"
+ },
+ "_teacherNotes": {
+  "rongngeng": "ครูเตรียมภาพ: ยังไม่มีภาพถ่ายวงรองเง็ง (ภาคใต้) ที่ตรวจสิทธิ์และตรวจเนื้อหาแล้ว — Wikimedia Commons ไม่พบภาพรองเง็งของไทย (ภาพ \"ronggeng\" ที่พบเป็นของอินโดนีเซีย ซึ่งเป็นคนละประเพณี จึงไม่นำมาใช้) นักเรียนจึงไม่เห็นกรอบภาพของวงนี้ ถ้าครูมีภาพของโรงเรียน/ท้องถิ่น ให้ส่งไฟล์ แล้วจะใส่พร้อมเครดิต"
+ }
+}

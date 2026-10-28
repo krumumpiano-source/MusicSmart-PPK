@@ -24,6 +24,7 @@ const API = 'https://script.google.com/macros/s/AKfycbTEST_sample/exec';
 global.MUSICSMART_PUBLIC_API_URL = API;
 const EMAIL = 'teacher.sample@example.com';
 const PW = 'Sample-Pass-2569';
+const LEGACY_PW = 'Throwaway-Local-Pw-1'; // รหัสทดสอบชั่วคราว (ไม่ใช่รหัสจริง)
 
 const runScript = (args) => new Promise(res => execFile(process.execPath, [path.join(__dirname, '../tools/set_teacher_password.js'), ...args], { timeout: 20000 }, (err, stdout, stderr) => res({ code: err ? err.code : 0, out: stdout + stderr })));
 
@@ -32,14 +33,16 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   assert.strictEqual(gas.call({ action: 'teacherAuthStatus' }).configured, false);
   assert.strictEqual(gas.call({ action: 'teacherLogin', email: EMAIL, password: PW }).code, 'not_configured');
   const acc = Store.getTeacherAccount();
-  let r = await TeacherAuth.login(acc.email, acc.secret);
+  await Store.saveTeacherAccount({ email: acc.email, secret: LEGACY_PW });
+  assert(!JSON.stringify(store).includes(LEGACY_PW), 'teacher password is not stored as plaintext');
+  let r = await TeacherAuth.login(acc.email, LEGACY_PW);
   assert(r.success && r.notice, 'legacy fallback while server not configured');
 
   // ---------- set password: token required, weak rejected, no plaintext stored
   assert.strictEqual(gas.call({ action: 'teacher_set_password', email: EMAIL, password: PW }).status, 'error');
   assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'wrong', email: EMAIL, password: PW }).message, 'unauthorized');
   assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: 'short' }).code, 'weak_password');
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: 'ppk1234xyz' }).code, 'weak_password');
+  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: 'password123' }).code, 'weak_password');
 
   // PC script against a local HTTP wrapper around the fake server (password from file, never echoed)
   const srv = http.createServer((req, res) => { let b = ''; req.on('data', c => { b += c; }); req.on('end', () => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(gas.callRaw(b))); }); });
@@ -72,7 +75,7 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
 
   // ---------- client: server login configures device, legacy default disabled afterwards
   store = {}; Store._cache.clear();
-  r = await TeacherAuth.login(acc.email, acc.secret);
+  r = await TeacherAuth.login(acc.email, LEGACY_PW);
   assert.strictEqual(r.success, false, 'public default password no longer works once server configured');
   r = await TeacherAuth.login(EMAIL, PW);
   assert(r.success); assert.strictEqual(Store.getCurrentUser().role, 'teacher');
@@ -82,7 +85,7 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   offline = true;
   assert((await TeacherAuth.login(EMAIL, PW)).offline);
   assert.strictEqual((await TeacherAuth.login(EMAIL, 'wrong-pass')).success, false);
-  assert.strictEqual((await TeacherAuth.login(acc.email, acc.secret)).success, false);
+  assert.strictEqual((await TeacherAuth.login(acc.email, LEGACY_PW)).success, false);
   offline = false;
   // forgot-password flow with SYNC_TOKEN
   assert.strictEqual((await TeacherAuth.resetWithToken('nope', EMAIL, 'Another-Pass-1')).success, false);
@@ -148,6 +151,6 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   assert(limited, 'registrations rate-limited per hour');
   // nothing personal in public files
   const pub = fs.readFileSync(path.join(__dirname, '../app/js/teacher-auth.js'), 'utf8');
-  assert(!/krumum|ppk1234/.test(pub));
+  assert(!/krumum|\bppk\d{4}/.test(pub));
   console.log('phase 6 (teacher server login + intern registration) tests passed');
 })().catch(e => { console.error(e); process.exit(1); });

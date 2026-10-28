@@ -3,6 +3,8 @@ const assert = require('assert');
 const { loadGas } = require('./fake_gas');
 const { sheets, call, callRaw, props } = loadGas({ SYNC_TOKEN: 'teacher-token' });
 const T = 'teacher-token';
+// ขนาดสูงสุดอ่านจาก google_apps_script.js (ไม่ hardcode) เพื่อไม่ให้เทสต์ค้างเมื่อปรับค่า
+const GAS_MAX_BODY = Number(/var STUDENT_MAX_BODY = (\d+)/.exec(require('fs').readFileSync(require('path').join(__dirname, '../google_apps_script.js'), 'utf8'))[1]);
 const roster = [
   { student_id: '90001', prefix: 'เด็กชาย', first_name: 'ตัวอย่างหนึ่ง', last_name: 'ทดสอบระบบ', nickname: 'หนึ่ง', class: 'ม.1/1', no: 1 },
   { student_id: '90002', prefix: 'เด็กหญิง', first_name: 'ตัวอย่างสอง', last_name: 'ทดสอบระบบ', nickname: 'สอง', class: 'ม.1/2', no: 2 }
@@ -69,7 +71,7 @@ assert.strictEqual(bad(asg('c_test_0004', { period: 99 })), 'bad_period');
 assert.strictEqual(bad(asg('short')), 'bad_client_id');
 assert.strictEqual(bad({ clientId: 'q_test_0002', kind: 'quiz_answers', data: { unitNo: 1, answers: {} } }), 'no_quiz');
 assert.strictEqual(bad({ clientId: 'f_test_0002', kind: 'file', data: {} }), 'bad_kind');
-assert.strictEqual(callRaw(JSON.stringify({ action: 'studentSubmit', sessionToken: tok1, items: [asg('c_test_0005', { content: 'x'.repeat(70000) })] })).code, 'too_large');
+assert.strictEqual(callRaw(JSON.stringify({ action: 'studentSubmit', sessionToken: tok1, items: [asg('c_test_0005', { content: 'x'.repeat(GAS_MAX_BODY + 1000) })] })).code, 'too_large');
 assert.strictEqual(call({ action: 'studentSubmit', sessionToken: tok1, items: Array.from({ length: 21 }, (_, i) => asg('c_many_' + (1000 + i))) }).code, 'too_many');
 
 // rate limit per student (60/hour)

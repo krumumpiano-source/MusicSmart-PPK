@@ -79,7 +79,7 @@ const PwaInstall = require('../app/js/pwa-install.js');
   }
   assert(checked >= 40, 'all lessons checked');
   const appSrc = fs.readFileSync(path.join(__dirname, '../app/js/app.js'), 'utf8');
-  const guide = appSrc.slice(appSrc.indexOf('buildStudentStudyGuideHTML(gradeKey, period, lesson) {'), appSrc.indexOf('    // --- Action Bar for Student ---'));
+  const guide = appSrc.slice(appSrc.indexOf('buildStudentStudyGuideHTML(gradeKey, period, lesson) {'), appSrc.indexOf('  openEnsemble(cat) {'));
   assert(!/lesson\.steps|mentor_tips|rubrics/.test(guide), 'student study guide never reads teacher-only fields');
   assert(/RoleGuard\.sanitizeLesson\(Store\.getLesson/.test(appSrc), 'student portal uses sanitized lesson');
 

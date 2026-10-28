@@ -1,0 +1,20 @@
+const {chromium}=(function(){try{return require('playwright-core')}catch(e){return require(process.env.PW_CORE||'/workspace/bt/node_modules/playwright-core')}})();
+(async()=>{const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
+const p=await b.newPage({viewport:{width:360,height:640},deviceScaleFactor:2});p.on('pageerror',e=>console.log('ERR',e.message));
+await p.goto('http://localhost:8893/index.html');await p.waitForTimeout(1500);
+await p.evaluate(()=>{Store.registerStudentPin('90001','246810');document.getElementById('modal-auth-login').classList.remove('active');App.switchRole('student',false);App.selectStudentPeriod(3);});
+await p.waitForTimeout(500);
+await p.evaluate(()=>{var e=document.querySelector('#student-lesson-text [data-role="devbox"]');e.scrollIntoView({block:'center'});window.scrollBy(0,-0);});
+await p.waitForTimeout(300);
+const r=await p.evaluate(()=>{var e=document.querySelector('#student-lesson-text [data-role="devbox"]').getBoundingClientRect();return {x:e.left,y:e.top,w:e.width,h:e.height};});
+console.log(JSON.stringify(r));
+// check the checkbox 'ไม่มีเลข' and save
+await p.evaluate(()=>{var e=document.querySelector('#student-lesson-text [data-role="devnone"]');e.click();document.querySelector('#student-lesson-text [data-role="devsave"]').click();});
+await p.waitForTimeout(300);
+const r2=await p.evaluate(()=>{var e=document.querySelector('#student-lesson-text [data-role="devbox"]');var q=e.getBoundingClientRect();return {y:q.top,h:q.height,msg:e.querySelector('[data-role="devmsg"]').innerText};});console.log(JSON.stringify(r2));
+await p.screenshot({path:'/workspace/shots/dev/device_field_360.png'});
+await p.evaluate(()=>{var all=STUDENTS_DATA&&STUDENTS_DATA.filter?STUDENTS_DATA:[];console.log;KalimbaDevices.provider.students=function(c){return Store.getStudents(c).length?Store.getStudents(c):(window.STUDENTS_DATA||[]).filter(function(x){return x.class===c;});};App.state.role='teacher';KalimbaDevices.openTeacherView({className:'ม.1/1',period:3});});
+await p.waitForTimeout(600);
+await p.screenshot({path:'/workspace/shots/dev/device_teacher_360.png'});
+const t=await p.evaluate(()=>{var m=document.getElementById('km-dev-modal');return {t:m.innerText.replace(/\s+/g,' ').slice(0,400),inputs:[...m.querySelectorAll('input[data-a=dev]')].map(i=>i.value),sw:document.documentElement.scrollWidth};});console.log(JSON.stringify(t));
+await b.close();})();

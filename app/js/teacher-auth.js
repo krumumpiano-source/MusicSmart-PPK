@@ -46,9 +46,9 @@ const TeacherAuth = {
   async login(emailRaw, password) {
     const email = String(emailRaw || '').trim().toLowerCase();
     const url = this.apiUrl();
-    const legacy = () => {
+    const legacy = async () => {
       if (this.serverManaged()) return { success: false, message: 'ไม่มีอินเทอร์เน็ต และเครื่องนี้ยังไม่เคยเข้าสู่ระบบแบบออฟไลน์ได้ กรุณาต่อเน็ตแล้วลองใหม่' };
-      return Store.verifyTeacherLogin(email, password);
+      return await Store.verifyTeacherLogin(email, password);
     };
     if (!url) return legacy();
     let r;
@@ -68,7 +68,7 @@ const TeacherAuth = {
       return { success: true, user: this._setUser(r.email, r.name) };
     }
     if (r && r.code === 'not_configured') {
-      const lr = legacy();
+      const lr = await legacy();
       if (lr.success) lr.notice = 'ℹ️ ยังไม่ได้ตั้งรหัสผ่านครูบนเซิร์ฟเวอร์ — แนะนำให้ตั้ง (ลืมรหัสผ่าน? → ตั้งรหัสใหม่ด้วยรหัสซิงค์)';
       return lr;
     }

@@ -170,9 +170,9 @@ const loginWrong = Store.verifyStudentLogin(sampleStudent.student_id, '999999');
 assert(loginWrong.success === false, 'Store.verifyStudentLogin rejects incorrect PIN');
 
 // Clean up student test registration
-Store.resetStudentPin('35994');
+Store.resetStudentPin('90001');
 Store.logout();
-assert(Store.getStudentAccount('35994') === null, 'Store.resetStudentPin cleans up test student PIN account');
+assert(Store.getStudentAccount('90001') === null, 'Store.resetStudentPin cleans up test student PIN account');
 
 // Test Timetable Assignment & Mentor Pedagogical Advice
 Store.saveScheduleAssignment('พุธ', 3, {
@@ -315,12 +315,12 @@ assert(loadedCfg.webAppUrl.includes('test_dummy_app'), 'GoogleSheetSync config s
 const enqSession = GoogleSheetSync.syncSessionLog('ม.1/1', 1, {
   instructor: { name: 'นายพงศธร โพธิแก้ว', role: 'ครูประจำวิชา' },
   reflection: { outcomes: 'เรียนรู้โน้ต C-D-E-F-G', problems: 'บางคนนิ้วเกร็ง', solutions: 'จับคู่บัดดี้' },
-  attendance: { '35994': 'present' },
+  attendance: { '90001': 'present' },
   handoverNote: 'ซ้อมท่อน 2 ต่อ'
 });
 assert(enqSession && enqSession.type === 'session_log', 'Session Log successfully enqueued for Google Sheets sync');
 
-const enqSub = GoogleSheetSync.syncSubmission('ม.1/1', 1, '35994', {
+const enqSub = GoogleSheetSync.syncSubmission('ม.1/1', 1, '90001', {
   submissionType: 'Feldman',
   content: 'เสียงใส กังวาน',
   score: 4
@@ -329,7 +329,7 @@ assert(enqSub && enqSub.type === 'submission', 'Student Submission successfully 
 
 const enqQuiz = GoogleSheetSync.syncQuizResult({
   unitNo: 1,
-  studentId: '35994',
+  studentId: '90001',
   score: 18,
   percentage: 90
 });
@@ -403,7 +403,7 @@ function verifyHtml(htmlData, cb) {
   assert(htmlData.includes('auth-student-id-error'), 'HTML contains Student ID Error Container (#auth-student-id-error)');
   assert(htmlData.includes('btn-copy-student-link'), 'HTML contains Teacher Copy Student Link Button (#btn-copy-student-link)');
   assert(htmlData.includes('student-pwa-banner'), 'HTML contains Student Portal PWA Banner (#student-pwa-banner)');
-  assert(!htmlData.includes('value="ppk1234"'), 'HTML does NOT leak default teacher password in secret input value');
+  assert(!/<input[^>]*type="password"[^>]*value="[^"]+"/i.test(htmlData) && !/\bppk\d{4}\b/i.test(htmlData), 'HTML does NOT leak a teacher password in any password input value');
   assert(htmlData.includes('modal-teaching-assignment'), 'HTML contains Teaching Assignment & Mentoring Guidance Modal (#modal-teaching-assignment)');
   assert(htmlData.includes('assign-mentor-advice'), 'HTML contains Mentor Advice input (#assign-mentor-advice)');
   assert(htmlData.includes('assign-teaching-method'), 'HTML contains Teaching Method input (#assign-teaching-method)');

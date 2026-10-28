@@ -1,13 +1,8 @@
-// Virtual Kalimba 17-Key Synthesizer & Practice Songs Player
+// Virtual Kalimba 17-Key Synthesizer & ห้องซ้อม (รายการแบบฝึกดึงจากข้อมูล วก.5 — ไม่ฝังในโค้ด)
 // Web Audio API pure client-side physical acoustic synthesis
 
 const VirtualKalimba = {
   audioCtx: null,
-  activeSongInterval: null,
-  isPlayingSong: false,
-  currentSongIndex: 0,
-  currentNoteIndex: 0,
-  tempoBpm: 90,
 
   // Standard 17-Key Kalimba (C Major Tuning)
   // Physical alternating layout from center C4 (longest) outward
@@ -31,87 +26,18 @@ const VirtualKalimba = {
     { id: 'E6', note: 'E6', solfege: '3\'\'', freq: 1318.51, heightPct: 63, key: 'U' }
   ],
 
-  // Practice Songs Library
-  PRACTICE_SONGS: [
-    {
-      id: 'scale_c',
-      title: '1. บันไดเสียง C Major (ขึ้น-ลง)',
-      desc: 'ฝึกไล่ระดับเสียงพื้นฐาน C4 ถึง C5',
-      tempo: 80,
-      notes: [
-        { note: 'C4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'E4', duration: 1 }, { note: 'F4', duration: 1 },
-        { note: 'G4', duration: 1 }, { note: 'A4', duration: 1 },
-        { note: 'B4', duration: 1 }, { note: 'C5', duration: 2 },
-        { note: 'B4', duration: 1 }, { note: 'A4', duration: 1 },
-        { note: 'G4', duration: 1 }, { note: 'F4', duration: 1 },
-        { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'C4', duration: 2 }
-      ]
-    },
-    {
-      id: 'mary_lamb',
-      title: '2. เพลงหนูมาลี (Mary Had a Little Lamb)',
-      desc: 'เพลงฝึกซ้อมเดี่ยวคาบที่ 3-4 บรรเลงด้วยลิ้นกลาง',
-      tempo: 90,
-      notes: [
-        { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'C4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'E4', duration: 2 },
-        { note: 'D4', duration: 1 }, { note: 'D4', duration: 1 }, { note: 'D4', duration: 2 },
-        { note: 'E4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'G4', duration: 2 },
-        { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'C4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 },
-        { note: 'D4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 }, { note: 'C4', duration: 2 }
-      ]
-    },
-    {
-      id: 'ode_to_joy',
-      title: '3. เพลง Ode to Joy (Beethoven Symphony No. 9)',
-      desc: 'เพลงฝึกรวมวงคาบที่ 5-7 เน้นความพร้อมเพรียง',
-      tempo: 95,
-      notes: [
-        { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'F4', duration: 1 }, { note: 'G4', duration: 1 },
-        { note: 'G4', duration: 1 }, { note: 'F4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'C4', duration: 1 }, { note: 'C4', duration: 1 }, { note: 'D4', duration: 1 }, { note: 'E4', duration: 1 },
-        { note: 'E4', duration: 1.5 }, { note: 'D4', duration: 0.5 }, { note: 'D4', duration: 2 },
-        { note: 'E4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'F4', duration: 1 }, { note: 'G4', duration: 1 },
-        { note: 'G4', duration: 1 }, { note: 'F4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'D4', duration: 1 },
-        { note: 'C4', duration: 1 }, { note: 'C4', duration: 1 }, { note: 'D4', duration: 1 }, { note: 'E4', duration: 1 },
-        { note: 'D4', duration: 1.5 }, { note: 'C4', duration: 0.5 }, { note: 'C4', duration: 2 }
-      ]
-    },
-    {
-      id: 'new_year',
-      title: '4. เพลงพระราชนิพนธ์ พรปีใหม่ (ท่อนสร้อย)',
-      desc: 'เพลงฝึกปฏิบัติรวมวงระดับสูง คาบที่ 8-11',
-      tempo: 85,
-      notes: [
-        { note: 'G4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'C5', duration: 2 },
-        { note: 'A4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'E4', duration: 1 }, { note: 'D4', duration: 2 },
-        { note: 'E4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'C5', duration: 1 }, { note: 'D5', duration: 2 },
-        { note: 'C5', duration: 1 }, { note: 'A4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'E4', duration: 2 }
-      ]
-    },
-    {
-      id: 'lanna_folk',
-      title: '5. เพลงล่องแม่ปิง / พื้นบ้านล้านนา',
-      desc: 'เพลงบูรณาการวัฒนธรรมดนตรีท้องถิ่น คาบที่ 12-14',
-      tempo: 80,
-      notes: [
-        { note: 'E4', duration: 1 }, { note: 'G4', duration: 1 }, { note: 'A4', duration: 1 }, { note: 'C5', duration: 2 },
-        { note: 'D5', duration: 1 }, { note: 'C5', duration: 1 }, { note: 'A4', duration: 1 }, { note: 'G4', duration: 2 },
-        { note: 'A4', duration: 1 }, { note: 'C5', duration: 1 }, { note: 'D5', duration: 1 }, { note: 'E5', duration: 2 },
-        { note: 'D5', duration: 1 }, { note: 'C5', duration: 1 }, { note: 'A4', duration: 2 }
-      ]
-    }
-  ],
+  // รายการบทเพลง/แบบฝึก "ไม่ได้ฝังในโค้ดนี้อีกต่อไป" — ดึงจาก KALIMBA_MEDIA (สร้างจาก วก.5, tools/curriculum/kalimba_media_source.json)
+  // ผ่าน KalimbaMedia.getItems() ซึ่งซ้อนโน้ตที่ครูใส่เอง (KalimbaNotes) ให้อัตโนมัติ
+  // เพลงเดิมที่ไม่อยู่ใน วก.5 (หนูมาลี, Ode to Joy ฉบับเดิม, พรปีใหม่, ล่องแม่ปิง) ถูกนำออกจากรายการนักเรียน ม.1
+  GRADE_KEY: 'M1',
+  STUDENT_ALL_PERIODS: false, // false = นักเรียนเห็นเพลง/แบบฝึกถึงคาบที่กำลังเปิดเท่านั้น (คาบก่อนหน้าเปิดทบทวนได้; คาบถัดไปยังไม่เห็น); ตั้ง true เพื่อเปิดทุกคาบ
+  currentItem: null,
+  widget: null,
 
   init() {
     this.renderTines();
     this.populateSongsSelect();
+    if (typeof window !== 'undefined') window.addEventListener('ppk-kalimba-notes-changed', () => { const sel = document.getElementById('kalimba-song-select'); if (sel && this.currentItem) this.populateSongsSelect(this.currentItem.id); });
     this.bindKeyboardShortcuts();
   },
 
@@ -132,6 +58,13 @@ const VirtualKalimba = {
     if (!tine) return;
 
     try {
+      const R = this._root();
+      if (R.KalimbaMedia && R.KalimbaMedia.isMuted && R.KalimbaMedia.isMuted()) {
+        // โหมดปิดเสียงคาลิมบ้า: ไม่ส่งเสียง แต่ลิ่มยังสว่างและนับการฝึกตามปกติ (ฟังเฉพาะเมโทรนอม)
+        this.highlightTine(tine.id);
+        this._recordPractice(tine.note);
+        return;
+      }
       const ctx = this.getAudioContext();
       const now = ctx.currentTime;
 
@@ -181,15 +114,32 @@ const VirtualKalimba = {
       this.highlightTine(tine.id);
 
       // Mark practice activity in store for badges
-      if (typeof Store !== 'undefined' && Store.recordStudentPractice) {
-        const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
-        if (user && user.studentId) {
-          Store.recordStudentPractice(user.studentId, tine.note);
-        }
-      }
+      this._recordPractice(tine.note);
     } catch (e) {
       console.warn('Audio playback not permitted yet', e);
     }
+  },
+
+  _recordPractice(note) {
+    if (typeof Store !== 'undefined' && Store.recordStudentPractice) {
+      const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
+      if (user && user.studentId) Store.recordStudentPractice(user.studentId, note);
+    }
+  },
+
+  /** ปุ่มปิด/เปิดเสียงคาลิมบ้าในหน้าต่างซ้อม (ใช้ค่าร่วมกับวิดเจ็ต) */
+  toggleMute() {
+    const R = this._root();
+    if (R.KalimbaMedia && R.KalimbaMedia.setMuted) R.KalimbaMedia.setMuted(!R.KalimbaMedia.isMuted());
+    this.syncMuteButton();
+  },
+  syncMuteButton() {
+    const R = this._root(), b = typeof document !== 'undefined' && document.getElementById('kalimba-vk-mute');
+    if (!b) return;
+    const m = !!(R.KalimbaMedia && R.KalimbaMedia.isMuted && R.KalimbaMedia.isMuted());
+    b.className = 'km-mute' + (m ? ' km-on' : '');
+    b.setAttribute('aria-pressed', m ? 'true' : 'false');
+    b.textContent = m ? '🔇 ปิดเสียงคาลิมบ้าอยู่ — ได้ยินเฉพาะเมโทรนอม (แตะเพื่อเปิด)' : '🔊 ปิดเสียงคาลิมบ้า (ฝึกกับเมโทรนอมเท่านั้น)';
   },
 
   highlightTine(tineId) {
@@ -234,136 +184,126 @@ const VirtualKalimba = {
     });
   },
 
-  populateSongsSelect() {
+  // ---- รายการ (data-driven) ----
+  _root() { return typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : {}); },
+  _items(period) {
+    const r = this._root();
+    if (r.KalimbaMedia && r.KalimbaMedia.getItems) return r.KalimbaMedia.getItems(this.GRADE_KEY, period) || [];
+    const m = r.KALIMBA_MEDIA;
+    return (m && m.periods && m.periods[this.GRADE_KEY] && m.periods[this.GRADE_KEY][String(period)]) || [];
+  },
+  /** [{ period, items:[item…] }] เรียงตามคาบ — เฉพาะคาบที่ วก.5 มีแบบฝึก/บทเพลง */
+  buildSongList(maxPeriod) {
+    const m = this._root().KALIMBA_MEDIA;
+    const g = m && m.periods && m.periods[this.GRADE_KEY];
+    if (!g) return [];
+    return Object.keys(g).map(Number).sort((a, b) => a - b)
+      .filter(p => !maxPeriod || p <= maxPeriod)
+      .map(p => ({ period: p, items: this._items(p) })).filter(x => x.items.length);
+  },
+  _role() {
+    try { const u = typeof Store !== 'undefined' && Store.getCurrentUser ? Store.getCurrentUser() : null; return u ? (u.role || '') : ''; } catch (e) { return ''; }
+  },
+  _isStaff() { const r = this._role(); return r === 'teacher' || r === 'intern'; },
+  _currentPeriod() {
+    try {
+      if (typeof App !== 'undefined' && App.state) return Number(this._isStaff() ? App.state.selectedPeriod : (App.state.studentPeriod || App.state.selectedPeriod)) || 0;
+    } catch (e) {}
+    return 0;
+  },
+  _periodTopic(p) {
+    try { const l = typeof Store !== 'undefined' && Store.getLesson ? Store.getLesson(this.GRADE_KEY, p) : null; if (l && l.topic) return String(l.topic).length > 48 ? String(l.topic).slice(0, 46) + '…' : l.topic; } catch (e) {}
+    return '';
+  },
+  populateSongsSelect(preferItemId) {
     const sel = document.getElementById('kalimba-song-select');
     if (!sel) return;
+    const cur = this._currentPeriod();
+    const limit = (!this._isStaff() && !this.STUDENT_ALL_PERIODS && cur) ? cur : 0;
+    const list = this.buildSongList(limit);
     sel.innerHTML = '';
-
-    this.PRACTICE_SONGS.forEach((song, idx) => {
-      const opt = document.createElement('option');
-      opt.value = idx;
-      opt.textContent = song.title;
-      sel.appendChild(opt);
-    });
-
-    this.onSongSelectChange(0);
-  },
-
-  onSongSelectChange(idx) {
-    this.stopSong();
-    this.currentSongIndex = parseInt(idx, 10) || 0;
-    const song = this.PRACTICE_SONGS[this.currentSongIndex];
-    if (!song) return;
-
-    this.tempoBpm = song.tempo || 90;
-    const tempoInput = document.getElementById('kalimba-tempo-input') || document.getElementById('kalimba-bpm-slider');
-    const tempoVal = document.getElementById('kalimba-tempo-val') || document.getElementById('kalimba-bpm-display');
-    const descEl = document.getElementById('kalimba-song-desc');
-    const noteRoll = document.getElementById('kalimba-song-noteroll');
-
-    if (tempoInput) tempoInput.value = this.tempoBpm;
-    if (tempoVal) tempoVal.textContent = `${this.tempoBpm} BPM`;
-    if (descEl) descEl.textContent = song.desc;
-
-    if (noteRoll) {
-      noteRoll.innerHTML = '';
-      song.notes.forEach((n, nIdx) => {
-        const badge = document.createElement('span');
-        badge.id = `song-note-${nIdx}`;
-        badge.className = 'song-note-chip';
-        badge.textContent = n.note;
-        noteRoll.appendChild(badge);
+    let firstOfCurrent = null, first = null;
+    list.forEach(g => {
+      const og = document.createElement('optgroup');
+      const topic = this._periodTopic(g.period);
+      og.label = 'คาบที่ ' + g.period + (topic ? ' — ' + topic : '');
+      g.items.forEach(it => {
+        const opt = document.createElement('option');
+        opt.value = g.period + '|' + it.id;
+        opt.textContent = it.title; // ชื่อตามที่ วก.5 / source ตั้งไว้ ไม่ใส่เลขลำดับเอง
+        og.appendChild(opt);
+        if (!first) first = opt.value;
+        if (!firstOfCurrent && g.period === cur) firstOfCurrent = opt.value;
+        if (preferItemId && it.id === preferItemId) firstOfCurrent = opt.value;
       });
+      sel.appendChild(og);
+    });
+    if (!list.length) {
+      const o = document.createElement('option'); o.value = ''; o.textContent = 'ยังไม่มีแบบฝึกใน วก.5'; sel.appendChild(o);
     }
+    const pick = firstOfCurrent || first;
+    if (pick) sel.value = pick;
+    this.onSongSelectChange(sel.value);
   },
 
-  onSongChange(val) {
-    return this.onSongSelectChange(val);
+  _findItem(val) {
+    const parts = String(val || '').split('|');
+    const p = Number(parts[0]);
+    if (!p) return null;
+    const it = this._items(p).filter(x => x.id === parts[1])[0];
+    return it ? { period: p, item: it } : null;
   },
 
-  onTempoChange(val) {
-    this.tempoBpm = parseInt(val, 10) || 90;
-    const tempoVal = document.getElementById('kalimba-tempo-val') || document.getElementById('kalimba-bpm-display');
-    if (tempoVal) tempoVal.textContent = `${this.tempoBpm} BPM`;
+  onSongSelectChange(val) {
+    this.stopSong();
+    const box = document.getElementById('kalimba-vk-widget');
+    const found = this._findItem(val);
+    this.currentItem = found ? found.item : null;
+    if (this.widget) { try { this.widget.destroy(); } catch (e) {} this.widget = null; }
+    this._clearPhysical();
+    const editBtn = document.getElementById('kalimba-vk-edit');
+    if (editBtn) editBtn.style.display = (this._isStaff() && this._root().KalimbaNoteEditor && found) ? 'inline-flex' : 'none';
+    if (!box) return;
+    if (!found) { box.innerHTML = '<div style="padding:12px;color:#fca5a5;">ยังไม่มีแบบฝึกให้เลือก</div>'; return; }
+    const R = this._root();
+    if (!R.KalimbaMedia || !R.KalimbaMedia.Widget) { box.innerHTML = '<div style="padding:12px;color:#fca5a5;">โมดูลแสดงโน้ตยังโหลดไม่เสร็จ — รีเฟรชหน้า</div>'; return; }
+    const self = this, item = found.item, period = found.period;
+    box.innerHTML = '';
+    const holder = document.createElement('div'); holder.className = 'vk-widget-light'; box.appendChild(holder);
+    this.widget = new R.KalimbaMedia.Widget(holder, item, { tines: false });
+    const w = this.widget, orig = w._noteState;
+    w._noteState = function (idx, what) { orig.call(w, idx, what); self._syncPhysical(w, idx, what); };
+    this._lastPeriod = period;
   },
 
-  setTempo(val) {
-    return this.onTempoChange(val);
+  _clearPhysical() {
+    document.querySelectorAll('#kalimba-tines-container .kalimba-tine.active-hit').forEach(e => e.classList.remove('active-hit'));
+    const cn = document.getElementById('kalimba-current-note'); if (cn) cn.textContent = '-';
+  },
+  _syncPhysical(w, idx, what) {
+    if (what === 'reset') { this._clearPhysical(); return; }
+    const n = w.notes && w.notes[idx]; if (!n) return;
+    n.p.forEach(pitch => {
+      const el = document.getElementById('tine-' + pitch);
+      if (el) { if (what === 'on') el.classList.add('active-hit'); else el.classList.remove('active-hit'); }
+    });
+    if (what === 'on') { const cn = document.getElementById('kalimba-current-note'); if (cn) cn.textContent = n.p.length ? (n.th || '') + ' (' + n.p.join('+') + ')' : 'พัก'; }
   },
 
-  togglePlay() {
-    return this.togglePlaySong();
+  openEditor() {
+    const R = this._root();
+    if (R.KalimbaNoteEditor && this.currentItem) R.KalimbaNoteEditor.open({ gradeKey: this.GRADE_KEY, period: this._lastPeriod, itemId: this.currentItem.id });
   },
 
-  stopPlay() {
-    return this.stopSong();
-  },
-
-
-  togglePlaySong() {
-    if (this.isPlayingSong) {
-      this.stopSong();
-    } else {
-      this.startSong();
-    }
-  },
-
-  startSong() {
-    const song = this.PRACTICE_SONGS[this.currentSongIndex];
-    if (!song || song.notes.length === 0) return;
-
-    this.isPlayingSong = true;
-    this.currentNoteIndex = 0;
-
-    const playBtn = document.getElementById('kalimba-play-btn') || document.getElementById('btn-kalimba-play');
-    if (playBtn) {
-      playBtn.innerHTML = '⏹️ หยุดซ้อม';
-      playBtn.classList.add('playing');
-    }
-
-    this.playNextSongNote();
-  },
-
-  playNextSongNote() {
-    if (!this.isPlayingSong) return;
-    const song = this.PRACTICE_SONGS[this.currentSongIndex];
-    if (!song) return;
-
-    if (this.currentNoteIndex >= song.notes.length) {
-      // Loop or finish
-      this.currentNoteIndex = 0;
-    }
-
-    // Highlight note chip
-    document.querySelectorAll('.song-note-chip').forEach(c => c.classList.remove('active'));
-    const curChip = document.getElementById(`song-note-${this.currentNoteIndex}`);
-    if (curChip) curChip.classList.add('active');
-
-    const item = song.notes[this.currentNoteIndex];
-    this.playNote(item.note);
-
-    const beatMs = (60 / this.tempoBpm) * 1000;
-    const noteDurationMs = item.duration * beatMs;
-
-    this.currentNoteIndex++;
-    this.activeSongInterval = setTimeout(() => {
-      this.playNextSongNote();
-    }, noteDurationMs);
-  },
-
-  stopSong() {
-    this.isPlayingSong = false;
-    if (this.activeSongInterval) {
-      clearTimeout(this.activeSongInterval);
-      this.activeSongInterval = null;
-    }
-    const playBtn = document.getElementById('kalimba-play-btn') || document.getElementById('btn-kalimba-play');
-    if (playBtn) {
-      playBtn.innerHTML = '▶️ ซ้อมเพลงนี้ (Play-Along)';
-      playBtn.classList.remove('playing');
-    }
-    document.querySelectorAll('.song-note-chip').forEach(c => c.classList.remove('active'));
-  },
+  // เข้ากันได้กับปุ่ม/โค้ดเดิม — ตอนนี้ควบคุมผ่านวิดเจ็ตของแบบฝึก (เล่น/พัก/หยุด/BPM/เมโทรนอม)
+  onSongChange(val) { return this.onSongSelectChange(val); },
+  onTempoChange(val) { if (this.widget) this.widget.setBpm(val); },
+  setTempo(val) { return this.onTempoChange(val); },
+  togglePlay() { return this.togglePlaySong(); },
+  stopPlay() { return this.stopSong(); },
+  togglePlaySong() { if (this.widget) { if (this.widget.transport.state === 'playing') this.widget.stop(); else this.widget.play(); } },
+  startSong() { if (this.widget) this.widget.play(); },
+  stopSong() { if (this.widget) { try { this.widget.stop(); } catch (e) {} } this._clearPhysical(); },
 
   bindKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
@@ -380,11 +320,14 @@ const VirtualKalimba = {
     });
   },
 
-  openModal() {
+  openModal(preferItemId) {
     const modal = document.getElementById('modal-virtual-kalimba');
     if (modal) {
       modal.classList.add('active');
       this.getAudioContext();
+      this.populateSongsSelect(preferItemId);
+      this.syncMuteButton();
+      if (!this._muteBound && typeof window !== 'undefined') { this._muteBound = true; window.addEventListener('ppk-kalimba-mute-changed', () => this.syncMuteButton()); }
     }
   },
 

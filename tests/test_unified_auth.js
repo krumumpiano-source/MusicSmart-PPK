@@ -47,7 +47,9 @@ global.document = {
   // Test 2: Teacher Admin Login in Store
   console.log('2. Testing primary teacher admin login in Store...');
   const acc = Store.getTeacherAccount();
-  const teacherLoginRes = Store.verifyTeacherLogin(acc.email, acc.secret);
+  const TEST_PW = 'Throwaway-Test-Pw-2569'; // รหัสทดสอบชั่วคราว (ไม่ใช่รหัสจริง)
+  await Store.saveTeacherAccount({ email: acc.email, secret: TEST_PW });
+  const teacherLoginRes = await Store.verifyTeacherLogin(acc.email, TEST_PW);
   assert.strictEqual(teacherLoginRes.success, true, 'Teacher login must succeed');
   assert.strictEqual(teacherLoginRes.user.role, 'teacher', 'Teacher role must be "teacher"');
   assert.strictEqual(teacherLoginRes.user.roleCategory, 'mentor', 'Role category must be "mentor"');
@@ -73,30 +75,42 @@ global.document = {
 
   const regRes = await InternRegistration.submit(internRegData);
   assert.strictEqual(regRes.success, true, 'Intern registration must succeed locally');
+  assert.strictEqual(regRes.status, 'pending', 'Newly registered intern must start in pending state');
 
-  // Verify that the newly registered intern can log in via Store.verifyTeacherLogin
-  const internLoginRes = Store.verifyTeacherLogin('INT66001', '246810');
-  assert.strictEqual(internLoginRes.success, true, 'Intern must be able to log in with internId and PIN');
+  // Verify that the newly registered intern is blocked while pending
+  const pendingLoginRes = await Store.verifyTeacherLogin('INT66001', '246810');
+  assert.strictEqual(pendingLoginRes.success, false, 'Pending intern must NOT be able to log in before approval');
+  assert.strictEqual(pendingLoginRes.code, 'pending', 'Must return pending code');
+  assert(pendingLoginRes.message.includes('รอครูอนุมัติ'), 'Must show รอครูอนุมัติ message');
+
+  // Approve intern and assign classes
+  const approveRes = Store.approveTeacher('INT66001', ['ม.1/1', 'ม.1/2']);
+  assert.strictEqual(approveRes.success, true, 'Teacher approval must succeed');
+
+  // Verify that the approved intern can now log in via Store.verifyTeacherLogin
+  const internLoginRes = await Store.verifyTeacherLogin('INT66001', '246810');
+  assert.strictEqual(internLoginRes.success, true, 'Approved intern must be able to log in with internId and PIN');
   assert.strictEqual(internLoginRes.user.role, 'intern', 'Intern must be automatically detected as role="intern"');
   assert.strictEqual(internLoginRes.user.roleCategory, 'trainee', 'Role category must be "trainee"');
   assert.strictEqual(internLoginRes.user.isAdmin, false, 'Intern is not admin');
   assert.deepStrictEqual(internLoginRes.user.classes, ['ม.1/1', 'ม.1/2'], 'Assigned classes must match');
-  console.log('✅ Intern login correctly identified as role="intern", trainee.');
+  console.log('✅ Intern login blocked while pending and allowed after teacher approval.');
 
   // Test 4: Intern Login via email
-  const internLoginEmailRes = Store.verifyTeacherLogin('intern_music@up.ac.th', '246810');
+  const internLoginEmailRes = await Store.verifyTeacherLogin('intern_music@up.ac.th', '246810');
   assert.strictEqual(internLoginEmailRes.success, true, 'Intern must also be able to log in with email');
   assert.strictEqual(internLoginEmailRes.user.role, 'intern');
   console.log('✅ Intern login by email works smoothly.');
 
-  // Test 5: Intern Roster Access
-  console.log('4. Testing intern roster access fallback when classes empty...');
+  // Test 5: Intern Roster Access (strictly scoped to assigned classes)
+  console.log('4. Testing intern roster access restriction when classes empty vs assigned...');
   Store.setCurrentUser({ role: 'intern', name: 'Test Intern', classes: [] });
-  const roster = Store.getRoster();
-  assert(Object.keys(roster).length > 0, 'Roster must NOT be empty when intern classes is empty array');
-  const m1Classes = Store.getAllClasses('M1');
-  assert(m1Classes.length > 0, 'getAllClasses must return available classes');
-  console.log(`✅ Intern sees ${m1Classes.length} M1 classes even before manual assignment.`);
+  const emptyRoster = Store.getRoster();
+  assert.strictEqual(Object.keys(emptyRoster).length, 0, 'Roster must be empty before classes are assigned');
+  Store.setCurrentUser({ role: 'intern', name: 'Test Intern', classes: ['ม.1/1'] });
+  const scopedRoster = Store.getRoster();
+  assert.deepStrictEqual(Object.keys(scopedRoster), ['ม.1/1'], 'Intern sees only assigned classes');
+  console.log('✅ Intern roster access strictly scoped to assigned classes.');
 
   // Test 6: RoleGuard Selectors clean
   console.log('5. Checking RoleGuard.TEACHER_ONLY_SELECTORS...');

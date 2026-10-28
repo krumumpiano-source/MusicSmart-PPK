@@ -233,8 +233,8 @@ const Portfolio = {
   build(info) {
     const e = this.esc.bind(this);
     const classes = info.classes || [];
-    const grades = [...new Set(classes.map(c => (c.startsWith('ม.2') ? 'M2' : 'M1')))];
-    const lessons = grades.flatMap(g => ((typeof LESSONS_DATA !== 'undefined' && LESSONS_DATA[g]) || []).map(l => Object.assign({ g }, l)));
+    const grades = [...new Set(classes.map(c => Store.gradeKeyOf(c)).filter(Boolean))];
+    const lessons = grades.flatMap(g => ((typeof LESSONS_DATA !== 'undefined' && LESSONS_DATA[g]) || []).map(l => Object.assign({ g }, Store.getLesson(g, l.period) || l)));
     const subs = (typeof Store !== 'undefined') ? Object.values(Store.getAllSubmissions()).filter(s => classes.includes(s.className)) : [];
     const summaries = (typeof Analytics !== 'undefined') ? classes.map(c => Analytics.classSummary(c)) : [];
     const now = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
@@ -244,7 +244,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid 
 <button class="noprint" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF</button>
 <h1>แฟ้มสะสมผลงานการฝึกประสบการณ์วิชาชีพครู</h1>
 <p><strong>${e(info.name)}</strong> (รหัส ${e(info.internId)}) • ห้องที่ได้รับมอบหมาย: ${e(classes.join(', '))}<br>รายวิชาดนตรี โรงเรียนพะเยาพิทยาคม • สร้างเมื่อ ${e(now)}</p>
-<h2>1. แผนการจัดการเรียนรู้</h2>${lessons.map(l => `<div class="lesson"><strong>${e(l.g === 'M1' ? 'ม.1' : 'ม.2')} คาบ ${l.period}: ${e(l.topic)}</strong>
+<h2>1. แผนการจัดการเรียนรู้</h2>${lessons.map(l => `<div class="lesson"><strong>${e((Store.getGradeInfo(l.g) || {}).short || l.g)} คาบ ${l.period}: ${e(l.topic)}</strong>
 <div>K: ${e(l.kpa && l.kpa.k)} • P: ${e(l.kpa && l.kpa.p)} • A: ${e(l.kpa && l.kpa.a)}</div>
 <ol>${(l.steps || []).map(s => `<li>${e(s.phase)} (${e(s.duration)} นาที): ${e(s.desc || s.action)}</li>`).join('')}</ol></div>`).join('') || '<p>-</p>'}
 <h2>2. สื่อการเรียนรู้</h2><ul>${lessons.flatMap(l => (l.media || []).map(m => `<li>คาบ ${l.period}: ${e(m.title)}</li>`)).join('') || '<li>-</li>'}</ul>
@@ -300,7 +300,7 @@ const InternRegistration = {
       major: d.major, phone: d.phone, email: d.email, term: String(d.term).trim(), academicYear: Number(d.academicYear), mentorName: d.mentorName || '',
       preferredClasses: preferred, pin: d.pin };
 
-    // บันทึกลงในระบบครูของ Store เพื่อให้นักศึกษาเข้าใช้งานได้ทันที
+    // บันทึกคำขอลงทะเบียนเป็นสถานะ pending (รอครูประจำวิชาอนุมัติ ห้ามเปิดสิทธิ์เข้าใช้หรือเข้าถึงห้องเรียนก่อนอนุมัติ)
     if (typeof Store !== 'undefined' && Store.addTeacher) {
       Store.addTeacher({
         id: 'intern_' + String(d.internId).trim(),
@@ -311,17 +311,19 @@ const InternRegistration = {
         roleCategory: 'trainee',
         secret: String(d.pin).trim(),
         institution: `${d.university || ''} ${d.faculty || ''}`.trim(),
-        classes: preferred.length ? preferred : (Store.getAllClasses ? [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')] : []),
-        activeTeaching: true,
+        status: 'pending',
+        classes: [],
+        preferredClasses: preferred,
+        activeTeaching: false,
         note: `รหัสนักศึกษา: ${d.internId} • สาขา: ${d.major || ''}`
       });
     }
 
     try {
       const r = await StudentAuth._post(body);
-      return r.status === 'success' ? { success: true, message: r.message } : { success: false, code: r.code, message: r.message };
+      return r.status === 'success' ? { success: true, status: 'pending', message: r.message } : { success: false, code: r.code, message: r.message };
     } catch (e) {
-      return { success: true, message: 'บันทึกข้อมูลการลงทะเบียนในระบบเรียบร้อยแล้ว' };
+      return { success: true, status: 'pending', message: 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ' };
     }
   },
   open() {
@@ -342,7 +344,7 @@ const InternRegistration = {
         if (!r.success) { alert('⚠️ ' + r.message); return; }
         m.querySelectorAll('input').forEach(i => { i.value = ''; });
         m.classList.remove('active');
-        alert('✅ ลงทะเบียนนักศึกษาฝึกสอนเรียบร้อยแล้ว!\nท่านสามารถเข้าสู่ระบบด้วยอีเมลหรือรหัสนักศึกษา และ PIN 6 หลักที่ตั้งไว้ได้ทันทีครับ');
+        alert('✅ ส่งคำขอลงทะเบียนนักศึกษาฝึกสอนเรียบร้อยแล้ว\nสถานะปัจจุบัน: รอครูอนุมัติ (จะสามารถเข้าสู่ระบบได้เมื่อครูประจำวิชาอนุมัติแล้วครับ)');
       };
     }
     m.classList.add('active');

@@ -1,0 +1,26 @@
+<!-- ms-legacy-guard: ES5 ล้วน ห้ามใช้ไวยากรณ์ใหม่ในบล็อกนี้ — แจ้งเป็นภาษาไทยเมื่อแอปเปิดไม่ขึ้นบนเครื่องเก่า -->
+<script>
+(function () {
+  var errs = [];
+  window.__msErrors = errs;
+  window.addEventListener('error', function (e) { try { errs.push(String(e && e.message || e)); } catch (x) {} });
+  function show() {
+    if (document.getElementById('ms-legacy-banner')) return;
+    var d = document.createElement('div'); d.id = 'ms-legacy-banner';
+    d.setAttribute('style', 'position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#fff3cd;color:#664d03;padding:14px 16px;font:16px/1.5 sans-serif;border-bottom:3px solid #ffc107');
+    d.innerHTML = '<b>แอป MusicSmart เปิดไม่สำเร็จบนเครื่อง/เบราว์เซอร์นี้</b><br>' +
+      'อาจเป็นเพราะเบราว์เซอร์เก่าเกินไป — แนะนำให้อัปเดต Google Chrome หรือ Android System WebView (ขั้นต่ำ Chrome 51 / Android 7 ขึ้นไป; iPhone ใช้ iOS 13 ขึ้นไป) ' +
+      'หรือเปิดด้วยเครื่องอื่น/คอมพิวเตอร์ แล้วแจ้งครูผู้สอน' +
+      (errs.length ? '<br><small>รหัสข้อผิดพลาด: ' + String(errs[0]).replace(/</g, '&lt;').slice(0, 120) + '</small>' : '');
+    (document.body || document.documentElement).appendChild(d);
+  }
+  window.__msShowLegacyBanner = show;
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var booted = false;
+      try { booted = (typeof App !== 'undefined') && (typeof Store !== 'undefined'); } catch (x) { booted = false; }
+      if (!booted) show();
+    }, 3500);
+  });
+})();
+</script>

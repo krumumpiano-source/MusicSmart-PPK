@@ -88,11 +88,18 @@ function loadGas(initialProps) {
   const ss = { getName: () => 'test', getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = makeSheet()) };
   const props = Object.assign({}, initialProps || {});
   const cache = {};
+  // นาฬิกาจำลอง (ใช้ทดสอบห้องสอบ): ไม่ตั้งค่า = เวลาจริง (เข้ากันได้กับเทสต์เดิม)
+  const clock = { t: null };
+  const lockState = { busy: false, acquired: 0, released: 0 };
+  class FakeDate extends Date {
+    constructor(...a) { if (a.length === 0 && clock.t !== null) super(clock.t); else super(...a); }
+    static now() { return clock.t !== null ? clock.t : Date.now(); }
+  }
   const ctx = {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; } }) },
-    LockService: { getScriptLock: () => ({ tryLock() {}, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({ tryLock() { if (lockState.busy) return false; lockState.acquired++; return true; }, releaseLock() { lockState.released++; } }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ text: t, setMimeType() { return this; } }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
@@ -106,12 +113,14 @@ function loadGas(initialProps) {
       formatDate: () => '2026-01-01 00:00:00'
     },
     DriveApp: D.DriveApp, UrlFetchApp: D.UrlFetchApp, ScriptApp: D.ScriptApp,
-    Date, JSON, Math, String, Number, Array, Object
+    Date: FakeDate, JSON, Math, String, Number, Array, Object
   };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(__dirname + '/../google_apps_script.js', 'utf8'), ctx);
   const call = body => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).text);
   const callRaw = text => JSON.parse(ctx.doPost({ postData: { contents: text } }).text);
-  return { ctx, sheets, props, cache, call, callRaw, drive: D };
+  const setNow = ms => { clock.t = ms === null ? null : Number(ms); };
+  const advance = ms => { clock.t = (clock.t === null ? Date.now() : clock.t) + Number(ms); };
+  return { ctx, sheets, props, cache, call, callRaw, drive: D, setNow, advance, lock: lockState };
 }
 module.exports = { loadGas };

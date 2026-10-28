@@ -1,0 +1,53 @@
+P1.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P1: updated
+P2.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P2: updated
+P3.assessment.weights: undefined -> {"k":1,"p":2,"a":1}
+P3: updated
+P4.assessment.weights: undefined -> {"k":1,"p":2,"a":1}
+P4: updated
+P5.assessment.weights: undefined -> {"k":1,"p":2,"a":1}
+P5: updated
+P6.assessment.weights: undefined -> {"k":1,"p":2,"a":1}
+P6: updated
+P7.assessment.weights: undefined -> {"k":0,"p":4,"a":0}
+P7: updated
+P8.unit_name: "บทเพลงสร้างสรรค์และการขับร้องประกอบ" -> "บทเพลงและการประพันธ์เนื้อร้องสร้างสรรค์"
+P8.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P8: updated
+P9.unit_name: "บทเพลงสร้างสรรค์และการขับร้องประกอบ" -> "บทเพลงและการประพันธ์เนื้อร้องสร้างสรรค์"
+P9.assessment.weights: undefined -> {"k":1,"p":7,"a":2}
+P9: updated
+P10.unit_name: "บทเพลงสร้างสรรค์และการขับร้องประกอบ" -> "บทเพลงและการประพันธ์เนื้อร้องสร้างสรรค์"
+P10.assessment.weights: undefined -> {"k":1,"p":7,"a":2}
+P10: updated
+P11.unit_name: "การสอบวัดผลกลางภาคเรียน" -> "บทเพลงและการประพันธ์เนื้อร้องสร้างสรรค์"
+P11.assessment.weights: undefined -> {"k":10,"p":0,"a":0}
+P11: updated
+P12.unit_name: "รอบรู้วงดนตรีไทย วงดนตรีพื้นบ้าน และวงดนตรีสากล" -> "วงดนตรีไทยและวงดนตรีสากล"
+P12.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P12: updated
+P13.unit_name: "รอบรู้วงดนตรีไทย วงดนตรีพื้นบ้าน และวงดนตรีสากล" -> "วงดนตรีไทยและวงดนตรีสากล"
+P13.assessment.weights: undefined -> {"k":2,"p":5,"a":3}
+P13: updated
+P14.unit_name: "รอบรู้วงดนตรีไทย วงดนตรีพื้นบ้าน และวงดนตรีสากล" -> "วงดนตรีไทยและวงดนตรีสากล"
+P14.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P14: updated
+P15.unit_name: "รอบรู้วงดนตรีไทย วงดนตรีพื้นบ้าน และวงดนตรีสากล" -> "วงดนตรีไทยและวงดนตรีสากล"
+P15.assessment.weights: undefined -> {"k":2,"p":5,"a":3}
+P15: updated
+P16.unit_name: "สุนทรียวิจารณ์และดนตรีกับสังคม" -> "การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม"
+P16.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P16: updated
+P17.unit_name: "สุนทรียวิจารณ์และดนตรีกับสังคม" -> "การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม"
+P17.assessment.weights: undefined -> {"k":2,"p":5,"a":3}
+P17: updated
+P18.unit_name: "สุนทรียวิจารณ์และดนตรีกับสังคม" -> "การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม"
+P18.assessment.weights: undefined -> {"k":0,"p":0,"a":0}
+P18: updated
+P19.unit_name: "สุนทรียวิจารณ์และดนตรีกับสังคม" -> "การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม"
+P19.assessment.weights: undefined -> {"k":2,"p":5,"a":3}
+P19: updated
+P20.unit_name: "การสอบวัดผลปลายภาคเรียน" -> "การวิเคราะห์วิจารณ์และอิทธิพลของดนตรีต่อสังคม"
+P20.assessment.weights: undefined -> {"k":10,"p":0,"a":0}
+P20: updated

@@ -204,11 +204,29 @@ const RoleGuard = {
       unit_name: lesson.unit_name,
       topic: lesson.topic,
       duration_min: lesson.duration_min,
+      aids: Array.isArray(lesson.aids) ? lesson.aids.map(String) : [],
       kpa: lesson.kpa ? { k: lesson.kpa.k, p: lesson.kpa.p, a: lesson.kpa.a } : undefined,
       media: (lesson.media || [])
         .filter(m => m && !this.STUDENT_MEDIA_BLOCK.test(`${m.title || ''} ${m.url || ''}`))
         .map(m => ({ title: m.title, type: m.type, url: m.url })),
-      assessment: lesson.assessment ? { has_score: !!lesson.assessment.has_score, max_score: lesson.assessment.max_score } : undefined
+      assessment: lesson.assessment ? { has_score: !!lesson.assessment.has_score, max_score: lesson.assessment.max_score } : undefined,
+      wk5: this.sanitizeWk5(lesson.wk5)
+    };
+  },
+
+  // วก.5 ฉบับนักเรียน: จุดประสงค์ ชิ้นงาน สื่อ เกณฑ์การประเมิน (หัวข้อ+น้ำหนัก) เท่านั้น
+  // ไม่ส่ง: ขั้นตอนกิจกรรมของครู (activities), เครื่องมือวัด (tools), รายละเอียดระดับคะแนนรูบริก
+  sanitizeWk5(w) {
+    if (!w) return undefined;
+    const arr = a => (Array.isArray(a) ? a.map(x => String(x)) : []);
+    const o = w.objectives || {};
+    const a = w.assessment || {};
+    return {
+      objectives: { k: arr(o.k), p: arr(o.p), a: arr(o.a) },
+      work: arr(w.work),
+      media: arr(w.media).filter(t => !this.STUDENT_MEDIA_BLOCK.test(t)),
+      assessment: { k: String(a.k || ''), p: String(a.p || ''), a: String(a.a || '') },
+      rubric: (w.rubric || []).map(r => ({ label: String(r.label || ''), weight: String(r.weight || '') }))
     };
   }
 };

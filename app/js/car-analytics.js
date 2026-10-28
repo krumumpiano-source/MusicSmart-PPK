@@ -48,15 +48,64 @@ const CARAnalytics = {
     };
   },
 
+  _tTwoTailP(t, df) {
+    if (typeof EvidenceCore !== 'undefined' && EvidenceCore && typeof EvidenceCore.tTwoTailP === 'function') {
+      return EvidenceCore.tTwoTailP(t, df);
+    }
+    if (typeof t !== 'number' || !Number.isFinite(t) || !(df > 0)) return null;
+    const lgamma = (x) => {
+      const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+      let y = x, tmp = x + 5.5, s = 1.000000000190015;
+      tmp -= (x + 0.5) * Math.log(tmp);
+      for (let j = 0; j < 6; j++) { y += 1; s += c[j] / y; }
+      return -tmp + Math.log(2.5066282746310005 * s / x);
+    };
+    const betacf = (a, b, x) => {
+      const MAXIT = 300, EPS = 3e-12, FPMIN = 1e-300;
+      const qab = a + b, qap = a + 1, qam = a - 1;
+      let c = 1, d = 1 - qab * x / qap;
+      if (Math.abs(d) < FPMIN) d = FPMIN;
+      d = 1 / d;
+      let h = d;
+      for (let m = 1; m <= MAXIT; m++) {
+        const m2 = 2 * m;
+        let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+        d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+        c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+        d = 1 / d; h *= d * c;
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+        d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+        c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+        d = 1 / d;
+        const del = d * c;
+        h *= del;
+        if (Math.abs(del - 1) < EPS) break;
+      }
+      return h;
+    };
+    const ibeta = (x, a, b) => {
+      if (x <= 0) return 0;
+      if (x >= 1) return 1;
+      const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+      if (x < (a + 1) / (a + b + 2)) return bt * betacf(a, b, x) / a;
+      return 1 - bt * betacf(b, a, 1 - x) / b;
+    };
+    return ibeta(df / (df + t * t), df / 2, 0.5);
+  },
+
+  _formatPValue(pVal) {
+    if (pVal === null || pVal === undefined || !Number.isFinite(pVal)) return 'ยังไม่มีข้อมูล';
+    if (pVal < 0.001) return '< .001';
+    return pVal.toFixed(3);
+  },
+
   // Calculate Pre/Post and Formative metrics dynamically with ZERO hardcoding
   computeStats(className) {
     const students = Store.getStudents(className) || [];
     const activeStudents = students.filter(s => !Store.isStudentWithdrawn(s.student_id));
-    const n = activeStudents.length || 1;
     const savedScores = Store.getResearchScores ? Store.getResearchScores(className) : {};
+    const hasNum = (v) => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
 
-    let sumPre = 0, sumPost = 0, sumD = 0, sumD2 = 0;
-    let sumFormative = 0;
     const studentData = [];
 
     activeStudents.forEach((s) => {
@@ -65,28 +114,31 @@ const CARAnalytics = {
       const preQuiz = (typeof QuizEngine !== 'undefined') ? QuizEngine.getStudentAttempt(s.student_id, 'pre') : null;
       const rubricSaved = Store.getStudentRubric ? Store.getStudentRubric(s.student_id, 1) : null;
 
-      let preScore, postScore, formScore;
+      let preScore = null, postScore = null, formScore = null;
 
-      if (saved && saved.pre !== undefined) {
+      if (saved && hasNum(saved.pre)) {
         preScore = Math.min(10, Math.max(0, Number(saved.pre)));
-        postScore = Math.min(10, Math.max(0, Number(saved.post)));
-        formScore = Math.min(10, Math.max(0, Number(saved.formative || 8)));
-      } else {
-        // Derive dynamically from real student records in app
-        preScore = preQuiz ? preQuiz.score : (qAttempt ? Math.max(2, Math.round(qAttempt.score * 0.45)) : 4);
-        postScore = qAttempt ? qAttempt.score : (rubricSaved ? Math.min(10, Math.round(rubricSaved.scaledScore * 3.33)) : 8);
-        formScore = rubricSaved ? Math.min(10, Math.round(rubricSaved.scaledScore * 3.33 * 10) / 10) : 8;
+      } else if (preQuiz && hasNum(preQuiz.score)) {
+        preScore = Math.min(10, Math.max(0, Number(preQuiz.score)));
       }
 
-      const diff = postScore - preScore;
-      sumPre += preScore;
-      sumPost += postScore;
-      sumD += diff;
-      sumD2 += (diff * diff);
-      sumFormative += formScore;
+      if (saved && hasNum(saved.post)) {
+        postScore = Math.min(10, Math.max(0, Number(saved.post)));
+      } else if (qAttempt && hasNum(qAttempt.score)) {
+        postScore = Math.min(10, Math.max(0, Number(qAttempt.score)));
+      }
 
-      // Individual Normalized Gain: g = (post - pre) / (10 - pre)
-      const gain = (10 - preScore > 0) ? ((postScore - preScore) / (10 - preScore)) : 1.0;
+      if (saved && hasNum(saved.formative)) {
+        formScore = Math.min(10, Math.max(0, Number(saved.formative)));
+      } else if (rubricSaved && hasNum(rubricSaved.percentage)) {
+        formScore = Math.min(10, Math.round(((Number(rubricSaved.percentage)) / 10) * 10) / 10);
+      }
+
+      const hasPair = preScore !== null && postScore !== null;
+      const diff = hasPair ? Math.round((postScore - preScore) * 100) / 100 : null;
+      const gain = (hasPair && (10 - preScore) > 0)
+        ? Math.round(((postScore - preScore) / (10 - preScore)) * 100) / 100
+        : null;
 
       studentData.push({
         no: s.no,
@@ -95,59 +147,103 @@ const CARAnalytics = {
         pre: preScore,
         post: postScore,
         diff: diff,
-        gain: Math.round(gain * 100) / 100,
-        formative: Math.round(formScore * 10) / 10
+        gain: gain,
+        formative: formScore !== null ? Math.round(formScore * 10) / 10 : null
       });
     });
 
-    const meanPre = sumPre / n;
-    const meanPost = sumPost / n;
-    const meanDiff = sumD / n;
+    const preList = studentData.filter(st => st.pre !== null);
+    const postList = studentData.filter(st => st.post !== null);
+    const formList = studentData.filter(st => st.formative !== null);
+    const paired = studentData.filter(st => st.pre !== null && st.post !== null);
+    const n = paired.length;
+    const totalStudents = activeStudents.length;
+    const hasData = paired.length > 0;
 
-    // S.D. calculations
-    let sumSqDiffPre = 0, sumSqDiffPost = 0;
-    studentData.forEach(st => {
-      sumSqDiffPre += Math.pow(st.pre - meanPre, 2);
-      sumSqDiffPost += Math.pow(st.post - meanPost, 2);
-    });
-    const sdPre = Math.sqrt(sumSqDiffPre / (n - 1 || 1));
-    const sdPost = Math.sqrt(sumSqDiffPost / (n - 1 || 1));
+    const meanPreRaw = preList.length > 0 ? preList.reduce((acc, st) => acc + st.pre, 0) / preList.length : null;
+    const meanPostRaw = postList.length > 0 ? postList.reduce((acc, st) => acc + st.post, 0) / postList.length : null;
 
-    // t-test dependent: t = sumD / sqrt( (n*sumD2 - sumD^2) / (n - 1) )
-    const numerator = sumD;
-    const denominator = Math.sqrt(((n * sumD2) - (sumD * sumD)) / (n - 1 || 1));
-    const tVal = denominator > 0 ? (numerator / denominator) : 0;
+    let sdPreRaw = null;
+    if (preList.length >= 2 && meanPreRaw !== null) {
+      const sq = preList.reduce((acc, st) => acc + Math.pow(st.pre - meanPreRaw, 2), 0);
+      sdPreRaw = Math.sqrt(sq / (preList.length - 1));
+    }
 
-    // Overall Normalized Gain: <g> = (%Post - %Pre) / (100 - %Pre)
-    const pctPre = (meanPre / 10) * 100;
-    const pctPost = (meanPost / 10) * 100;
-    const overallGain = (100 - pctPre > 0) ? ((pctPost - pctPre) / (100 - pctPre)) : 0;
+    let sdPostRaw = null;
+    if (postList.length >= 2 && meanPostRaw !== null) {
+      const sq = postList.reduce((acc, st) => acc + Math.pow(st.post - meanPostRaw, 2), 0);
+      sdPostRaw = Math.sqrt(sq / (postList.length - 1));
+    }
 
-    // E1 / E2 Efficiency: E1 = Process / Total * 100, E2 = Product / Total * 100
-    const e1 = Math.round(((sumFormative / n) / 10) * 1000) / 10;
-    const e2 = Math.round(((meanPost) / 10) * 1000) / 10;
+    let meanDiffRaw = null, tValRaw = null, pValRaw = null, cohensDRaw = null, overallGainRaw = null;
+    if (paired.length > 0) {
+      const sumD = paired.reduce((acc, st) => acc + (st.post - st.pre), 0);
+      const sumD2 = paired.reduce((acc, st) => acc + Math.pow(st.post - st.pre, 2), 0);
+      meanDiffRaw = sumD / paired.length;
 
-    let gainLevel = 'ปานกลาง (Medium)';
-    if (overallGain >= 0.70) gainLevel = 'สูง (High)';
-    else if (overallGain < 0.30) gainLevel = 'ต่ำ (Low)';
+      const pairedMeanPre = paired.reduce((acc, st) => acc + st.pre, 0) / paired.length;
+      const pairedMeanPost = paired.reduce((acc, st) => acc + st.post, 0) / paired.length;
+      const pairedPctPre = (pairedMeanPre / 10) * 100;
+      const pairedPctPost = (pairedMeanPost / 10) * 100;
+      if (100 - pairedPctPre > 0) {
+        overallGainRaw = (pairedPctPost - pairedPctPre) / (100 - pairedPctPre);
+      }
+
+      if (paired.length >= 2) {
+        const varD = ((paired.length * sumD2) - (sumD * sumD)) / (paired.length * (paired.length - 1));
+        const sdDiff = varD > 0 ? Math.sqrt(varD) : 0;
+        const denom = Math.sqrt(((paired.length * sumD2) - (sumD * sumD)) / (paired.length - 1));
+        if (denom > 0 && sdDiff > 0) {
+          tValRaw = sumD / denom;
+          cohensDRaw = meanDiffRaw / sdDiff;
+          pValRaw = this._tTwoTailP(tValRaw, paired.length - 1);
+        }
+      }
+    }
+
+    const pctPreRaw = meanPreRaw !== null ? (meanPreRaw / 10) * 100 : null;
+    const pctPostRaw = meanPostRaw !== null ? (meanPostRaw / 10) * 100 : null;
+    const e1 = formList.length > 0
+      ? Math.round(((formList.reduce((acc, st) => acc + st.formative, 0) / formList.length) / 10) * 1000) / 10
+      : null;
+    const e2 = meanPostRaw !== null
+      ? Math.round((meanPostRaw / 10) * 1000) / 10
+      : null;
+
+    let gainLevel = 'ยังไม่มีข้อมูล';
+    if (overallGainRaw !== null) {
+      gainLevel = 'ปานกลาง (Medium)';
+      if (overallGainRaw >= 0.70) gainLevel = 'สูง (High)';
+      else if (overallGainRaw < 0.30) gainLevel = 'ต่ำ (Low)';
+    }
+
+    const overallGain = overallGainRaw !== null ? Math.round(overallGainRaw * 100) / 100 : null;
+    const pVal = pValRaw !== null ? Math.round(pValRaw * 10000) / 10000 : null;
 
     return {
       className,
       n,
-      meanPre: Math.round(meanPre * 100) / 100,
-      sdPre: Math.round(sdPre * 100) / 100,
-      meanPost: Math.round(meanPost * 100) / 100,
-      sdPost: Math.round(sdPost * 100) / 100,
-      meanDiff: Math.round(meanDiff * 100) / 100,
-      tVal: Math.round(tVal * 1000) / 1000,
-      pctPre: Math.round(pctPre * 10) / 10,
-      pctPost: Math.round(pctPost * 10) / 10,
-      overallGain: Math.round(overallGain * 100) / 100,
+      totalStudents,
+      hasData,
+      meanPre: meanPreRaw !== null ? Math.round(meanPreRaw * 100) / 100 : null,
+      sdPre: sdPreRaw !== null ? Math.round(sdPreRaw * 100) / 100 : null,
+      meanPost: meanPostRaw !== null ? Math.round(meanPostRaw * 100) / 100 : null,
+      sdPost: sdPostRaw !== null ? Math.round(sdPostRaw * 100) / 100 : null,
+      meanDiff: meanDiffRaw !== null ? Math.round(meanDiffRaw * 100) / 100 : null,
+      tVal: tValRaw !== null ? Math.round(tValRaw * 1000) / 1000 : null,
+      pVal,
+      cohensD: cohensDRaw !== null ? Math.round(cohensDRaw * 100) / 100 : null,
+      pctPre: pctPreRaw !== null ? Math.round(pctPreRaw * 10) / 10 : null,
+      pctPost: pctPostRaw !== null ? Math.round(pctPostRaw * 10) / 10 : null,
+      overallGain,
+      gainScore: overallGainRaw !== null ? Math.round(overallGainRaw * 1000) / 10 : null,
       gainLevel,
       e1,
       e2,
+      e1Score: e1,
+      e2Score: e2,
       eStandard: '80/80',
-      isEPassed: (e1 >= 80 && e2 >= 80),
+      isEPassed: (e1 !== null && e2 !== null && e1 >= 80 && e2 >= 80),
       students: studentData
     };
   },
@@ -162,6 +258,12 @@ const CARAnalytics = {
       schoolName: "โรงเรียนพะเยาพิทยาคม"
     };
 
+    const fmt = (v, suffix = '') => (v === null || v === undefined) ? 'ยังไม่มีข้อมูล' : `${v}${suffix}`;
+    const pText = this._formatPValue(stats.pVal);
+    const sigStars = (stats.pVal !== null && stats.pVal < 0.01) ? '**' : ((stats.pVal !== null && stats.pVal < 0.05) ? '*' : '');
+    const tDisplay = stats.tVal !== null ? `${stats.tVal}${sigStars}` : 'ยังไม่มีข้อมูล';
+    const diffDisplay = stats.meanDiff !== null ? `${stats.meanDiff >= 0 ? '+' : ''}${stats.meanDiff}` : 'ยังไม่มีข้อมูล';
+
     container.innerHTML = `
       <!-- Research Overview Hero Card -->
       <div style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); color: #ffffff; padding: 1.5rem 1.75rem; border-radius: var(--radius-md); margin-bottom: 1.5rem;">
@@ -174,10 +276,10 @@ const CARAnalytics = {
               ${this.escapeHtml(settings.researchTitle)}
             </h3>
             <div style="font-size: 0.85rem; color: #cbd5e1;">
-              กลุ่มเป้าหมาย: นักเรียนชั้น ${stats.className} ${this.escapeHtml(settings.schoolName)} (จำนวน N = ${stats.n} คน)
+              กลุ่มเป้าหมาย: นักเรียนชั้น ${stats.className} ${this.escapeHtml(settings.schoolName)} (จำนวนที่มีผลเปรียบเทียบ N = ${stats.n} / ทั้งหมด ${stats.totalStudents} คน)
             </div>
             <div style="margin-top: 8px; display: inline-block; background: rgba(254, 240, 138, 0.2); border: 1px solid #fde047; color: #fef08a; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem;">
-              📌 สถานะ: แผนการจัดการเรียนรู้เตรียมความพร้อม (ปล่อยว่างข้อมูลวิจัยไว้รอเก็บข้อมูลสอนจริง)
+              📌 สถานะ: ${stats.hasData ? 'คำนวณจากข้อมูลจริงที่มีในระบบ' : 'ยังไม่มีข้อมูลผลสอบจริง (ไม่สร้างตัวเลขจำลอง)'}
             </div>
           </div>
 
@@ -204,25 +306,25 @@ const CARAnalytics = {
         <div class="stat-card-clean" style="background: #ffffff; padding: 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
           <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);">คะแนนก่อนเรียน (Pre-test)</div>
           <div style="font-size: 1.85rem; font-weight: 800; color: #d97706; margin-top: 2px;">
-            ${stats.meanPre} <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">(S.D. ${stats.sdPre})</span>
+            ${fmt(stats.meanPre)} <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">${stats.sdPre !== null ? `(S.D. ${stats.sdPre})` : ''}</span>
           </div>
-          <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">คิดเป็นร้อยละ ${stats.pctPre}%</div>
+          <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px;">${stats.pctPre !== null ? `คิดเป็นร้อยละ ${stats.pctPre}%` : 'ยังไม่มีข้อมูล'}</div>
         </div>
 
         <!-- Card 2: Post-test Mean -->
         <div class="stat-card-clean" style="background: #ffffff; padding: 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); border-left: 4px solid #16a34a;">
           <div style="font-size: 0.78rem; font-weight: 700; color: #16a34a;">คะแนนหลังเรียน (Post-test)</div>
           <div style="font-size: 1.85rem; font-weight: 800; color: #16a34a; margin-top: 2px;">
-            ${stats.meanPost} <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">(S.D. ${stats.sdPost})</span>
+            ${fmt(stats.meanPost)} <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">${stats.sdPost !== null ? `(S.D. ${stats.sdPost})` : ''}</span>
           </div>
-          <div style="font-size: 0.78rem; color: #15803d; margin-top: 4px;">คิดเป็นร้อยละ ${stats.pctPost}% (+${Math.round((stats.pctPost - stats.pctPre)*10)/10}%)</div>
+          <div style="font-size: 0.78rem; color: #15803d; margin-top: 4px;">${stats.pctPost !== null ? `คิดเป็นร้อยละ ${stats.pctPost}%${stats.pctPre !== null ? ` (${stats.pctPost - stats.pctPre >= 0 ? '+' : ''}${Math.round((stats.pctPost - stats.pctPre)*10)/10}%)` : ''}` : 'ยังไม่มีข้อมูล'}</div>
         </div>
 
         <!-- Card 3: Normalized Gain -->
         <div class="stat-card-clean" style="background: #ffffff; padding: 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); border-left: 4px solid var(--ppk-blue);">
           <div style="font-size: 0.78rem; font-weight: 700; color: var(--ppk-blue);">พัฒนาการสัมพัทธ์ (&lt;g&gt;)</div>
           <div style="font-size: 1.85rem; font-weight: 800; color: var(--ppk-navy-dark); margin-top: 2px;">
-            ${stats.overallGain}
+            ${fmt(stats.overallGain)}
           </div>
           <div style="font-size: 0.78rem; color: var(--ppk-blue); font-weight: 600; margin-top: 4px;">ระดับพัฒนาการ: ${stats.gainLevel}</div>
         </div>
@@ -231,10 +333,10 @@ const CARAnalytics = {
         <div class="stat-card-clean" style="background: #ffffff; padding: 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
           <div style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);">ประสิทธิภาพนวัตกรรม (E1/E2)</div>
           <div style="font-size: 1.85rem; font-weight: 800; color: #7c3aed; margin-top: 2px;">
-            ${stats.e1} / ${stats.e2}
+            ${stats.e1 !== null || stats.e2 !== null ? `${fmt(stats.e1)} / ${fmt(stats.e2)}` : 'ยังไม่มีข้อมูล'}
           </div>
           <div style="font-size: 0.78rem; color: ${stats.isEPassed ? '#16a34a' : '#d97706'}; font-weight: 600; margin-top: 4px;">
-            ${stats.isEPassed ? '✅ สูงกว่าเกณฑ์ 80/80 ที่ตั้งไว้' : 'เทียบเท่าเกณฑ์'}
+            ${stats.e1 !== null && stats.e2 !== null ? (stats.isEPassed ? '✅ สูงกว่าเกณฑ์ 80/80 ที่ตั้งไว้' : 'ต่ำกว่าเกณฑ์ 80/80') : 'ยังไม่มีข้อมูล'}
           </div>
         </div>
       </div>
@@ -246,7 +348,7 @@ const CARAnalytics = {
             ตารางที่ 1: การเปรียบเทียบผลสัมฤทธิ์ก่อนเรียนและหลังเรียนด้วย t-test Dependent (N = ${stats.n})
           </h4>
           <span style="font-size: 0.8rem; color: var(--text-muted);">
-            ระดับนัยสำคัญทางสถิติ: ** p &lt; .01
+            ${stats.pVal !== null ? 'คำนวณจากข้อมูลจริง' : 'ยังไม่มีข้อมูลสำหรับคำนวณ t-test'}
           </span>
         </div>
 
@@ -268,24 +370,26 @@ const CARAnalytics = {
               <td>ก่อนเรียน (Pre-test)</td>
               <td style="text-align: center;">${stats.n}</td>
               <td style="text-align: center;">10</td>
-              <td style="text-align: center; font-weight: 600;">${stats.meanPre}</td>
-              <td style="text-align: center;">${stats.sdPre}</td>
-              <td rowspan="2" style="text-align: center; font-weight: 700; vertical-align: middle; color: #16a34a;">+${stats.meanDiff}</td>
-              <td rowspan="2" style="text-align: center; font-weight: 800; vertical-align: middle; color: var(--ppk-blue); font-size: 1rem;">${stats.tVal}**</td>
-              <td rowspan="2" style="text-align: center; font-weight: 700; vertical-align: middle; color: #16a34a;">&lt; .001</td>
+              <td style="text-align: center; font-weight: 600;">${fmt(stats.meanPre)}</td>
+              <td style="text-align: center;">${fmt(stats.sdPre)}</td>
+              <td rowspan="2" style="text-align: center; font-weight: 700; vertical-align: middle; color: #16a34a;">${diffDisplay}</td>
+              <td rowspan="2" style="text-align: center; font-weight: 800; vertical-align: middle; color: var(--ppk-blue); font-size: 1rem;">${tDisplay}</td>
+              <td rowspan="2" style="text-align: center; font-weight: 700; vertical-align: middle; color: #16a34a;">${this.escapeHtml(pText)}</td>
             </tr>
             <tr>
               <td>หลังเรียน (Post-test)</td>
               <td style="text-align: center;">${stats.n}</td>
               <td style="text-align: center;">10</td>
-              <td style="text-align: center; font-weight: 700; color: #16a34a;">${stats.meanPost}</td>
-              <td style="text-align: center;">${stats.sdPost}</td>
+              <td style="text-align: center; font-weight: 700; color: #16a34a;">${fmt(stats.meanPost)}</td>
+              <td style="text-align: center;">${fmt(stats.sdPost)}</td>
             </tr>
           </tbody>
         </table>
 
         <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-top: 0.75rem; background: var(--bg-subtle); padding: 0.75rem 1rem; border-radius: 4px;">
-          <strong>บทสรุปเชิงสถิติ:</strong> นักเรียนชั้น ${stats.className} ที่ได้รับการจัดการเรียนรู้ดนตรีด้วยรูปแบบ T-PACE มีผลสัมฤทธิ์ทางการเรียนหลังเรียน (&macr;X = ${stats.meanPost}, S.D. = ${stats.sdPost}) สูงกว่าก่อนเรียน (&macr;X = ${stats.meanPre}, S.D. = ${stats.sdPre}) อย่างมีนัยสำคัญทางสถิติที่ระดับ .01 (t = ${stats.tVal}, p &lt; .001) และมีค่าพัฒนาการสัมพัทธ์ &lt;g&gt; เท่ากับ ${stats.overallGain} จัดอยู่ในระดับ "${stats.gainLevel}"
+          ${stats.hasData
+            ? `<strong>บทสรุปเชิงสถิติ:</strong> นักเรียนชั้น ${stats.className} (N = ${stats.n}) มีคะแนนหลังเรียนเฉลี่ย (&macr;X = ${fmt(stats.meanPost)}, S.D. = ${fmt(stats.sdPost)}) เปรียบเทียบกับก่อนเรียน (&macr;X = ${fmt(stats.meanPre)}, S.D. = ${fmt(stats.sdPre)}) ผลต่างเฉลี่ย ${diffDisplay} (${stats.tVal !== null ? `t = ${stats.tVal}, p = ${this.escapeHtml(pText)}` : 'ยังไม่สามารถคำนวณค่า t/p ได้'}) และมีค่าพัฒนาการสัมพัทธ์ &lt;g&gt; เท่ากับ ${fmt(stats.overallGain)} (${stats.gainLevel})`
+            : `<strong>บทสรุปเชิงสถิติ:</strong> ยังไม่มีข้อมูลคะแนนก่อนเรียนและหลังเรียนสำหรับคำนวณสถิติของชั้น ${stats.className}`}
         </div>
       </div>
 
@@ -321,16 +425,16 @@ const CARAnalytics = {
                   <td style="font-weight: 600;">${this.escapeHtml(st.name)}</td>
                   <td style="text-align: center;">
                     ${this.isEditingScores ? `
-                      <input type="number" min="0" max="10" step="0.5" class="form-input car-score-input" data-student-id="${st.id}" data-field="pre" value="${st.pre}" style="width: 60px; padding: 2px 4px; text-align: center; font-size: 0.82rem;">
-                    ` : st.pre}
+                      <input type="number" min="0" max="10" step="0.5" class="form-input car-score-input" data-student-id="${st.id}" data-field="pre" value="${st.pre !== null ? st.pre : ''}" placeholder="-" style="width: 60px; padding: 2px 4px; text-align: center; font-size: 0.82rem;">
+                    ` : fmt(st.pre)}
                   </td>
                   <td style="text-align: center; font-weight: 700; color: #16a34a;">
                     ${this.isEditingScores ? `
-                      <input type="number" min="0" max="10" step="0.5" class="form-input car-score-input" data-student-id="${st.id}" data-field="post" value="${st.post}" style="width: 60px; padding: 2px 4px; text-align: center; font-size: 0.82rem; color: #16a34a; font-weight: 700;">
-                    ` : st.post}
+                      <input type="number" min="0" max="10" step="0.5" class="form-input car-score-input" data-student-id="${st.id}" data-field="post" value="${st.post !== null ? st.post : ''}" placeholder="-" style="width: 60px; padding: 2px 4px; text-align: center; font-size: 0.82rem; color: #16a34a; font-weight: 700;">
+                    ` : fmt(st.post)}
                   </td>
-                  <td style="text-align: center; font-weight: 600; color: #0284c7;">+${st.diff}</td>
-                  <td style="text-align: center; font-weight: 700;">${st.gain}</td>
+                  <td style="text-align: center; font-weight: 600; color: #0284c7;">${st.diff !== null ? (st.diff >= 0 ? '+' + st.diff : st.diff) : 'ยังไม่มีข้อมูล'}</td>
+                  <td style="text-align: center; font-weight: 700;">${fmt(st.gain)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -349,9 +453,14 @@ const CARAnalytics = {
       inputs.forEach(inp => {
         const sid = inp.getAttribute('data-student-id');
         const field = inp.getAttribute('data-field');
-        const val = parseFloat(inp.value) || 0;
+        const raw = String(inp.value ?? '').trim();
         if (!scores[sid]) scores[sid] = {};
-        scores[sid][field] = val;
+        if (raw === '') {
+          delete scores[sid][field];
+        } else {
+          const val = parseFloat(raw);
+          if (Number.isFinite(val)) scores[sid][field] = val;
+        }
       });
 
       Store.saveResearchScores(this.activeClass, scores);
@@ -366,9 +475,10 @@ const CARAnalytics = {
 
   exportCSV() {
     const stats = this.computeStats(this.activeClass);
+    const cell = (v) => (v === null || v === undefined) ? 'ยังไม่มีข้อมูล' : v;
     let csv = "เลขที่,รหัสนักเรียน,ชื่อ-สกุล,ก่อนเรียน(10),หลังเรียน(10),ผลต่าง,Normalized_Gain\n";
     stats.students.forEach(st => {
-      csv += `${st.no},${st.id},"${st.name}",${st.pre},${st.post},${st.diff},${st.gain}\n`;
+      csv += `${st.no},${st.id},"${st.name}",${cell(st.pre)},${cell(st.post)},${cell(st.diff)},${cell(st.gain)}\n`;
     });
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -421,7 +531,12 @@ const CARAnalytics = {
     const directorRole = (settings && settings.directorRole) || 'ผู้อำนวยการโรงเรียนพะเยาพิทยาคม';
     const researchTitle = (settings && settings.researchTitle) || 'การพัฒนาระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE เพื่อส่งเสริมผลสัมฤทธิ์ทางการเรียนและทักษะการปฏิบัติเครื่องดนตรีคาลิมบ้า สำหรับนักเรียนชั้นมัธยมศึกษาปีที่ 1';
     const appName = (settings && settings.appName) || 'MusicSmart';
-    const term = (settings && settings.academicTerm) || 'ภาคเรียนที่ 2 ปีการศึกษา 2569';
+    const term = Store.getSemesterInfo().label;
+
+    const fmt = (v, suffix = '') => (v === null || v === undefined) ? 'ยังไม่มีข้อมูล' : `${v}${suffix}`;
+    const pText = this._formatPValue(stats.pVal);
+    const sigStars = (stats.pVal !== null && stats.pVal < 0.01) ? '**' : ((stats.pVal !== null && stats.pVal < 0.05) ? '*' : '');
+    const tDisplay = stats.tVal !== null ? `${stats.tVal}${sigStars}` : 'ยังไม่มีข้อมูล';
 
     return `
       <div class="official-paperwork" style="max-width: 900px; margin: 0 auto; font-family: 'Sarabun', serif; line-height: 1.7; color: #111827;">
@@ -438,7 +553,7 @@ const CARAnalytics = {
           </div>
           <div style="font-size: 0.95rem; margin-top: 0.65rem; color: #334155;">
             ผู้วิจัย: <strong>${this.escapeHtml(instructor.name)}</strong> (${this.escapeHtml(instructor.role)})<br>
-            กลุ่มเป้าหมาย: นักเรียนชั้นมัธยมศึกษาปีที่ 1 (${this.escapeHtml(className)}) จำนวน ${stats.n} คน<br>
+            กลุ่มเป้าหมาย: นักเรียนชั้น${this.escapeHtml((Store.getGradeInfo(Store.gradeKeyOf(className)) || {}).level || '')} (${this.escapeHtml(className)}) จำนวน ${stats.n} คน<br>
             ${this.escapeHtml(deptName)} • ${this.escapeHtml(schoolName)} • ${this.escapeHtml(term)}
           </div>
         </div>
@@ -458,7 +573,7 @@ const CARAnalytics = {
             3) เพื่อประเมินทักษะการปฏิบัติเครื่องดนตรีคาลิมบ้า (P) และคุณลักษณะอันพึงประสงค์ (A) ของนักเรียน
           </p>
           <p style="text-indent: 2.5rem; margin-bottom: 0.75rem;">
-            <strong>1.3 สมมติฐานการวิจัย:</strong> นักเรียนชั้นมัธยมศึกษาปีที่ 1 ที่ได้รับการจัดการเรียนรู้ตามรูปแบบ T-PACE ร่วมกับแอปพลิเคชัน ${this.escapeHtml(appName)} มีผลสัมฤทธิ์ทางการเรียนหลังเรียนสูงกว่าก่อนเรียนอย่างมีนัยสำคัญทางสถิติที่ระดับ .05 และมีประสิทธิภาพของนวัตกรรมไม่ต่ำกว่าเกณฑ์ 80/80
+            <strong>1.3 สมมติฐานการวิจัย:</strong> นักเรียนชั้น${this.escapeHtml((Store.getGradeInfo(Store.gradeKeyOf(className)) || {}).level || '')} ที่ได้รับการจัดการเรียนรู้ตามรูปแบบ T-PACE ร่วมกับแอปพลิเคชัน ${this.escapeHtml(appName)} มีผลสัมฤทธิ์ทางการเรียนหลังเรียนสูงกว่าก่อนเรียนอย่างมีนัยสำคัญทางสถิติที่ระดับ .05 และมีประสิทธิภาพของนวัตกรรมไม่ต่ำกว่าเกณฑ์ 80/80
           </p>
         </div>
 
@@ -485,7 +600,7 @@ const CARAnalytics = {
             บทที่ 3 วิธีดำเนินการวิจัย (Methodology)
           </h2>
           <p style="text-indent: 2.5rem; margin-bottom: 0.5rem;">
-            <strong>กลุ่มเป้าหมาย:</strong> นักเรียนชั้นมัธยมศึกษาปีที่ 1/${className.replace('ม.1/', '')} โรงเรียนพะเยาพิทยาคม ภาคเรียนที่ 2 ปีการศึกษา 2569 จำนวน ${stats.n} คน
+            <strong>กลุ่มเป้าหมาย:</strong> นักเรียนชั้นมัธยมศึกษาปีที่ ${this.escapeHtml(className.replace('ม.', ''))} ${this.escapeHtml((settings && settings.schoolName) || 'โรงเรียนพะเยาพิทยาคม')} ${this.escapeHtml(Store.getSemesterInfo().label)} จำนวน ${stats.n} คน
           </p>
           <p style="text-indent: 2.5rem; margin-bottom: 0.5rem;">
             <strong>เครื่องมือที่ใช้ในการวิจัย:</strong> 1) แผนการจัดการเรียนรู้เชิงรุก T-PACE จำนวน 20 คาบ 2) เว็บแอปพลิเคชัน MusicSmart และเครื่องตั้งเสียงดิจิทัล 3) แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียนรู้ 4) แบบประเมินทักษะปฏิบัติเครื่องดนตรีรูบริกเมทริกซ์ 4 ด้าน
@@ -523,23 +638,23 @@ const CARAnalytics = {
                   <td style="padding: 8px;">ก่อนเรียน (Pre-test)</td>
                   <td>${stats.n}</td>
                   <td>10</td>
-                  <td>${stats.meanPre}</td>
-                  <td>${stats.sdPre}</td>
-                  <td rowspan="2" style="font-weight: 700; vertical-align: middle;">${stats.tVal}**</td>
-                  <td rowspan="2" style="font-weight: 700; vertical-align: middle;">&lt; .001</td>
-                  <td rowspan="2" style="font-weight: 700; vertical-align: middle; color: #16a34a;">${stats.gainScore}%</td>
+                  <td>${fmt(stats.meanPre)}</td>
+                  <td>${fmt(stats.sdPre)}</td>
+                  <td rowspan="2" style="font-weight: 700; vertical-align: middle;">${tDisplay}</td>
+                  <td rowspan="2" style="font-weight: 700; vertical-align: middle;">${this.escapeHtml(pText)}</td>
+                  <td rowspan="2" style="font-weight: 700; vertical-align: middle; color: #16a34a;">${fmt(stats.gainScore, '%')}</td>
                 </tr>
                 <tr style="border-bottom: 2px solid #000;">
                   <td style="padding: 8px;">หลังเรียน (Post-test)</td>
                   <td>${stats.n}</td>
                   <td>10</td>
-                  <td style="font-weight: 700; color: #1e3a8a;">${stats.meanPost}</td>
-                  <td>${stats.sdPost}</td>
+                  <td style="font-weight: 700; color: #1e3a8a;">${fmt(stats.meanPost)}</td>
+                  <td>${fmt(stats.sdPost)}</td>
                 </tr>
               </tbody>
             </table>
             <div style="font-size: 0.8rem; text-align: right; margin-top: 4px; color: #475569;">
-              ** มีนัยสำคัญทางสถิติที่ระดับ .01 | ระดับพัฒนาการ: ${stats.gainLevel}
+              ระดับพัฒนาการ: ${stats.gainLevel}
             </div>
           </div>
 
@@ -560,14 +675,14 @@ const CARAnalytics = {
                 <tr>
                   <td style="padding: 8px; text-align: left;">ประสิทธิภาพระหว่างกระบวนการเรียนรู้ (E1)</td>
                   <td>80.00%</td>
-                  <td style="font-weight: 700; color: #1e3a8a;">${stats.e1Score}%</td>
-                  <td style="color: #16a34a; font-weight: 600;">สูงกว่าเกณฑ์ที่กำหนด</td>
+                  <td style="font-weight: 700; color: #1e3a8a;">${fmt(stats.e1Score, '%')}</td>
+                  <td style="color: #16a34a; font-weight: 600;">${stats.e1Score !== null ? (stats.e1Score >= 80 ? 'สูงกว่าเกณฑ์ที่กำหนด' : 'ต่ำกว่าเกณฑ์ที่กำหนด') : 'ยังไม่มีข้อมูล'}</td>
                 </tr>
                 <tr style="border-bottom: 2px solid #000;">
                   <td style="padding: 8px; text-align: left;">ประสิทธิภาพผลลัพธ์หลังการจัดการเรียนรู้ (E2)</td>
                   <td>80.00%</td>
-                  <td style="font-weight: 700; color: #1e3a8a;">${stats.e2Score}%</td>
-                  <td style="color: #16a34a; font-weight: 600;">สูงกว่าเกณฑ์ที่กำหนด</td>
+                  <td style="font-weight: 700; color: #1e3a8a;">${fmt(stats.e2Score, '%')}</td>
+                  <td style="color: #16a34a; font-weight: 600;">${stats.e2Score !== null ? (stats.e2Score >= 80 ? 'สูงกว่าเกณฑ์ที่กำหนด' : 'ต่ำกว่าเกณฑ์ที่กำหนด') : 'ยังไม่มีข้อมูล'}</td>
                 </tr>
               </tbody>
             </table>
@@ -580,13 +695,15 @@ const CARAnalytics = {
             บทที่ 5 สรุปผล อภิปรายผล และข้อเสนอแนะ (Conclusion & Discussion)
           </h2>
           <p style="text-indent: 2.5rem; margin-bottom: 0.75rem;">
-            <strong>5.1 สรุปผลการวิจัย:</strong> ผลสัมฤทธิ์ทางการเรียนดนตรีของนักเรียนชั้นมัธยมศึกษาปีที่ 1 หลังเรียนสูงกว่าก่อนเรียนอย่างมีนัยสำคัญทางสถิติที่ระดับ .01 โดยมีคะแนนเฉลี่ยเพิ่มขึ้นจาก ${stats.meanPre} คะแนน เป็น ${stats.meanPost} คะแนน มีพัฒนาการสัมพัทธ์คิดเป็นร้อยละ ${stats.gainScore}% อยู่ในระดับ ${stats.gainLevel} และประสิทธิภาพของนวัตกรรมเท่ากับ ${stats.e1Score}/${stats.e2Score} ซึ่งสูงกว่าเกณฑ์มาตรฐาน 80/80 ที่กำหนดไว้ เป็นไปตามสมมติฐานการวิจัยทุกประการ
+            ${stats.hasData
+              ? `<strong>5.1 สรุปผลการวิจัย:</strong> ผลสัมฤทธิ์ทางการเรียนดนตรีของนักเรียนชั้น${this.escapeHtml((Store.getGradeInfo(Store.gradeKeyOf(className)) || {}).level || '')} มีคะแนนเฉลี่ยก่อนเรียน ${fmt(stats.meanPre)} คะแนน และหลังเรียน ${fmt(stats.meanPost)} คะแนน (${stats.tVal !== null ? `t = ${stats.tVal}, p = ${this.escapeHtml(pText)}` : 'ยังไม่มีข้อมูล t-test'}) มีพัฒนาการสัมพัทธ์คิดเป็นร้อยละ ${fmt(stats.gainScore, '%')} อยู่ในระดับ ${stats.gainLevel} และประสิทธิภาพของนวัตกรรมเท่ากับ ${fmt(stats.e1Score)}/${fmt(stats.e2Score)}`
+              : `<strong>5.1 สรุปผลการวิจัย:</strong> ยังไม่มีข้อมูลคะแนนก่อนเรียนและหลังเรียนสำหรับสรุปผลการวิจัยของชั้น ${this.escapeHtml(className)}`}
           </p>
           <p style="text-indent: 2.5rem; margin-bottom: 0.75rem;">
             <strong>5.2 การอภิปรายผล:</strong> การที่ผู้เรียนมีผลสัมฤทธิ์และทักษะปฏิบัติสูงขึ้น เนื่องจากการนำแอปพลิเคชัน ${this.escapeHtml(appName)} มาช่วยในขั้น Practice & Precision ทำให้ผู้เรียนได้รับผลย้อนกลับทันที (Instant Feedback) จากเครื่องเทียบเสียง และสามารถฝึกซ้อมซ้ำได้ตามความพร้อมของตนเอง ประกอบกับกระบวนการรวมวงในขั้น Collaboration ช่วยสร้างปฏิสัมพันธ์เชิงบวกระหว่างผู้เรียน
           </p>
           <p style="text-indent: 2.5rem; margin-bottom: 0.75rem;">
-            <strong>5.3 ข้อเสนอแนะ:</strong> ควรขยายผลการนำระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE ไปปรับใช้กับระดับชั้นมัธยมศึกษาปีที่ 2 และ 3 รวมถึงส่งเสริมให้มีการบูรณาการบทเพลงท้องถิ่นล้านนากับเครื่องดนตรีประเภทอื่นอย่างต่อเนื่อง
+            <strong>5.3 ข้อเสนอแนะ:</strong> ควรขยายผลการนำระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE ไปปรับใช้กับระดับชั้นอื่น ๆ รวมถึงส่งเสริมให้มีการบูรณาการบทเพลงท้องถิ่นล้านนากับเครื่องดนตรีประเภทอื่นอย่างต่อเนื่อง
           </p>
         </div>
 

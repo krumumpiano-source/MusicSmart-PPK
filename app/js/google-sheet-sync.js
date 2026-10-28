@@ -17,7 +17,9 @@ const GoogleSheetSync = {
     autoSync: true,
     lastSyncAt: null,
     syncCount: 0,
-    syncStatus: 'synced' // 'unconfigured' | 'synced' | 'pending' | 'syncing' | 'error'
+    syncStatus: 'synced', // 'unconfigured' | 'synced' | 'pending' | 'syncing' | 'error'
+    gasVersion: '',       // เวอร์ชันโค้ดที่ Apps Script ที่ deploy อยู่รายงานกลับมา (ว่าง = ยังไม่เคยตรวจ/โค้ดเก่าที่ไม่รายงาน)
+    gasOutdated: false    // true = เวอร์ชันไม่ตรงกับที่แอปคาดหวัง → ต้องอัปเดต GAS
   },
 
   isFlushing: false,
@@ -275,7 +277,7 @@ const GoogleSheetSync = {
       // มีไฟล์กำลังอัปโหลด: StudentUpload จะส่งงานพร้อมไฟล์เมื่ออัปโหลดเสร็จ
       if (subData.pendingUploadId) return null;
       return StudentOutbox.enqueue('assignment', StudentOutbox.assignmentKey(className, period), {
-        period: Number(period), content: String(subData.content || '').slice(0, 5000), url: String(subData.url || '').slice(0, 500),
+        period: Number(period), content: (typeof KalimbaDevices !== 'undefined' ? KalimbaDevices.tagContent(subData.content, className, period, studentId, 5000) : String(subData.content || '').slice(0, 5000)), url: String(subData.url || '').slice(0, 500),
         submissionType: subData.submissionType || 'text', title: subData.songTitle || subData.title || ''
       });
     }
@@ -482,6 +484,37 @@ const GoogleSheetSync = {
   },
 
   /**
+   * เวอร์ชันโค้ด Apps Script ที่แอปนี้คาดหวัง — อ่านจากเทมเพลต APPS_SCRIPT_CODE (ซึ่งซิงค์จาก google_apps_script.js)
+   * จึงเป็นแหล่งเดียวกับไฟล์จริงเสมอ ไม่ต้องจำแก้สองที่
+   */
+  expectedGasVersion() {
+    const m = /var GAS_VERSION = '([^']+)'/.exec(this.APPS_SCRIPT_CODE || '');
+    return m ? m[1] : '';
+  },
+
+  /** เทียบเวอร์ชันที่ GAS รายงาน (reply.gasVersion) กับที่แอปคาดหวัง; ไม่รายงาน = โค้ดเก่า */
+  evaluateGasVersion(reply) {
+    const expected = this.expectedGasVersion();
+    const actual = (reply && reply.gasVersion) ? String(reply.gasVersion) : '';
+    if (!expected) return { ok: true, expected, actual, message: '' };
+    if (actual === expected) return { ok: true, expected, actual, message: 'Apps Script เป็นเวอร์ชันล่าสุด (' + actual + ')' };
+    return {
+      ok: false, expected, actual,
+      message: 'ต้องอัปเดต GAS — Apps Script ที่ deploy อยู่เป็นเวอร์ชัน ' + (actual || 'เก่า (ไม่รายงานเวอร์ชัน)') + ' แต่แอปต้องการ ' + expected + ' (วางโค้ดใหม่ด้วยปุ่มคัดลอก แล้ว Deploy → Manage deployments → New version หรือใช้ auto-deploy ตาม docs/GAS_AUTODEPLOY_TH.md)'
+    };
+  },
+
+  /** ตรวจเวอร์ชัน GAS เงียบ ๆ (เมื่อมี URL + ออนไลน์) — เรียกตอนครูเปิดหน้าต่างซิงค์ ไม่ throw */
+  async checkGasVersion() {
+    try {
+      const cfg = this.getConfig();
+      if (!cfg.webAppUrl || (typeof navigator !== 'undefined' && navigator.onLine === false)) return null;
+      const r = await this.testConnection(cfg.webAppUrl);
+      return r;
+    } catch (e) { return null; }
+  },
+
+  /**
    * ทดสอบการเชื่อมต่อ URL Web App ของ Google Sheets
    */
   async testConnection(testUrl) {
@@ -498,8 +531,9 @@ const GoogleSheetSync = {
 
       this.saveConfig({ webAppUrl: url });
       const reply = await this.postJSON(url, payload);
-      this.saveConfig({ syncStatus: 'synced', lastError: '' });
-      return { success: true, message: reply.message || 'เชื่อมต่อกับ Google Apps Script สำเร็จ' };
+      const ver = this.evaluateGasVersion(reply);
+      this.saveConfig({ syncStatus: 'synced', lastError: '', gasVersion: ver.actual, gasOutdated: !ver.ok });
+      return { success: true, gasOutdated: !ver.ok, gasVersion: ver.actual, expectedGasVersion: ver.expected, message: (reply.message || 'เชื่อมต่อกับ Google Apps Script สำเร็จ') + (ver.ok ? '' : ' — ' + ver.message) };
     } catch (e) {
       return { success: false, message: e.message || 'ไม่สามารถติดต่อ Web App ได้' };
     }
@@ -557,6 +591,12 @@ const GoogleSheetSync = {
         headerPill.style.borderColor = '#fecaca';
         headerPill.style.color = '#991b1b';
         headerPill.style.background = '#fef2f2';
+      } else if (cfg.gasOutdated) {
+        headerPill.innerHTML = `⚠️ ต้องอัปเดต GAS`;
+        headerPill.title = 'โค้ด Apps Script ที่ deploy อยู่ไม่ตรงกับแอป (เวอร์ชัน ' + (cfg.gasVersion || 'เก่า') + ') — เปิดหน้าต่างซิงค์เพื่อดูวิธีอัปเดต';
+        headerPill.style.borderColor = '#fed7aa';
+        headerPill.style.color = '#9a3412';
+        headerPill.style.background = '#fff7ed';
       } else if (pendingCount > 0) {
         headerPill.innerHTML = `⏳ Google Sheet (${pendingCount})`;
         headerPill.style.borderColor = '#fde68a';
@@ -632,6 +672,7 @@ const GoogleSheetSync = {
     if (box) box.style.display = 'none';
     this.updateUIStatus();
     modal.classList.add('active');
+    if (!this._gasChecked) { this._gasChecked = true; this.checkGasVersion(); }
   },
 
   closeModal() {
@@ -887,6 +928,11 @@ const GoogleSheetSync = {
  * ============================================================================
  */
 
+// เวอร์ชันโค้ดฝั่ง Apps Script — แอปเทียบค่านี้กับค่าที่แอปคาดหวัง (ผ่าน action 'ping')
+// ถ้าไม่ตรง/ไม่มี แอปจะแจ้งครูว่า "ต้องอัปเดต GAS". ⚠ เปลี่ยนค่านี้ทุกครั้งที่แก้โค้ดไฟล์นี้ (รูปแบบ ปี.เดือน.วัน-ลำดับ)
+// แล้วรัน: python tools/sync_apps_script_template.py  (ให้ปุ่ม 1-Click Copy ในแอปตรงกัน) — ดู docs/GAS_AUTODEPLOY_TH.md
+var GAS_VERSION = '2026.10.28-2';
+
 function doPost(e) {
   // อัปโหลดชิ้นไฟล์นักเรียน: ไม่ต้องรอ Lock รวม (แต่ละชิ้นเขียนไฟล์ของตัวเอง)
   var rawPeek = (e && e.postData && e.postData.contents) ? e.postData.contents : '';
@@ -897,13 +943,15 @@ function doPost(e) {
     if (up && UPLOAD_ACTIONS.indexOf(up.action) !== -1) {
       if (up.action === 'studentUploadChunk') return jsonOut(handleUploadAction(SpreadsheetApp.getActiveSpreadsheet(), up));
       var ulock = LockService.getScriptLock();
-      ulock.tryLock(20000);
-      try { return jsonOut(handleUploadAction(SpreadsheetApp.getActiveSpreadsheet(), up)); } finally { ulock.releaseLock(); }
+      var ugot = ulock.tryLock(20000);
+      if (!ugot) return jsonOut({ status: 'error', message: 'ระบบกำลังยุ่ง ลองใหม่อีกครั้ง' });
+      try { return jsonOut(handleUploadAction(SpreadsheetApp.getActiveSpreadsheet(), up)); } finally { if (ugot) ulock.releaseLock(); }
     }
   }
   var lock = LockService.getScriptLock();
   // รอ Lock สูงสุด 20 วินาทีเพื่อป้องกันการเขียนข้อมูลชนกันพร้อมกัน
-  lock.tryLock(20000);
+  var gotLock = lock.tryLock(20000);
+  if (!gotLock) return jsonOut({ status: 'error', message: 'ระบบกำลังยุ่ง ลองใหม่อีกครั้ง' });
   try {
     var rawText = (e && e.postData && e.postData.contents) ? e.postData.contents : "{}";
     var payload = JSON.parse(rawText);
@@ -943,6 +991,7 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({
         status: 'success',
         message: 'เชื่อมต่อ Google Sheet สำเร็จ: ' + ss.getName(),
+        gasVersion: GAS_VERSION,
         serverTime: new Date().toISOString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -966,6 +1015,12 @@ function doPost(e) {
     if (action === 'post_supervision') return jsonOut(postSupervision(ss, payload));
     if (action === 'post_notices') return jsonOut(postNotices(ss, payload.items || []));
     if (action === 'set_due_date') return jsonOut(setDueDate(ss, payload));
+    if (action === 'exam_upload_bank') return jsonOut(examUploadBank_(ss, payload));
+    if (action === 'exam_open') return jsonOut(examOpen_(ss, payload));
+    if (action === 'exam_close') return jsonOut(examClose_(ss, payload));
+    if (action === 'exam_sessions') return jsonOut(examListSessions_(ss, payload));
+    if (action === 'exam_results') return jsonOut(examResults_(ss, payload));
+    if (action === 'exam_grant_retake') return jsonOut(examGrantRetake_(ss, payload));
     if (action === 'upload_quiz_bank') return jsonOut(uploadQuizBank(ss, payload.units || []));
     if (action === 'fetch_student_submissions') return jsonOut(fetchStudentSubmissions(ss, Number(payload.since || 0), Number(payload.limit || 500)));
 
@@ -1001,7 +1056,7 @@ function doPost(e) {
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   } finally {
-    lock.releaseLock();
+    if (gotLock) lock.releaseLock();
   }
 }
 
@@ -1275,7 +1330,7 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices', 'studentProgress', 'uploadProfileAvatar', 'fetchProfileAvatars'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices', 'studentProgress', 'uploadProfileAvatar', 'fetchProfileAvatars', 'studentExamStatus', 'studentExamStart', 'studentExamSubmit'];
 var STUDENT_MAX_BODY = 350000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
 var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
 var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
@@ -1376,6 +1431,9 @@ function handleStudentPublicAction(ss, payload) {
   }
   if (payload.action === 'studentSubmit') return studentSubmit_(ss, payload);
   if (payload.action === 'studentQuizGet') return studentQuizGet_(ss, payload);
+  if (payload.action === 'studentExamStatus') return studentExamStatus_(ss, payload);
+  if (payload.action === 'studentExamStart') return studentExamStart_(ss, payload);
+  if (payload.action === 'studentExamSubmit') return studentExamSubmit_(ss, payload);
   if (payload.action === 'studentTasks') return studentTasks_(ss, payload);
   if (payload.action === 'studentProgress') return studentProgress_(ss, payload);
   if (payload.action === 'studentNotices') return studentNotices_(ss, payload);
@@ -1603,8 +1661,16 @@ function studentSubmit_(ss, payload) {
 
   var inbox = getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS);
   var existing = {};
+  var quizCounts = {};
   var vals = inbox.getDataRange().getValues();
-  for (var r = 1; r < vals.length; r++) existing[cleanId_(vals[r][3]) + '|' + String(vals[r][2])] = true;
+  for (var r = 1; r < vals.length; r++) {
+    var rowSid = cleanId_(vals[r][3]);
+    existing[rowSid + '|' + String(vals[r][2])] = true;
+    if (rowSid === sid && String(vals[r][5]) === 'quiz' && String(vals[r][18]) !== 'true' && vals[r][18] !== true) {
+      var uKey = Number(vals[r][6]);
+      if (uKey >= 1) quizCounts[uKey] = (quizCounts[uKey] || 0) + 1;
+    }
+  }
 
   var cache = CacheService.getScriptCache();
   var rlKey = 'stu_submit_' + sid + '_' + Math.floor(Date.now() / 3600000);
@@ -1618,20 +1684,30 @@ function studentSubmit_(ss, payload) {
     var cid = it && it.clientId ? String(it.clientId) : '';
     var err = validateSubmission_(it);
     if (err) { rejected.push({ clientId: cid, reason: err }); continue; }
-    if (existing[sid + '|' + cid]) { duplicates.push(cid); continue; }  // ส่งซ้ำ = สำเร็จ (idempotent)
+    if (existing[sid + '|' + cid]) { duplicates.push(cid); continue; }  // ส่งซ้ำด้วย clientId เดิม = สำเร็จ (idempotent)
     if (used >= STUDENT_SUBMIT_PER_HOUR) { rejected.push({ clientId: cid, reason: 'rate_limited' }); continue; }
     used++;
     var d = it.data || {};
     var now = new Date();
     if (it.kind === 'quiz_answers') {
-      var g = gradeQuiz_(ss, Number(d.unitNo), d.answers);
-      if (!g) { used--; rejected.push({ clientId: cid, reason: 'no_quiz' }); continue; }
+      var uNo = Number(d.unitNo);
       var practice = !!d.practice;
-      inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, practice ? 'practice_quiz' : 'quiz', Number(d.unitNo),
+      if (!practice) {
+        var maxQuiz = quizAllowedAttempts_(ss, sid, uNo);
+        if ((quizCounts[uNo] || 0) >= maxQuiz) {
+          used--;
+          rejected.push({ clientId: cid, reason: 'duplicate_quiz' });
+          continue;
+        }
+      }
+      var g = gradeQuiz_(ss, uNo, d.answers);
+      if (!g) { used--; rejected.push({ clientId: cid, reason: 'no_quiz' }); continue; }
+      inbox.appendRow([now.toISOString(), now.getTime(), cid, sid, profile.studentClass, practice ? 'practice_quiz' : 'quiz', uNo,
         '', '', g.score, g.total, g.percentage, Math.max(0, Math.min(86400, Number(d.timeSpentSeconds) || 0)),
         'server_graded', g.title, str_(d.clientTime, 40), '', '', practice, '']);
       if (!practice) {
-        processSyncItem(ss, { type: 'quiz_result', data: { unitNo: Number(d.unitNo), unitTitle: g.title, studentId: sid,
+        quizCounts[uNo] = (quizCounts[uNo] || 0) + 1;
+        processSyncItem(ss, { type: 'quiz_result', data: { unitNo: uNo, unitTitle: g.title, studentId: sid,
           studentName: profile.name, studentClass: profile.studentClass, studentNo: profile.no, score: g.score,
           totalQuestions: g.total, percentage: g.percentage, timeSpentSeconds: Number(d.timeSpentSeconds) || 0 } });
       }
@@ -1828,6 +1904,377 @@ function gradeQuiz_(ss, unitNo, answers) {
   }
   var total = u.questions.length;
   return { score: score, total: total, percentage: Math.round(score / total * 100), title: u.title };
+}
+
+/* ============================================================================
+ * ห้องสอบกลางภาค/ปลายภาค (Exam Rooms) — ข้อสอบและเฉลย "อยู่บนเซิร์ฟเวอร์เท่านั้น"
+ * - ครูอัปโหลดคลังข้อสอบ (exam_upload_bank) แล้วเปิดห้องสอบรายห้อง (exam_open) กำหนดช่วงเวลา/เวลาทำ/จำนวนครั้ง
+ * - นักเรียนได้รับข้อสอบ "หลังเข้าสู่ระบบ + อยู่ห้องนั้น + ห้องสอบเปิดอยู่" เท่านั้น (studentExamStart)
+ * - เซิร์ฟเวอร์สลับข้อ/ตัวเลือกต่อคน ตรวจคำตอบเอง ไม่ส่งเฉลยกลับ และปฏิเสธการส่งที่เลยเวลา
+ * ============================================================================ */
+var EXAM_BANK_SHEET = 'คลังข้อสอบกลางปลายภาค_ExamBank';
+var EXAM_BANK_HEADERS = ['kind', 'qid', 'question', 'choices_json', 'correct', 'explanation', 'src_period', 'src_objective', 'difficulty', 'status'];
+var EXAM_SESSION_SHEET = 'ห้องสอบ_ExamSessions';
+var EXAM_SESSION_HEADERS = ['session_id', 'kind', 'class', 'open_ms', 'close_ms', 'duration_min', 'max_attempts', 'closed_ms', 'created_ms', 'max_points', 'items'];
+var EXAM_ATTEMPT_SHEET = 'ผลสอบ_ExamAttempts';
+var EXAM_ATTEMPT_HEADERS = ['attempt_id', 'session_id', 'kind', 'class', 'student_id', 'student_name', 'no', 'attempt_no',
+  'started_ms', 'deadline_ms', 'submitted_ms', 'status', 'order_json', 'correct', 'items', 'points', 'level', 'late'];
+var EXAM_GRANT_SHEET = 'สิทธิ์สอบซ่อม_ExamRetakes';
+var EXAM_GRANT_HEADERS = ['session_id', 'student_id', 'extra', 'granted_ms'];
+var EXAM_KINDS = ['midterm', 'final'];
+var EXAM_KEYS = ['ก', 'ข', 'ค', 'ง', 'จ'];
+var EXAM_GRACE_MS = 15000;          // เผื่อเวลาเครือข่ายหลังหมดเวลา (วินาที x1000)
+var EXAM_MAX_POINTS = 10;
+var EXAM_DEFAULT_MINUTES = 25;
+
+function examNum_(v) { var n = Number(v); return isNaN(n) ? 0 : n; }
+function examMs_(v) {
+  if (v === undefined || v === null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  var n = Number(v);
+  if (!isNaN(n) && String(v).trim() !== '') return n;
+  var d = new Date(v);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function examSeed_(text) {
+  var h = 2166136261;
+  for (var i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = (h * 16777619) >>> 0; }
+  return h >>> 0;
+}
+function examRng_(seed) {
+  var s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) >>> 0;
+    var t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function examShuffle_(arr, rnd) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(rnd() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+function examBankRows_(ss, kind) {
+  var rows = rowsOf_(getOrCreateSheet(ss, EXAM_BANK_SHEET, EXAM_BANK_HEADERS), EXAM_BANK_HEADERS), out = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].kind) !== kind) continue;
+    var choices = [];
+    try { choices = JSON.parse(String(rows[i].choices_json || '[]')); } catch (e) { choices = []; }
+    out.push({ qid: String(rows[i].qid), question: String(rows[i].question), choices: choices, correct: String(rows[i].correct) });
+  }
+  return out;
+}
+
+/** ครูอัปโหลดคลังข้อสอบของ kind หนึ่ง (แทนที่เฉพาะ kind นั้น) — ห้ามอัปโหลดขณะมีห้องสอบเปิดอยู่ */
+function examUploadBank_(ss, payload) {
+  var kind = String(payload.kind || '');
+  if (EXAM_KINDS.indexOf(kind) === -1) return { status: 'error', code: 'bad_kind', message: 'ชนิดข้อสอบไม่ถูกต้อง (midterm/final)' };
+  var items = payload.items;
+  if (Object.prototype.toString.call(items) !== '[object Array]' || !items.length) return { status: 'error', code: 'invalid', message: 'ไม่พบข้อสอบ' };
+  if (items.length > 60) return { status: 'error', code: 'too_many', message: 'ข้อสอบมากเกิน 60 ข้อ' };
+  var now = Date.now();
+  var sess = rowsOf_(getOrCreateSheet(ss, EXAM_SESSION_SHEET, EXAM_SESSION_HEADERS), EXAM_SESSION_HEADERS);
+  for (var s = 0; s < sess.length; s++) {
+    if (String(sess[s].kind) === kind && !sess[s].closed_ms && examNum_(sess[s].close_ms) > now) {
+      return { status: 'error', code: 'session_open', message: 'มีห้องสอบที่ยังไม่ปิด กรุณาปิดห้องสอบก่อนเปลี่ยนคลังข้อสอบ' };
+    }
+  }
+  var seen = {}, rows = [];
+  for (var i = 0; i < items.length; i++) {
+    var q = items[i] || {};
+    var id = str_(q.id, 40), text = str_(q.question, 1000);
+    var ch = Object.prototype.toString.call(q.choices) === '[object Array]' ? q.choices : [];
+    if (!id || !text || seen[id]) return { status: 'error', code: 'invalid', message: 'ข้อที่ ' + (i + 1) + ' ไม่ครบหรือรหัสซ้ำ' };
+    if (ch.length < 3 || ch.length > EXAM_KEYS.length) return { status: 'error', code: 'invalid', message: 'ข้อที่ ' + (i + 1) + ' ต้องมี 3-5 ตัวเลือก' };
+    var texts = ch.map(function (c) { return str_(c && c.text !== undefined ? c.text : c, 500); });
+    var ci = Number(q.correctIndex);
+    if (!(ci >= 0 && ci < texts.length) || texts.some(function (t) { return !t; })) return { status: 'error', code: 'invalid', message: 'ข้อที่ ' + (i + 1) + ' เฉลย/ตัวเลือกไม่ถูกต้อง' };
+    seen[id] = true;
+    var keyed = texts.map(function (t, k) { return { key: EXAM_KEYS[k], text: t }; });
+    rows.push([kind, id, text, JSON.stringify(keyed), EXAM_KEYS[ci], str_(q.explanation, 1000), str_(q.srcPeriod, 20), str_(q.srcObjective, 300), str_(q.difficulty, 20), str_(q.status, 60)]);
+  }
+  var sheet = getOrCreateSheet(ss, EXAM_BANK_SHEET, EXAM_BANK_HEADERS);
+  var all = rowsOf_(sheet, EXAM_BANK_HEADERS), kept = [EXAM_BANK_HEADERS];
+  for (var r = 0; r < all.length; r++) {
+    if (String(all[r].kind) !== kind) kept.push(EXAM_BANK_HEADERS.map(function (h) { return all[r][h] === undefined ? '' : all[r][h]; }));
+  }
+  for (var k = 0; k < rows.length; k++) kept.push(rows[k]);
+  sheet.clearContents();
+  sheet.getRange(1, 1, kept.length, EXAM_BANK_HEADERS.length).setValues(kept);
+  return { status: 'success', kind: kind, items: rows.length };
+}
+
+function examSessions_(ss) { return rowsOf_(getOrCreateSheet(ss, EXAM_SESSION_SHEET, EXAM_SESSION_HEADERS), EXAM_SESSION_HEADERS); }
+function examEffectiveClose_(sess) {
+  var c = examNum_(sess.close_ms), z = examNum_(sess.closed_ms);
+  return z ? Math.min(c, z) : c;
+}
+function examSessionState_(sess, now) {
+  if (examNum_(sess.closed_ms) && examNum_(sess.closed_ms) <= now) return 'closed';
+  if (now < examNum_(sess.open_ms)) return 'scheduled';
+  if (now < examNum_(sess.close_ms)) return 'open';
+  return 'ended';
+}
+/** ห้องสอบที่ "เปิดอยู่ตอนนี้" ของห้องเรียนนั้น (ห้องอื่นไม่เห็น) */
+function examActiveSession_(ss, cls, now) {
+  var list = examSessions_(ss), best = null;
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    if (String(s['class']) !== String(cls)) continue;
+    if (examSessionState_(s, now) !== 'open') continue;
+    if (!best || examNum_(s.created_ms) >= examNum_(best.created_ms)) best = s;
+  }
+  return best;
+}
+
+function examOpen_(ss, payload) {
+  var kind = String(payload.kind || '');
+  var cls = str_(payload.className, 40);
+  if (EXAM_KINDS.indexOf(kind) === -1 || !cls) return { status: 'error', code: 'invalid', message: 'ห้อง/ชนิดข้อสอบไม่ถูกต้อง' };
+  var now = Date.now();
+  var openMs = payload.openAt ? examMs_(payload.openAt) : now;
+  var closeMs = examMs_(payload.closeAt);
+  if (!openMs || !closeMs || closeMs <= openMs) return { status: 'error', code: 'invalid', message: 'ช่วงเวลาเปิด-ปิดสอบไม่ถูกต้อง' };
+  if (closeMs <= now) return { status: 'error', code: 'invalid', message: 'เวลาปิดสอบผ่านไปแล้ว' };
+  var minutes = Math.max(5, Math.min(180, Math.round(examNum_(payload.durationMin) || EXAM_DEFAULT_MINUTES)));
+  var attempts = Math.max(1, Math.min(3, Math.round(examNum_(payload.maxAttempts) || 1)));
+  var bank = examBankRows_(ss, kind);
+  if (!bank.length) return { status: 'error', code: 'no_bank', message: 'ยังไม่ได้อัปโหลดคลังข้อสอบชนิดนี้' };
+  var sheet = getOrCreateSheet(ss, EXAM_SESSION_SHEET, EXAM_SESSION_HEADERS);
+  var list = rowsOf_(sheet, EXAM_SESSION_HEADERS);
+  for (var i = 0; i < list.length; i++) {   // ห้อง+ชนิดเดียวกัน เปิดได้ทีละรอบ: ปิดรอบเก่าที่ยังค้าง
+    if (String(list[i].kind) === kind && String(list[i]['class']) === cls && !list[i].closed_ms && examNum_(list[i].close_ms) > now) {
+      list[i].closed_ms = now; writeRow_(sheet, EXAM_SESSION_HEADERS, list[i]);
+    }
+  }
+  var id = 'EX' + now.toString(36) + Utilities.getUuid().slice(0, 4);
+  sheet.appendRow([id, kind, cls, openMs, closeMs, minutes, attempts, '', now, EXAM_MAX_POINTS, bank.length]);
+  return { status: 'success', sessionId: id, kind: kind, className: cls, openMs: openMs, closeMs: closeMs, durationMin: minutes, maxAttempts: attempts, items: bank.length };
+}
+
+function examClose_(ss, payload) {
+  var sheet = getOrCreateSheet(ss, EXAM_SESSION_SHEET, EXAM_SESSION_HEADERS);
+  var list = rowsOf_(sheet, EXAM_SESSION_HEADERS), id = String(payload.sessionId || '');
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].session_id) === id) {
+      if (!list[i].closed_ms) { list[i].closed_ms = Date.now(); writeRow_(sheet, EXAM_SESSION_HEADERS, list[i]); }
+      return { status: 'success', sessionId: id, closedMs: Number(list[i].closed_ms) };
+    }
+  }
+  return { status: 'error', code: 'not_found', message: 'ไม่พบห้องสอบ' };
+}
+
+function examAttemptsSheet_(ss) { return getOrCreateSheet(ss, EXAM_ATTEMPT_SHEET, EXAM_ATTEMPT_HEADERS); }
+
+function examListSessions_(ss, payload) {
+  var now = Date.now(), cls = str_(payload.className, 40);
+  var att = rowsOf_(examAttemptsSheet_(ss), EXAM_ATTEMPT_HEADERS);
+  var out = examSessions_(ss).filter(function (s) { return !cls || String(s['class']) === cls; }).map(function (s) {
+    var sub = 0, prog = 0;
+    for (var i = 0; i < att.length; i++) {
+      if (String(att[i].session_id) !== String(s.session_id)) continue;
+      if (att[i].status === 'submitted') sub++; else if (att[i].status === 'in_progress') prog++;
+    }
+    return { sessionId: String(s.session_id), kind: String(s.kind), className: String(s['class']), openMs: examNum_(s.open_ms), closeMs: examNum_(s.close_ms),
+      closedMs: examNum_(s.closed_ms), durationMin: examNum_(s.duration_min), maxAttempts: examNum_(s.max_attempts), items: examNum_(s.items),
+      state: examSessionState_(s, now), submitted: sub, inProgress: prog };
+  });
+  return { status: 'success', serverNow: now, sessions: out };
+}
+
+/** ครูดูผลสอบ (ไม่มีข้อสอบ/เฉลย/ลำดับข้อ) — ใช้นำคะแนนเข้าสมุดคะแนน */
+function examResults_(ss, payload) {
+  var kind = str_(payload.kind, 20), cls = str_(payload.className, 40), sid = str_(payload.sessionId, 40);
+  var rows = rowsOf_(examAttemptsSheet_(ss), EXAM_ATTEMPT_HEADERS).filter(function (a) {
+    return (!kind || String(a.kind) === kind) && (!cls || String(a['class']) === cls) && (!sid || String(a.session_id) === sid);
+  }).map(function (a) {
+    return { attemptId: String(a.attempt_id), sessionId: String(a.session_id), kind: String(a.kind), className: String(a['class']), studentId: cleanId_(a.student_id),
+      name: String(a.student_name), no: a.no, attemptNo: examNum_(a.attempt_no), startedMs: examNum_(a.started_ms), submittedMs: examNum_(a.submitted_ms),
+      status: String(a.status), correct: a.correct === '' ? null : examNum_(a.correct), items: examNum_(a.items), points: a.points === '' ? null : examNum_(a.points),
+      level: a.level === '' ? null : examNum_(a.level), late: String(a.late) === 'true' };
+  });
+  return { status: 'success', attempts: rows };
+}
+
+function examGrantRetake_(ss, payload) {
+  var sid = cleanId_(payload.studentId), id = String(payload.sessionId || '');
+  var extra = Math.max(1, Math.min(2, Math.round(examNum_(payload.extra) || 1)));
+  if (!id && (payload.unitNo || payload.period)) {
+    var recQ = findStudentRow_(getStudentSheet_(ss), sid);
+    if (!recQ) return { status: 'error', code: 'not_found', message: 'ไม่พบนักเรียน' };
+    var targetId = payload.unitNo ? ('quiz_u' + Number(payload.unitNo)) : ('p' + Number(payload.period));
+    getOrCreateSheet(ss, EXAM_GRANT_SHEET, EXAM_GRANT_HEADERS).appendRow([targetId, sid, extra, Date.now()]);
+    return { status: 'success', sessionId: targetId, studentId: sid, extra: extra };
+  }
+  if (/^(quiz_u\\d+|u\\d+|p\\d+|\\d+)$/.test(id)) {
+    var recU = findStudentRow_(getStudentSheet_(ss), sid);
+    if (!recU) return { status: 'error', code: 'not_found', message: 'ไม่พบนักเรียน' };
+    getOrCreateSheet(ss, EXAM_GRANT_SHEET, EXAM_GRANT_HEADERS).appendRow([id, sid, extra, Date.now()]);
+    return { status: 'success', sessionId: id, studentId: sid, extra: extra };
+  }
+  var sess = null, list = examSessions_(ss);
+  for (var i = 0; i < list.length; i++) if (String(list[i].session_id) === id) sess = list[i];
+  if (!sess) return { status: 'error', code: 'not_found', message: 'ไม่พบห้องสอบ' };
+  var rec = findStudentRow_(getStudentSheet_(ss), sid);
+  if (!rec || String(rec['class']) !== String(sess['class'])) return { status: 'error', code: 'not_in_room', message: 'นักเรียนไม่อยู่ในห้องที่สอบ' };
+  getOrCreateSheet(ss, EXAM_GRANT_SHEET, EXAM_GRANT_HEADERS).appendRow([id, sid, extra, Date.now()]);
+  return { status: 'success', sessionId: id, studentId: sid, extra: extra };
+}
+
+function quizAllowedAttempts_(ss, sid, unitOrPeriod) {
+  var extra = 0;
+  var n = Number(unitOrPeriod);
+  var keys = [String(n), 'quiz_u' + n, 'u' + n, 'p' + n];
+  var rows = rowsOf_(getOrCreateSheet(ss, EXAM_GRANT_SHEET, EXAM_GRANT_HEADERS), EXAM_GRANT_HEADERS);
+  for (var i = 0; i < rows.length; i++) {
+    if (cleanId_(rows[i].student_id) === sid && keys.indexOf(String(rows[i].session_id)) !== -1) {
+      extra += examNum_(rows[i].extra);
+    }
+  }
+  return 1 + extra;
+}
+
+function examAllowed_(ss, sess, sid) {
+  var extra = 0, rows = rowsOf_(getOrCreateSheet(ss, EXAM_GRANT_SHEET, EXAM_GRANT_HEADERS), EXAM_GRANT_HEADERS);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].session_id) === String(sess.session_id) && cleanId_(rows[i].student_id) === sid) extra += examNum_(rows[i].extra);
+  }
+  return examNum_(sess.max_attempts) + extra;
+}
+
+/** ปิดความพยายามที่ค้างและเลยเวลาแล้ว (นับเป็นใช้สิทธิ์ ไม่ให้คะแนน) */
+function examExpireStale_(sheet, attempts, now) {
+  for (var i = 0; i < attempts.length; i++) {
+    var a = attempts[i];
+    if (a.status === 'in_progress' && now > examNum_(a.deadline_ms) + EXAM_GRACE_MS) { a.status = 'expired'; writeRow_(sheet, EXAM_ATTEMPT_HEADERS, a); }
+  }
+}
+
+function examLevel_(correct, items) {
+  var p = items ? correct / items : 0;
+  return p >= 0.8 ? 4 : p >= 0.7 ? 3 : p >= 0.5 ? 2 : 1;
+}
+
+function examStudentView_(ss, rec, now) {
+  var cls = String(rec['class']), sid = cleanId_(rec.student_id);
+  var sess = examActiveSession_(ss, cls, now);
+  if (!sess) return { sess: null };
+  var sheet = examAttemptsSheet_(ss);
+  var mine = rowsOf_(sheet, EXAM_ATTEMPT_HEADERS).filter(function (a) { return cleanId_(a.student_id) === sid && String(a.session_id) === String(sess.session_id); });
+  examExpireStale_(sheet, mine, now);
+  var used = 0, running = null, last = null;
+  for (var i = 0; i < mine.length; i++) {
+    if (mine[i].status === 'in_progress') running = mine[i]; else used++;
+    if (mine[i].status === 'submitted') last = mine[i];
+  }
+  var allowed = examAllowed_(ss, sess, sid);
+  return { sess: sess, sheet: sheet, mine: mine, used: used, running: running, last: last, allowed: allowed, left: Math.max(0, allowed - used), sid: sid };
+}
+
+function studentExamStatus_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var now = Date.now();
+  var view = examStudentView_(ss, v.rec, now);
+  if (!view.sess) return { status: 'success', open: false };   // เป็นกลาง: ไม่บอกว่ามีตาราง/ห้องอื่น
+  var r = { status: 'success', open: true, kind: String(view.sess.kind), closeMs: examEffectiveClose_(view.sess), durationMin: examNum_(view.sess.duration_min),
+    items: examNum_(view.sess.items), attemptsLeft: view.left, canStart: view.left > 0 || (!!view.running && examNum_(view.running.deadline_ms) > now),
+    inProgress: !!view.running && examNum_(view.running.deadline_ms) > now, serverNow: now };
+  if (view.last) r.last = { points: examNum_(view.last.points), maxPoints: examNum_(view.sess.max_points), correct: examNum_(view.last.correct), items: examNum_(view.last.items) };
+  return r;
+}
+
+function examQuestionsFor_(bank, order) {
+  var byId = {}, i;
+  for (i = 0; i < bank.length; i++) byId[bank[i].qid] = bank[i];
+  var out = [];
+  for (i = 0; i < order.length; i++) {
+    var q = byId[order[i].id];
+    if (!q) continue;
+    out.push({ id: q.qid, question: q.question, choices: order[i].p.map(function (idx, k) { return { key: EXAM_KEYS[k], text: String(q.choices[idx].text) }; }) });
+  }
+  return out;
+}
+
+function studentExamStart_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var now = Date.now(), rec = v.rec;
+  var view = examStudentView_(ss, rec, now);
+  if (!view.sess) return { status: 'error', code: 'not_open', message: 'ยังไม่เปิดสอบ' };
+  var sess = view.sess;
+  var bank = examBankRows_(ss, String(sess.kind));
+  if (!bank.length) return { status: 'error', code: 'not_open', message: 'ยังไม่เปิดสอบ' };
+  var att = view.running && examNum_(view.running.deadline_ms) > now ? view.running : null;
+  var order;
+  if (att) {
+    try { order = JSON.parse(String(att.order_json)); } catch (e) { order = null; }
+  }
+  if (!att) {
+    if (view.left <= 0) return { status: 'error', code: 'no_attempts', message: 'ใช้สิทธิ์สอบครบแล้ว' };
+    var rnd = examRng_(examSeed_(Utilities.getUuid() + '|' + view.sid + '|' + now));
+    order = examShuffle_(bank, rnd).map(function (q) {
+      var idx = []; for (var k = 0; k < q.choices.length; k++) idx.push(k);
+      return { id: q.qid, p: examShuffle_(idx, rnd) };
+    });
+    var deadline = Math.min(examEffectiveClose_(sess), now + examNum_(sess.duration_min) * 60000);
+    var profile = publicProfile_(rec);
+    var attemptId = 'AT' + now.toString(36) + Utilities.getUuid().slice(0, 6);
+    view.sheet.appendRow([attemptId, sess.session_id, sess.kind, sess['class'], view.sid, profile.name, profile.no, view.used + 1,
+      now, deadline, '', 'in_progress', JSON.stringify(order), '', order.length, '', '', '']);
+    att = { attempt_id: attemptId, deadline_ms: deadline };
+  }
+  if (!order) return { status: 'error', code: 'error', message: 'เริ่มสอบไม่สำเร็จ กรุณาแจ้งครู' };
+  return { status: 'success', attemptId: String(att.attempt_id), kind: String(sess.kind), deadlineMs: examNum_(att.deadline_ms), serverNow: now,
+    items: order.length, maxPoints: examNum_(sess.max_points), questions: examQuestionsFor_(bank, order) };
+}
+
+function studentExamSubmit_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณากรอก PIN อีกครั้ง' };
+  var now = Date.now(), sid = cleanId_(v.rec.student_id);
+  var sheet = examAttemptsSheet_(ss);
+  var id = String(payload.attemptId || ''), att = null, list = rowsOf_(sheet, EXAM_ATTEMPT_HEADERS);
+  for (var i = 0; i < list.length; i++) if (String(list[i].attempt_id) === id && cleanId_(list[i].student_id) === sid) att = list[i];
+  if (!att) return { status: 'error', code: 'bad_attempt', message: 'ไม่พบการสอบนี้' };
+  var sess = null, ss_ = examSessions_(ss);
+  for (var s = 0; s < ss_.length; s++) if (String(ss_[s].session_id) === String(att.session_id)) sess = ss_[s];
+  var maxPts = sess ? examNum_(sess.max_points) : EXAM_MAX_POINTS;
+  if (att.status === 'submitted') {   // ส่งซ้ำ (เครือข่ายสะดุด) = ตอบผลเดิม ไม่ตรวจใหม่
+    return { status: 'success', submitted: true, correct: examNum_(att.correct), items: examNum_(att.items), points: examNum_(att.points), maxPoints: maxPts, level: examNum_(att.level), duplicate: true };
+  }
+  if (att.status !== 'in_progress') return { status: 'error', code: 'closed', message: 'การสอบครั้งนี้สิ้นสุดแล้ว' };
+  var limit = examNum_(att.deadline_ms);
+  if (sess) limit = Math.min(limit, examEffectiveClose_(sess));
+  if (now > limit + EXAM_GRACE_MS) {
+    att.status = 'late_rejected'; att.submitted_ms = now; att.late = true; writeRow_(sheet, EXAM_ATTEMPT_HEADERS, att);
+    return { status: 'error', code: 'late', message: 'หมดเวลาสอบแล้ว ระบบไม่รับคำตอบ' };
+  }
+  var order = []; try { order = JSON.parse(String(att.order_json)); } catch (e) { order = []; }
+  var bank = examBankRows_(ss, String(att.kind)), byId = {};
+  for (var b = 0; b < bank.length; b++) byId[bank[b].qid] = bank[b];
+  var answers = payload.answers && typeof payload.answers === 'object' ? payload.answers : {};
+  var correct = 0;
+  for (var o = 0; o < order.length; o++) {
+    var q = byId[order[o].id];
+    if (!q) continue;
+    var picked = EXAM_KEYS.indexOf(String(answers[order[o].id] || ''));
+    if (picked < 0 || picked >= order[o].p.length) continue;
+    if (String(q.choices[order[o].p[picked]].key) === q.correct) correct++;   // เทียบกับเฉลยบนเซิร์ฟเวอร์เท่านั้น
+  }
+  var items = order.length;
+  var points = items ? Math.round(correct / items * maxPts * 100) / 100 : 0;
+  var level = examLevel_(correct, items);
+  att.status = 'submitted'; att.submitted_ms = now; att.correct = correct; att.items = items; att.points = points; att.level = level; att.late = now > limit;
+  writeRow_(sheet, EXAM_ATTEMPT_HEADERS, att);
+  return { status: 'success', submitted: true, correct: correct, items: items, points: points, maxPoints: maxPts, level: level };
 }
 
 /* ============================================================================
@@ -2237,7 +2684,8 @@ function uploadStart_(ss, sheet, rec, sid, uploadId, u, payload) {
   var mime = String(payload.mimeType || '').toLowerCase();
   var size = Number(payload.size);
   var period = Number(payload.period);
-  var purpose = payload.purpose === 'recording' ? 'recording' : 'assignment';
+  var rawPurpose = String(payload.purpose || '');
+  var purpose = (rawPurpose === 'recording' || rawPurpose === 'quiz' || rawPurpose === 'exam') ? rawPurpose : 'assignment';
   if (!t) return { status: 'error', code: 'bad_type', message: 'ไม่รองรับไฟล์ชนิดนี้ (รับ รูป jpg/png/heic/webp, เสียง mp3/m4a/aac/wav/ogg, วิดีโอ mp4/mov/webm, pdf)' };
   if (mime && t.mimes.indexOf(mime) === -1) return { status: 'error', code: 'type_mismatch', message: 'นามสกุลไฟล์กับชนิดไฟล์ไม่ตรงกัน' };
   if (!(size > 0) || Math.floor(size) !== size) return { status: 'error', code: 'bad_size', message: 'ขนาดไฟล์ไม่ถูกต้อง' };
@@ -2305,6 +2753,30 @@ function uploadChunk_(sheet, u, payload) {
 }
 
 function uploadFinish_(ss, sheet, u) {
+  var sid = cleanId_(u.student_id);
+  var uPeriod = Number(u.period);
+  var isExamUpload = (String(u.purpose) === 'quiz' || String(u.purpose) === 'exam');
+  if (isExamUpload) {
+    var allowed = quizAllowedAttempts_(ss, sid, uPeriod);
+    var doneCount = 0;
+    var upVals = sheet.getDataRange().getValues();
+    for (var r = 1; r < upVals.length; r++) {
+      if (String(upVals[r][0]) === String(u.upload_id)) continue;
+      var rPurpose = String(upVals[r][4] || '');
+      if (cleanId_(upVals[r][1]) === sid && Number(upVals[r][3]) === uPeriod && String(upVals[r][11]) === 'done' && (rPurpose === 'quiz' || rPurpose === 'exam')) {
+        doneCount++;
+      }
+    }
+    var inboxVals = getOrCreateSheet(ss, STUDENT_INBOX_SHEET, STUDENT_INBOX_HEADERS).getDataRange().getValues();
+    for (var ir = 1; ir < inboxVals.length; ir++) {
+      if (cleanId_(inboxVals[ir][3]) === sid && String(inboxVals[ir][5]) === 'quiz' && Number(inboxVals[ir][6]) === uPeriod && String(inboxVals[ir][18]) !== 'true' && inboxVals[ir][18] !== true) {
+        doneCount++;
+      }
+    }
+    if (doneCount >= allowed) {
+      return { status: 'error', code: 'duplicate_quiz', message: 'ส่งแบบทดสอบของคาบนี้ไปแล้ว ไม่สามารถส่งซ้ำได้ เว้นแต่ครูอนุญาตให้ส่งใหม่' };
+    }
+  }
   var folder = DriveApp.getFolderById(String(u.staging_folder_id));
   var have = stagedChunks_(folder), n = Number(u.total_chunks), missing = [];
   for (var i = 0; i < n; i++) if (!have[i]) missing.push(i);
@@ -2390,7 +2862,7 @@ function setTeacherPassword(payload) {
   var email = normEmail_(payload.email), pw = String(payload.password || '');
   if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return { status: 'error', code: 'bad_email', message: 'อีเมลไม่ถูกต้อง' };
   if (pw.length < TEACHER_MIN_PASSWORD || pw.length > 128) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านต้องยาว ' + TEACHER_MIN_PASSWORD + '–128 ตัวอักษร' };
-  if (/^(.)\\1+$/.test(pw) || /^(12345678|password|ppk1234)/i.test(pw)) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านเดาง่ายเกินไป' };
+  if (/^(.)\\1+$/.test(pw) || /^(12345678|password|ppk\\d+)/i.test(pw)) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านเดาง่ายเกินไป' };
   var old = teacherAuth_() || {};
   var salt = Utilities.getUuid();
   saveTeacherAuth_({ email: email, name: str_(payload.name, 80) || old.name || '', salt: salt, hash: hashPin_('teacher:' + email, pw, salt),
@@ -2501,24 +2973,98 @@ function decideIntern(ss, payload) {
 var AVATAR_SHEET = 'โปรไฟล์_Avatars';
 var AVATAR_HEADERS = ['target_key', 'role', 'owner_id', 'class', 'file_id', 'file_url', 'thumb_data_url', 'updated_ms'];
 var AVATAR_FOLDER_NAME = 'โปรไฟล์_Avatars';
+var AVATAR_MAX_BYTES = 200 * 1024;
+
+function checkAvatarAuth_(ss, payload) {
+  var expectedToken = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');
+  if (expectedToken && payload && (payload.token === expectedToken || payload.syncToken === expectedToken)) {
+    return { role: 'teacher' };
+  }
+  if (payload && payload.sessionToken) {
+    var sv = verifySessionToken_(ss, payload.sessionToken);
+    if (sv && sv.rec) {
+      return {
+        role: 'student',
+        studentId: cleanId_(sv.rec.student_id),
+        studentClass: String(sv.rec['class'] || ''),
+        rec: sv.rec
+      };
+    }
+    var iv = verifyInternToken_(ss, payload.sessionToken);
+    if (iv && iv.rec) {
+      return {
+        role: 'intern',
+        internId: String(iv.rec.intern_id),
+        classes: iv.classes || [],
+        rec: iv.rec
+      };
+    }
+    return { error: (sv && sv.error) || 'bad_session' };
+  }
+  return { error: 'unauthorized' };
+}
 
 function uploadProfileAvatar_(ss, payload) {
+  var auth = checkAvatarAuth_(ss, payload);
+  if (auth.error) return { status: 'error', code: auth.error, message: 'กรุณาเข้าสู่ระบบก่อนอัปโหลดรูปโปรไฟล์' };
+
   var targetKey = str_(payload.targetKey, 80).replace(/[^A-Za-z0-9_.@-]/g, '_');
-  if (!targetKey) return { status: 'error', code: 'bad_target', message: 'ไม่พบรหัสผู้ใช้สำหรับอัปโหลดรูปโปรไฟล์' };
   var role = payload.role === 'teacher' ? 'teacher' : 'student';
   var ownerId = str_(payload.ownerId || targetKey, 80);
   var cls = str_(payload.className || '', 20);
-  var mime = String(payload.mimeType || 'image/jpeg').toLowerCase();
-  if (['image/jpeg', 'image/png', 'image/webp'].indexOf(mime) === -1) mime = 'image/jpeg';
+
+  if (auth.role === 'student') {
+    if (payload.role === 'teacher' || (payload.ownerId && cleanId_(payload.ownerId) !== auth.studentId) || (targetKey && targetKey !== 'student_' + auth.studentId)) {
+      return { status: 'error', code: 'forbidden', message: 'นักเรียนอัปโหลดได้เฉพาะรูปโปรไฟล์ของตนเองเท่านั้น' };
+    }
+    role = 'student';
+    ownerId = auth.studentId;
+    targetKey = 'student_' + auth.studentId;
+    cls = auth.studentClass;
+  } else if (auth.role === 'intern') {
+    var expectedInternKey = 'intern_' + safeName_(auth.internId);
+    if (payload.role === 'student' || (payload.ownerId && String(payload.ownerId) !== auth.internId) || (targetKey && targetKey !== expectedInternKey && targetKey !== 'teacher_' + safeName_(auth.internId))) {
+      return { status: 'error', code: 'forbidden', message: 'นักศึกษาฝึกสอนอัปโหลดได้เฉพาะรูปโปรไฟล์ของตนเองเท่านั้น' };
+    }
+    role = 'teacher';
+    ownerId = auth.internId;
+    if (!targetKey) targetKey = expectedInternKey;
+  }
+
+  if (!targetKey) return { status: 'error', code: 'bad_target', message: 'ไม่พบรหัสผู้ใช้สำหรับอัปโหลดรูปโปรไฟล์' };
+
+  var mime = String(payload.mimeType || '').toLowerCase();
+  if (['image/jpeg', 'image/png', 'image/webp'].indexOf(mime) === -1) {
+    return { status: 'error', code: 'bad_type', message: 'รองรับเฉพาะไฟล์รูปภาพ JPEG, PNG หรือ WebP เท่านั้น' };
+  }
   var ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
   var b64 = String(payload.base64Data || '');
   var thumb = String(payload.thumbDataUrl || '');
   if (!b64 && thumb.indexOf('base64,') !== -1) b64 = thumb.split('base64,')[1];
-  if (!b64 || b64.length > 300000) return { status: 'error', code: 'bad_image', message: 'ข้อมูลรูปภาพไม่ถูกต้องหรือมีขนาดใหญ่เกินไป' };
+  if (!b64 || b64.length > 300000 || !/^[A-Za-z0-9+\\/=\\r\\n]+$/.test(b64)) {
+    return { status: 'error', code: 'bad_image', message: 'ข้อมูลรูปภาพไม่ถูกต้องหรือมีขนาดใหญ่เกินไป' };
+  }
+  if (thumb && (thumb.length > 48000 || !/^data:image\\/(jpeg|png|webp);base64,/i.test(thumb))) {
+    return { status: 'error', code: 'bad_image', message: 'ข้อมูลรูปตัวอย่างไม่ถูกต้องหรือใหญ่เกินกำหนด' };
+  }
+
+  var bytes = null;
+  try {
+    bytes = Utilities.base64Decode(b64.replace(/[\\r\\n]/g, ''));
+  } catch (e) {
+    return { status: 'error', code: 'bad_image', message: 'ถอดรหัสรูปภาพไม่สำเร็จ' };
+  }
+  if (!bytes || !bytes.length || bytes.length > AVATAR_MAX_BYTES) {
+    return { status: 'error', code: bytes && bytes.length > AVATAR_MAX_BYTES ? 'too_large' : 'bad_image', message: 'ขนาดไฟล์รูปภาพต้องไม่เกิน 200 KB' };
+  }
+  var magic = sniffType_(bytes);
+  var wantMagic = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpeg');
+  if (magic !== wantMagic) {
+    return { status: 'error', code: 'bad_type', message: 'เนื้อไฟล์รูปภาพไม่ตรงกับชนิดที่ระบุ' };
+  }
 
   var fileId = '', fileUrl = '';
   try {
-    var bytes = Utilities.base64Decode(b64);
     var rootFolder = childFolder_(null, UPLOAD_ROOT_FOLDER);
     var avatarRoot = childFolder_(rootFolder, AVATAR_FOLDER_NAME);
     var subFolder = childFolder_(avatarRoot, role === 'teacher' ? 'ครู_Teachers' : 'นักเรียน_Students');
@@ -2557,6 +3103,9 @@ function uploadProfileAvatar_(ss, payload) {
 }
 
 function fetchProfileAvatars_(ss, payload) {
+  var auth = checkAvatarAuth_(ss, payload);
+  if (auth.error) return { status: 'error', code: auth.error, message: 'กรุณาเข้าสู่ระบบก่อนดึงรูปโปรไฟล์' };
+
   var cls = str_(payload && payload.className || '', 20);
   var sheet = getOrCreateSheet(ss, AVATAR_SHEET, AVATAR_HEADERS);
   var vals = sheet.getDataRange().getValues();
@@ -2564,13 +3113,24 @@ function fetchProfileAvatars_(ss, payload) {
   for (var r = 1; r < vals.length; r++) {
     var key = String(vals[r][0] || '');
     if (!key) continue;
-    var rowCls = String(vals[r][3] || '');
     var role = String(vals[r][1] || '');
-    if (cls && role === 'student' && rowCls && rowCls !== cls) continue;
+    var ownerId = String(vals[r][2] || '');
+    var rowCls = String(vals[r][3] || '');
+    if (auth.role === 'student') {
+      var isOwnStudent = (role === 'student' && (cleanId_(ownerId) === auth.studentId || key === 'student_' + auth.studentId));
+      if (role !== 'teacher' && !isOwnStudent) continue;
+    } else if (auth.role === 'intern') {
+      if (role === 'student') {
+        if (auth.classes.indexOf(rowCls) === -1) continue;
+        if (cls && rowCls && rowCls !== cls) continue;
+      }
+    } else {
+      if (cls && role === 'student' && rowCls && rowCls !== cls) continue;
+    }
     out[key] = {
       targetKey: key,
       role: role,
-      ownerId: String(vals[r][2] || ''),
+      ownerId: ownerId,
       className: rowCls,
       fileId: String(vals[r][4] || ''),
       fileUrl: String(vals[r][5] || ''),

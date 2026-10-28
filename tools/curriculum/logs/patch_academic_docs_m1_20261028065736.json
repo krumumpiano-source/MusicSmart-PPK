@@ -1,0 +1,86 @@
+{
+  "at": "2026-10-28T06:57:36.902Z",
+  "log": [
+    {
+      "rule": "wk5 M1 replaced from wk5_m1_docx.json",
+      "old_plans": 18,
+      "new_plans": 20
+    },
+    {
+      "rule": "class criterion",
+      "count": 3
+    },
+    {
+      "rule": "ร้อยละ 80 ขึ้นไป",
+      "count": 54
+    },
+    {
+      "rule": "ผ่านเกณฑ์ร้อยละ 80 จึงไปต่อ",
+      "count": 1
+    },
+    {
+      "rule": "ผ่านเกณฑ์ร้อยละ 80",
+      "count": 0
+    },
+    {
+      "rule": "≥80%",
+      "count": 22
+    },
+    {
+      "rule": "IOC method 3 experts",
+      "count": 5
+    },
+    {
+      "rule": "IOC claim A",
+      "count": 5
+    },
+    {
+      "rule": "IOC claim B",
+      "count": 1
+    },
+    {
+      "rule": "IOC claim C",
+      "count": 3
+    },
+    {
+      "rule": "40 ข้อ clarify",
+      "count": 5
+    },
+    {
+      "rule": "header comment",
+      "count": 1
+    },
+    {
+      "rule": "app/data/lessons.js: header",
+      "count": 1
+    },
+    {
+      "rule": "app/data/quizzes.js: header code",
+      "count": 1
+    },
+    {
+      "rule": "app/data/quizzes.js: header 40",
+      "count": 1
+    },
+    {
+      "rule": "app/js/feldman-criticism.js: header",
+      "count": 1
+    },
+    {
+      "rule": "tools/curriculum/extract_wk5_docx.py: glob",
+      "count": 1
+    },
+    {
+      "rule": "tools/curriculum/patch_m1_docx.py: import glob",
+      "count": 1
+    },
+    {
+      "rule": "tools/curriculum/patch_m1_docx.py: glob",
+      "count": 1
+    },
+    {
+      "rule": "legacy guard",
+      "count": 1
+    }
+  ]
+}

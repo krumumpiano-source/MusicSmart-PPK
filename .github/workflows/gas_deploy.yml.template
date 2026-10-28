@@ -1,0 +1,103 @@
+# ============================================================================
+# เทมเพลต: อัปเดต Google Apps Script (GAS) อัตโนมัติด้วย clasp   — ยังไม่ทำงานจนกว่าครูจะเปิดใช้เอง
+#  * ไฟล์นี้นามสกุล .template GitHub จึงไม่รันมัน (ไม่มี trigger ใด ๆ ทั้งสิ้นจนกว่าจะเปลี่ยนชื่อ)
+#  * วิธีเปิดใช้: ทำตาม docs/GAS_AUTODEPLOY_TH.md (ตั้ง Secrets 3 ตัว → เพิ่มไฟล์ gas/appsscript.json
+#    → เปลี่ยนชื่อไฟล์นี้เป็น gas_deploy.yml)
+#  * แม้เปิดใช้แล้ว ก็รันได้เฉพาะเมื่อครูกด "Run workflow" เอง (workflow_dispatch) และพิมพ์ DEPLOY ยืนยัน
+#    — ไม่รันเองตอน push เพื่อไม่ให้ระบบจริงเปลี่ยนโดยไม่ตั้งใจ
+#  * Secrets ที่ต้องมี (Settings → Secrets and variables → Actions):
+#      GAS_SCRIPT_ID       = Script ID ของโปรเจกต์ Apps Script เดิม
+#      GAS_DEPLOYMENT_ID   = Deployment ID ของ Web app เดิม (เพื่อให้ URL /exec เดิมไม่เปลี่ยน)
+#      CLASPRC_JSON        = เนื้อไฟล์ ~/.clasprc.json หลังรัน `clasp login` (เก็บเป็นความลับ ห้ามคอมมิต/ห้ามแชร์)
+#  * ไม่พิมพ์ค่า secret ออก log; ไม่แตะ Script Properties (SYNC_TOKEN อยู่บน Google ไม่ถูกเขียนทับ)
+# ============================================================================
+name: Deploy Google Apps Script (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'พิมพ์ DEPLOY เพื่อยืนยันการอัปเดต Apps Script จริง'
+        required: true
+        default: ''
+      description:
+        description: 'คำอธิบายเวอร์ชันที่จะ deploy (ไม่บังคับ)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gas-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-gas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ตรวจคำยืนยัน
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "DEPLOY" ]; then
+            echo "ยกเลิก: ต้องพิมพ์ DEPLOY เพื่อยืนยัน"; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: ตรวจว่าตั้ง Secrets ครบ (ไม่พิมพ์ค่า)
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          for v in GAS_SCRIPT_ID GAS_DEPLOYMENT_ID CLASPRC_JSON; do
+            if [ -z "${!v}" ]; then echo "ยังไม่ได้ตั้ง secret $v — ดู docs/GAS_AUTODEPLOY_TH.md"; exit 1; fi
+          done
+
+      - name: ตรวจว่ามีไฟล์ manifest ของโปรเจกต์เดิม
+        run: |
+          # clasp push จะเขียนทับ appsscript.json บน Google; ต้องใช้ไฟล์ที่ดึงมาจากโปรเจกต์จริง (clasp pull) เพื่อไม่ให้สิทธิ์/ค่า webapp เปลี่ยน
+          test -f gas/appsscript.json || { echo "ไม่พบ gas/appsscript.json — ดู docs/GAS_AUTODEPLOY_TH.md ข้อ 3"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ตรวจโค้ดก่อน deploy
+        run: |
+          node --check google_apps_script.js
+          python3 tools/sync_apps_script_template.py --check
+          node tests/test_gas_version_check.js
+          grep -o "var GAS_VERSION = '[^']*'" google_apps_script.js
+
+      - name: เตรียมไฟล์สำหรับ clasp
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          set -e
+          mkdir -p gas_build
+          cp google_apps_script.js gas_build/Code.js
+          cp gas/appsscript.json gas_build/appsscript.json
+          printf '{"scriptId":"%s","rootDir":"gas_build"}\n' "$GAS_SCRIPT_ID" > .clasp.json
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          npm install -g @google/clasp@2
+
+      - name: อัปโหลดโค้ด (clasp push)
+        run: clasp push --force
+
+      - name: Deploy ไปที่ deployment เดิม (URL /exec เดิมไม่เปลี่ยน)
+        env:
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+          DESC: ${{ github.event.inputs.description }}
+        run: |
+          VER=$(grep -o "var GAS_VERSION = '[^']*'" google_apps_script.js | sed "s/.*= '//; s/'$//")
+          clasp deploy --deploymentId "$GAS_DEPLOYMENT_ID" --description "MusicSmart ${VER} ${DESC}"
+          echo "deploy แล้ว: เวอร์ชันโค้ด ${VER} — เปิดหน้าต่างซิงค์ในแอปเพื่อยืนยันว่าไม่ขึ้น 'ต้องอัปเดต GAS'"
+
+      - name: ลบข้อมูลรับรองออกจากเครื่อง runner
+        if: always()
+        run: rm -f "$HOME/.clasprc.json" .clasp.json

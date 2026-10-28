@@ -11,4 +11,10 @@ python3 tests/test_students.py | tail -1
 node test_e2e_suite.js | grep "Results"
 node tests/test_sync.js 2>/dev/null | tail -1
 for t in tests/test_student_*.js tests/test_phase*.js; do node "$t"; done
+node tools/curriculum/build_wk5_data.js --check
+node tests/test_wk5_form.js
+node tests/test_student_guide_data.js
+node tests/test_lesson_editor_wk5.js
+node tests/test_semester_single_source.js
+node tests/test_password_security.js
 echo "ALL SUITES PASSED"

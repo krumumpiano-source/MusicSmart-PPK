@@ -1,0 +1,14 @@
+{
+ "ranat_ek": {
+  "file": "media/m1/p12/audio/ranat_ek_scale.mp3",
+  "original": "media/m1/p12/audio/ranat_ek_scale.ogg",
+  "label": "เสียงระนาดเอกจริง: บันไดเสียงไทย 7 เสียง (ประมาณ 7 วินาที)",
+  "title": "Thai classical music scale.ogg",
+  "license": "CC BY-SA 3.0",
+  "author": "Paul_012",
+  "page": "https://commons.wikimedia.org/wiki/File:Thai_classical_music_scale.ogg",
+  "source": "Wikimedia Commons",
+  "change": "แปลงรูปแบบ ogg → mp3 เพื่อให้เล่นได้บน iPhone/Safari — ไม่ได้ตัดต่อเนื้อเสียง",
+  "period": 12
+ }
+}

@@ -1,23 +1,25 @@
 // ==========================================================================
 // Feldman 4-Step Music Criticism Workspace (ระบบวิจารณ์ดนตรีตามโมเดล Feldman)
-// สาระการเรียนรู้ศิลปะ (ดนตรี 1 ศ21101) ชั้นมัธยมศึกษาปีที่ 1 • หน่วยการเรียนรู้ที่ 4
+// สาระการเรียนรู้ศิลปะ (ดนตรี 1 ม.1 — รหัสวิชาคำนวณจาก term-config.js) ชั้นมัธยมศึกษาปีที่ 1 • หน่วยการเรียนรู้ที่ 4
 // ==========================================================================
 
 const FeldmanCriticism = {
   activePeriod: 17,
   activeStudentId: null,
-  selectedCoord: { valence: 6, arousal: -4 },
-  selectedKeywords: ['คาลิมบ้า 17 คีย์', 'จังหวะช้า 65 BPM', 'เสียงกังวาน (Resonance)', 'โทนอบอุ่นผ่อนคลาย (Alpha)', 'แฝงความเหงาช่วงท้าย (Outlier)'],
-  classroomKeywords: [
-    { text: 'คาลิมบ้า 17 คีย์', count: 36, type: 'desc' },
-    { text: 'จังหวะช้า 65 BPM', count: 34, type: 'analysis' },
-    { text: 'เสียงกังวาน (Resonance)', count: 31, type: 'desc' },
-    { text: 'โทนอบอุ่นผ่อนคลาย (Alpha)', count: 32, type: 'interp' },
-    { text: 'ไดนามิกส์นุ่มนวล (Piano)', count: 29, type: 'analysis' },
-    { text: 'บันไดเสียง C Major', count: 27, type: 'analysis' },
-    { text: 'แฝงความเหงาช่วงท้าย (Outlier)', count: 6, type: 'outlier' },
-    { text: 'ตื่นเต้นช่วงเปลี่ยนท่อน (Outlier)', count: 4, type: 'outlier' }
-  ],
+  // ไม่มีค่าตัวอย่างฝังไว้: จุดพิกัด/คีย์เวิร์ดเริ่มว่าง นักเรียนเลือกเอง · รายการคีย์เวิร์ดสร้างจาก ENSEMBLE_DATA.listening (วก.5 คาบ 16)
+  selectedCoord: null,
+  selectedKeywords: [],
+  get classroomKeywords() {
+    const d = typeof window !== 'undefined' ? window.ENSEMBLE_DATA : null;
+    const L = d && d.listening;
+    if (!L) return [];
+    const out = [];
+    ((d.classSets && d.classSets.thai) || []).concat((d.classSets && d.classSets.western) || []).forEach(x => { if (!out.some(o => o.text === x)) out.push({ text: x, type: 'desc' }); });
+    (L.tempos || []).forEach(x => out.push({ text: 'ความเร็ว' + x.label, type: 'analysis' }));
+    (L.dynamics || []).forEach(x => out.push({ text: 'ความดัง ' + x.label, type: 'analysis' }));
+    (L.moods || []).forEach(x => out.push({ text: x, type: 'interp' }));
+    return out;
+  },
 
   openModal(period = 17, studentId = null) {
     const modal = document.getElementById('modal-feldman-criticism');
@@ -30,6 +32,12 @@ const FeldmanCriticism = {
     this.activePeriod = period || 17;
     this.activeStudentId = studentId || (typeof Store !== 'undefined' && Store.getCurrentUser() && Store.getCurrentUser().studentId) || '';
 
+    this.selectedCoord = null;
+    this.selectedKeywords = [];
+    const mk = document.getElementById('feldman-user-marker');
+    if (mk && mk.style) mk.style.display = 'none';
+    const ro = document.getElementById('feldman-coord-readout');
+    if (ro) ro.textContent = '(ยังไม่ได้เลือกจุด — คลิกบนกราฟเพื่อพล็อตอารมณ์ที่รู้สึก)';
     modal.classList.add('active');
     this.loadFormData();
     this.renderWordCloud();
@@ -45,6 +53,7 @@ const FeldmanCriticism = {
     const xPct = Math.max(5, Math.min(95, ((event.clientX - rect.left) / rect.width) * 100));
     const yPct = Math.max(5, Math.min(95, ((event.clientY - rect.top) / rect.height) * 100));
 
+    marker.style.display = '';
     marker.style.left = `${xPct}%`;
     marker.style.top = `${yPct}%`;
 
@@ -87,34 +96,27 @@ const FeldmanCriticism = {
         background: ${isOutlier ? (isSel ? '#fef3c7' : '#fffbeb') : (isSel ? '#dbeafe' : '#ffffff')};
         color: ${isOutlier ? '#b45309' : (isSel ? '#1e40af' : '#475569')};
         font-weight: ${isSel ? '700' : '500'};
-        font-size: ${item.count > 30 ? '0.84rem' : '0.76rem'};
+        font-size: 0.8rem;
         padding: 3px 9px;
         border-radius: 999px;
         cursor: pointer;
       `;
-      span.textContent = `${isSel ? '✓ ' : ''}${item.text} (${item.count})`;
+      span.textContent = `${isSel ? '✓ ' : ''}${item.text}`;
       box.appendChild(span);
     });
   },
 
+  // ไม่เติมข้อความสำเร็จรูป/สถิติตัวอย่างแทนนักเรียน — แสดงเฉพาะคำถามช่วยคิดจากข้อมูล วก.5 เป็น placeholder และคำที่นักเรียนเลือกไว้
   autoPopulateFromAnalytics() {
-    const songTitleInput = document.getElementById('feldman-song-title');
-    const descInput = document.getElementById('feldman-step1-desc');
-    const analysisInput = document.getElementById('feldman-step2-analysis');
-    const interpInput = document.getElementById('feldman-step3-interp');
-
-    if (songTitleInput && !songTitleInput.value.trim()) {
-      songTitleInput.value = 'บทเพลงบรรเลงคาลิมบ้าผสานทำนองพื้นบ้านพะเยา (Acoustic Soundscape)';
-    }
-    if (descInput) {
-      descInput.value = `บรรเลงด้วยคาลิมบ้า 17 คีย์ ให้เสียงกังวานใส (Resonance) ผสานเทคนิคเปิด-ปิดรูกล่องเสียง (Wah-wah) ในช่วงนาทีที่ 0:15–1:30 คีย์เวิร์ดที่พบในชั้นเรียน: ${this.selectedKeywords.join(', ')}`;
-    }
-    if (analysisInput) {
-      analysisInput.value = `โครงสร้างบทเพลงอยู่ในบันไดเสียง C Major อัตราความเร็วช้าสม่ำเสมอประมาณ 65 BPM ควบคุมน้ำหนักเสียงระดับเบาถึงปานกลาง (Piano - Mezzo Piano) และมีการชะลอจังหวะ (Ritardando) ใน 4 ห้องสุดท้าย`;
-    }
-    if (interpInput) {
-      interpInput.value = `จากพิกัดอารมณ์ (Valence ${this.selectedCoord.valence}, Arousal ${this.selectedCoord.arousal}) ผู้ฟังส่วนใหญ่ (85%) ตีความว่าสื่อถึงความสงบอบอุ่นและช่วยปรับคลื่นสมองสู่ภาวะผ่อนคลาย (Alpha State) ในขณะที่มีมุมมองเห็นต่าง (Outliers 15%) ที่ตีความว่าช่วงท้ายแฝงความรู้สึกเหงาและคิดถึงบ้านจากการทอดจังหวะช้าลง`;
-    }
+    const d = typeof window !== 'undefined' ? window.ENSEMBLE_DATA : null;
+    const L = d && d.listening;
+    const ids = ['feldman-step1-desc', 'feldman-step2-analysis', 'feldman-step3-interp', 'feldman-step4-eval'];
+    if (L && L.feldman) L.feldman.forEach((f, i) => { const el = document.getElementById(ids[i]); if (el) el.placeholder = f.label + ' ' + f.hint + ' — ' + f.prompt; });
+    const kw = this.selectedKeywords.length ? 'คำที่คุณเลือกไว้: ' + this.selectedKeywords.join(', ') : 'ยังไม่ได้เลือกคีย์เวิร์ด';
+    const c = this.selectedCoord ? `จุดอารมณ์ (Valence ${this.selectedCoord.valence}, Arousal ${this.selectedCoord.arousal})` : 'ยังไม่ได้เลือกจุดอารมณ์';
+    const ro = document.getElementById('feldman-coord-readout');
+    if (ro && !this.selectedCoord) ro.textContent = '(ยังไม่ได้เลือกจุด)';
+    if (typeof alert === 'function') alert('เขียนด้วยคำพูดของตนเอง: ' + kw + ' · ' + c + '\n(ระบบไม่เขียนแทน — ใช้คำถามช่วยคิดในช่องแต่ละขั้น)');
   },
 
   closeModal() {

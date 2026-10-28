@@ -1,206 +1,173 @@
 // ==========================================================================
-// Interactive Ensemble Explorer (ห้องสำรวจวงดนตรีไทย สากล และพื้นบ้านเสมือนจริง)
-// สื่อการจัดการเรียนรู้เชิงรุก (Active Learning Media) • สาระการเรียนรู้ศิลปะ (ดนตรี)
-// โรงเรียนพะเยาพิทยาคม • รองรับตัวชี้วัด ศ 2.1 ม.1/4, ม.2/1
-// 100% Dynamic - Zero Hardcoding
+// ห้องสำรวจวงดนตรี (Interactive Ensemble Explorer) • สาระดนตรี ม.1 หน่วยที่ 3
+// วก.5 คาบ 12: วงดนตรีไทย (ปี่พาทย์ เครื่องสาย มโหรี) + วงพื้นบ้าน 4 ภาค (ล้านนา อีสาน กลาง ใต้)
+// วก.5 คาบ 14: วงดนตรีสากล 5 ประเภท
+//
+// ข้อมูลทั้งหมด (ชื่อวง ภาค เครื่องดนตรี บทบาท ผังที่นั่ง เสียงจำลอง) อยู่ใน app/data/ensemble_data.js
+// ซึ่งสร้างจาก tools/curriculum/ensemble_source.json (node tools/curriculum/build_ensemble_data.js)
+// ไฟล์นี้มีแต่ตรรกะแสดงผล — ไม่มีเนื้อหาวงดนตรีฝังอยู่ในโค้ด
+// รายการที่ review=true คือร่างโดยระบบ ต้องให้ครูตรวจก่อนใช้สอน — ป้าย/คำเตือนร่างแสดงเฉพาะมุมมองครู (พับอยู่ใน 'ข้อสังเกตสำหรับครู') นักเรียนไม่เห็น
+// เปิดตามคาบ: openModal(cat, key, period) แสดงเฉพาะวงที่ วก.5 ของคาบนั้นระบุ (คาบ 12 = ไทย+พื้นบ้าน, คาบ 14 = สากล)
+// ผังที่นั่ง: จัดเป็นแถวจากค่า y ในข้อมูล (ไม่วางทับซ้อนแบบ absolute) — ปุ่มสูง ≥44px ตัดบรรทัดชื่อได้ ใช้ได้ที่ 360px ถึง 1024px
 // ==========================================================================
 
 const EnsembleExplorer = {
   activeCategory: 'thai', // 'thai' | 'folk' | 'western'
-  activeEnsembleKey: 'piphat_hard',
-  selectedInstrument: null,
+  activeEnsembleKey: null,
+  selectedSeat: null,      // index ใน seating
+  quiz: null,
+  period: null,            // คาบที่เปิดมา: ตัวเลข หรือ อาร์เรย์ของคาบ (นักเรียนเปิดจากเมนูรวม = คาบที่ถึงแล้ว) · null = ไม่จำกัด (ครู)
 
-  // ฐานข้อมูลโครงสร้างวงดนตรี ผังที่นั่ง และบทบาทหน้าที่
-  data: {
-    thai: {
-      categoryName: 'วงดนตรีไทย',
-      ensembles: {
-        piphat_hard: {
-          name: 'วงปี่พาทย์ไม้แข็งเครื่องคู่',
-          era: 'กรุงรัตนโกสินทร์',
-          soundChar: 'เสียงดังกังวาน แข็งแกร่ง เร้าใจ ใช้ไม้ตีหัวแข็ง',
-          occasion: 'ใช้ในงานมงคล พิธีไหว้ครู โขน ละคร และการประโคม',
-          seating: [
-            { id: 'ranat_ek', name: 'ระนาดเอก', role: 'เครื่องนำทำนอง (ผู้นำวง)', family: 'เครื่องตี', tone: 'เสียงแหลมสดใส คมชัด ดำเนินทำนองหลักและแปรทำนอง', x: 50, y: 35 },
-            { id: 'ranat_thum', name: 'ระนาดทุ้ม', role: 'เครื่องหยอกล้อขัดจังหวะ', family: 'เครื่องตี', tone: 'เสียงทุ้มนุ่ม ล้อเลียนขัดจังหวะทำนองหลัก', x: 25, y: 35 },
-            { id: 'khong_wong_yai', name: 'ฆ้องวงใหญ่', role: 'แม่บทแห่งทำนองหลัก (Root Melody)', family: 'เครื่องตี', tone: 'เสียงกังวานทุ้ม เป็นแก่นและโครงสร้างทำนองที่เครื่องอื่นต้องยึดถือ', x: 50, y: 65 },
-            { id: 'khong_wong_lek', name: 'ฆ้องวงเล็ก', role: 'เครื่องสอดแทรกทำนองสูง', family: 'เครื่องตี', tone: 'เสียงแหลมเล็ก ลวดลายพริ้วไหว สอดประสานเสียงสูง', x: 75, y: 35 },
-            { id: 'pi_nai', name: 'ปี่ใน', role: 'เครื่องเป่าดำเนินทำนองนำ', family: 'เครื่องเป่า', tone: 'เสียงแหลมโหยหวน มีพลัง ลมหายใจหมุนเวียน (ระบายลม)', x: 50, y: 15 },
-            { id: 'ching', name: 'ฉิ่ง', role: 'ผู้นำและผู้กำกับจังหวะของวง', family: 'เครื่องประกอบจังหวะ', tone: 'เสียง ฉิ่ง (เปิด) และ ฉับ (ปิด) ควบคุมอัตราจังหวะ ช้า-ปานกลาง-เร็ว', x: 80, y: 65 },
-            { id: 'taphoon', name: 'ตะโพนไทย', role: 'เครื่องคุมหน้าทับจังหวะหลัก', family: 'เครื่องหนัง', tone: 'เสียงทุ้มกังวานและเสียงหนักแน่น เป็นครูใหญ่แห่งเครื่องจังหวะ', x: 20, y: 65 },
-            { id: 'klong_that', name: 'กลองทัด (คู่)', role: 'เครื่องส่งพลังและจังหวะหนัก', family: 'เครื่องหนัง', tone: 'เสียง ตูม (ตัวผู้) และ ต้อม (ตัวเมีย) ตีขานรับเพิ่มความฮึกเหิม', x: 10, y: 80 }
-          ]
-        },
-        string_ensemble: {
-          name: 'วงเครื่องสายผสมเครื่องคู่',
-          era: 'สมัยอยุธยาตอนปลาย - รัตนโกสินทร์',
-          soundChar: 'เสียงนุ่มนวล หวานซึ้ง ไพเราะ ไม่ดังกระโชกโฮกฮาก',
-          occasion: 'บรรเลงในอาคาร งานเลี้ยงมงคล ขับกล่อม',
-          seating: [
-            { id: 'saw_duang', name: 'ซอด้วง', role: 'ผู้นำทำนองเสียงสูง', family: 'เครื่องสี', tone: 'เสียงแหลมหวาน คมชัด ดำเนินทำนองนำของเครื่องสาย', x: 40, y: 35 },
-            { id: 'saw_u', name: 'ซออู้', role: 'เครื่องทำนองเสียงทุ้มหวาน', family: 'เครื่องสี', tone: 'เสียงทุ้มลึก นุ่มนวล เคล้าคลอไปกับซอด้วง', x: 60, y: 35 },
-            { id: 'jakhe', name: 'จะเข้', role: 'เครื่องดีดโซโล่และดำเนินทำนองหลัก', family: 'เครื่องดีด', tone: 'เสียงกังวานใส รัวนิ้วและสะบัดเสียงได้คล่องแคล่ว', x: 30, y: 55 },
-            { id: 'khlui_phiang_aw', name: 'ขลุ่ยเพียงออ', role: 'เครื่องเป่าสอดแทรกนุ่มนวล', family: 'เครื่องเป่า', tone: 'เสียงโหยหวน นุ่มนวล สอดประสานคลอเคล้าเสียงร้อง', x: 70, y: 55 },
-            { id: 'ching', name: 'ฉิ่ง', role: 'เครื่องกำกับจังหวะหน้าทับ', family: 'เครื่องกำกับจังหวะ', tone: 'คุมจังหวะเบา-ดัง พอเหมาะกับความนุ่มของเครื่องสาย', x: 85, y: 70 },
-            { id: 'thon_rammana', name: 'โทน-รำมะนา', role: 'เครื่องคุมหน้าทับคู่', family: 'เครื่องหนัง', tone: 'โทนให้เสียงป้อง รำมะนาให้เสียงปิ๊ง สอดประสานเข้ากัน', x: 15, y: 70 }
-          ]
-        },
-        mahori: {
-          name: 'วงมโหรีเครื่องใหญ่',
-          era: 'รัตนโกสินทร์ (รวมเครื่องดนตรีไทยครบทุกตระกูล)',
-          soundChar: 'สมบูรณ์แบบที่สุด มีทั้ง ดีด-สี-ตี-เป่า บรรเลงร่วมกันอย่างกลมกลืน',
-          occasion: 'งานพระราชพิธี งานเฉลิมฉลองชั้นสูง',
-          seating: [
-            { id: 'ranat_ek_mahori', name: 'ระนาดเอกมโหรี (ย่อส่วน)', role: 'เครื่องตีนำทำนอง', family: 'เครื่องตี', tone: 'เสียงหวานใส ไม่ดังเกินเครื่องสาย', x: 50, y: 25 },
-            { id: 'saw_sam_sai', name: 'ซอสามสาย', role: 'ราชินีแห่งเครื่องสาย คลอเสียงร้อง', family: 'เครื่องสี', tone: 'เสียงหวานซึ้ง ละเมียดละไม เป็นประธานแห่งวงมโหรี', x: 50, y: 50 },
-            { id: 'saw_duang', name: 'ซอด้วง', role: 'เครื่องสีนำทำนองสูง', family: 'เครื่องสี', tone: 'เสียงแหลมพริ้วไหว', x: 35, y: 40 },
-            { id: 'saw_u', name: 'ซออู้', role: 'เครื่องสีทำนองทุ้ม', family: 'เครื่องสี', tone: 'เสียงทุ้มละมุน', x: 65, y: 40 },
-            { id: 'jakhe', name: 'จะเข้', role: 'เครื่องดีดพริ้วกังวาน', family: 'เครื่องดีด', tone: 'รัวเก็บเสียงดังกังวาน', x: 20, y: 55 },
-            { id: 'khlui', name: 'ขลุ่ยเพียงออ/หลิบ', role: 'เครื่องเป่ากลมกลืน', family: 'เครื่องเป่า', tone: 'โหยหวนเชื่อมเสียงร้อง', x: 80, y: 55 },
-            { id: 'khong_mahori', name: 'ฆ้องวงมโหรี', role: 'โครงสร้างทำนองหลัก', family: 'เครื่องตี', tone: 'ขนาดเล็กกว่าฆ้องวงไทยเดิม ให้เสียงหวาน', x: 50, y: 70 }
-          ]
-        }
-      }
-    },
-    folk: {
-      categoryName: 'วงดนตรีพื้นบ้าน 4 ภาค',
-      ensembles: {
-        lanna_salor: {
-          name: 'วงสะล้อซอซึง (อัตลักษณ์ล้านนา • พะเยา)',
-          era: 'วัฒนธรรมดนตรีล้านนาภาคเหนือ',
-          soundChar: 'นุ่มนวล อ่อนช้อย สอดคล้องกับธรรมชาติและวิถีชีวิตชาวล้านนา',
-          occasion: 'งานบุญประเพณี ขันโตก ต้อนรับแขกบ้านแขกเมืองกว๊านพะเยา',
-          seating: [
-            { id: 'salor', name: 'สะล้อ (เล็ก/ใหญ่)', role: 'เครื่องสีนำทำนองหลักล้านนา', family: 'เครื่องสีพื้นบ้าน', tone: 'เสียงหวานโหยหวน ลากคันชักพริ้วไหว', x: 35, y: 35 },
-            { id: 'seung', name: 'ซึง (กลาง/หลวง)', role: 'เครื่องดีดคลอทำนองและคอร์ด', family: 'เครื่องดีดพื้นบ้าน', tone: 'เสียงดีดกังวาน นุ่มนวล เคาะจังหวะนิ้วเป็นเอกลักษณ์', x: 65, y: 35 },
-            { id: 'pi_jum', name: 'ปี่จุม (ปี่ก้อย/แม่)', role: 'เครื่องเป่าบรรเลงคลอซอ', family: 'เครื่องเป่าลิ้นเดี่ยว', tone: 'เสียงโอดครวญ นุ่มนวล เข้ากับบทขับซอล้านนา', x: 50, y: 20 },
-            { id: 'klong_teungnong', name: 'กลองเต่งถิ้ง', role: 'เครื่องกำกับจังหวะพื้นบ้าน', family: 'เครื่องหนัง', tone: 'เสียงทุ้มแน่น คุมจังหวะช้าเนิบนาบสไตล์ล้านนา', x: 50, y: 65 }
-          ]
-        },
-        ponglang: {
-          name: 'วงโปงลาง (ภาคอีสาน)',
-          era: 'วัฒนธรรมอีสาน ลุ่มแม่น้ำชีและโขง',
-          soundChar: 'คึกคัก สนุกสนาน รวดเร็ว สะท้อนความร่าเริงของชาวอีสาน',
-          occasion: 'งานบุญบั้งไฟ งานแห่ ฟ้อนรำฉลองเทศกาล',
-          seating: [
-            { id: 'ponglang_inst', name: 'โปงลาง', role: 'เครื่องนำทำนองลายอีสาน', family: 'เครื่องตีไม้', tone: 'เสียงคม แข็ง ใส แขวนเล่น 2 คน (คนตีทำนอง + คนตีลูกเสพ)', x: 40, y: 30 },
-            { id: 'phin', name: 'พิณอีสาน (2-3 สาย)', role: 'เครื่องดีดโซโล่สะบัดนิ้ว', family: 'เครื่องดีด', tone: 'เสียงหวานใส รัวนิ้วเร็วเร้าใจ ลายเต้ย ลายภูไท', x: 60, y: 30 },
-            { id: 'khene', name: 'แคน', role: 'ราชาแห่งเครื่องเป่าอีสาน', family: 'เครื่องเป่าลิ้นโลหะ', tone: 'มีเสียงประสานคอร์ดในตัว พลังเสียงพริ้วต่อเนื่องไม่ขาดสาย', x: 25, y: 45 },
-            { id: 'wot', name: 'โหวด', role: 'เครื่องเป่าไร้ลิ้นเสียงสูง', family: 'เครื่องเป่า', tone: 'เสียงหมุนเหวี่ยงสูง คล้ายเสียงนกบินร่อนบนท้องฟ้า', x: 75, y: 45 },
-            { id: 'hai_song', name: 'ไหซอง', role: 'เครื่องประกอบลีลาและเบส', family: 'เครื่องดีดสายยาง', tone: 'ดึงสายยางปากไห ให้เสียงเบสทุ้มต่ำและท่าฟ้อนรำสวยงาม', x: 50, y: 65 }
-          ]
-        }
-      }
-    },
-    western: {
-      categoryName: 'วงดนตรีสากล',
-      ensembles: {
-        orchestra: {
-          name: 'Symphony Orchestra (วงดุริยางค์ซิมโฟนี)',
-          era: 'ยุคคลาสสิก - ปัจจุบัน',
-          soundChar: 'ยิ่งใหญ่ อลังการ มีมิติความดัง-เบา (Dynamics) กว้างที่สุดในโลกดนตรี',
-          occasion: 'คอนเสิร์ตฮอลล์ เพลงคลาสสิก บัลเลต์ ประกอบภาพยนตร์ระดับโลก',
-          seating: [
-            { id: 'first_violin', name: 'Violin 1 (Concertmaster)', role: 'ผู้นำกลุ่มเครื่องสายและทำนองหลัก', family: 'Strings (เครื่องสาย)', tone: 'เสียงสูงสดใส พริ้วไหว กังวาน', x: 25, y: 55 },
-            { id: 'second_violin', name: 'Violin 2', role: 'แนวประสานเสียงสูง', family: 'Strings', tone: 'สอดประสานกับ Violin 1', x: 32, y: 65 },
-            { id: 'viola', name: 'Viola', role: 'แนวเสียงกลาง (Tenor/Alto)', family: 'Strings', tone: 'เสียงอุ่น หนา นุ่ม เป็นสะพานเชื่อมเสียงสูงกับต่ำ', x: 68, y: 65 },
-            { id: 'cello', name: 'Cello', role: 'แนวเบสและทำนองหวานทุ้ม', family: 'Strings', tone: 'เสียงทุ้มลึก มีพลัง สื่ออารมณ์ซาบซึ้ง', x: 75, y: 55 },
-            { id: 'double_bass', name: 'Double Bass', role: 'รากฐานเสียงต่ำสุดของวง (Sub-Bass)', family: 'Strings', tone: 'เสียงทุ้มต่ำ หนักแน่น ยึดโครงสร้างฮาร์โมนี', x: 88, y: 50 },
-            { id: 'woodwinds', name: 'Woodwinds (Flute/Oboe/Clarinet/Bassoon)', role: 'สีสันทำนองเดี่ยวและลมหายใจ', family: 'Woodwinds (เครื่องลมไม้)', tone: 'เสียงนุ่มนวล มีเอกลักษณ์เฉพาะตัวสูง', x: 50, y: 45 },
-            { id: 'brass', name: 'Brass (Horn/Trumpet/Trombone/Tuba)', role: 'ความยิ่งใหญ่ พลังอำนาจ เสียงสะท้อน', family: 'Brass (เครื่องลมทองเหลือง)', tone: 'เสียงดังก้องกังวาน สง่างาม', x: 50, y: 30 },
-            { id: 'timpani', name: 'Timpani & Percussion', role: 'จังหวะเน้นย้ำและพายุแห่งเสียง', family: 'Percussion (เครื่องกระทบ)', tone: 'เสียงทุ้มกึกก้อง กำหนดจุดไคลแมกซ์ของบทเพลง', x: 30, y: 20 },
-            { id: 'conductor', name: 'Conductor (วาทยกร)', role: 'ผู้อำนวยเพลง คุมจังหวะและบาลานซ์เสียง', family: 'Leadership', tone: 'ใช้ไม้บาตองสื่อสารอารมณ์และคิวการเข้าเล่น', x: 50, y: 80 }
-          ]
-        },
-        string_quartet: {
-          name: 'String Quartet (วงสตริงควอร์เท็ต)',
-          era: 'ยุคคลาสสิก (Haydn, Mozart, Beethoven)',
-          soundChar: 'ประณีต ลึกซึ้ง บทสนทนาระหว่างเครื่องสาย 4 ชิ้นอย่างลงตัว',
-          occasion: 'Chamber Music ในห้องฟังขนาดเล็ก งานพิธีอบอุ่น',
-          seating: [
-            { id: 'sq_v1', name: 'Violin 1', role: 'ผู้นำบทสนทนาและทำนองหลัก', family: 'Strings', tone: 'เสียงสูงสดใส ชวนคุย', x: 30, y: 40 },
-            { id: 'sq_v2', name: 'Violin 2', role: 'ผู้รับคำและสอดประสาน', family: 'Strings', tone: 'ช่วยเติมเต็มฮาร์โมนี', x: 40, y: 65 },
-            { id: 'sq_va', name: 'Viola', role: 'ผู้ให้ความอบอุ่นช่วงกลาง', family: 'Strings', tone: 'เสียงทุ้มกลางลึกซึ้ง', x: 60, y: 65 },
-            { id: 'sq_vc', name: 'Cello', role: 'ฐานรากเสียงทุ้มต่ำ', family: 'Strings', tone: 'เสียงเบสทุ้มกังวานรองรับทุกคน', x: 70, y: 40 }
-          ]
-        }
-      }
-    }
+  // ---- ข้อมูล ----
+  getData() {
+    const root = typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : {});
+    return root.ENSEMBLE_DATA || null;
+  },
+  categoryKeys() { const d = this.getData(); return d ? Object.keys(d.categories) : []; },
+  getEnsembles(cat) { const d = this.getData(); return d && d.categories[cat] ? d.categories[cat].ensembles : {}; },
+  esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); },
+
+  // ---- มุมมองครู/นักเรียน ----
+  isTeacher() { return typeof App !== 'undefined' && !!App.state && App.state.role === 'teacher'; },
+  // ข้อความร่างในข้อมูล เช่น "(รอครูตรวจ)" — นักเรียนไม่เห็น (ครูเห็นต้นฉบับ)
+  clean(s) {
+    if (s == null) return '';
+    const t = String(s);
+    if (this.isTeacher()) return t;
+    return t.replace(/\s*[(（][^)）]*(?:รอครูตรวจ|ร่างโดยระบบ|ครูโปรดยืนยัน)[^)）]*[)）]/g, '').replace(/\s{2,}/g, ' ').trim();
+  },
+  hasDraftMark(s) { return /รอครูตรวจ|ร่างโดยระบบ|ครูโปรดยืนยัน/.test(String(s || '')); },
+
+  // ---- คาบ ↔ วง (ข้อมูล: ensemble.period) ----
+  periodsAvailable() {
+    const d = this.getData(), out = {};
+    if (!d) return [];
+    Object.keys(d.categories).forEach(ck => { const m = d.categories[ck].ensembles; Object.keys(m).forEach(k => { if (m[k].period) out[m[k].period] = 1; }); });
+    return Object.keys(out).map(Number).sort((a, b) => a - b);
+  },
+  hasPeriod(p) { return this.periodsAvailable().indexOf(Number(p)) >= 0; },
+  _pset(period) { return period == null ? null : (Array.isArray(period) ? period.map(Number) : [Number(period)]); },
+  // หมวดที่เปิดได้ในคาบนั้น (ไม่ระบุคาบ = ทุกหมวด)
+  categoriesFor(period) {
+    const d = this.getData();
+    if (!d) return [];
+    const ps = this._pset(period);
+    if (!ps || !ps.length) return this.categoryKeys();
+    return this.categoryKeys().filter(ck => Object.keys(d.categories[ck].ensembles).some(k => ps.indexOf(d.categories[ck].ensembles[k].period) >= 0));
+  },
+  // วงในหมวด (กรองตามคาบที่เปิดมา)
+  ensemblesIn(cat) {
+    const all = this.getEnsembles(cat), out = {};
+    const ps = this._pset(this.period);
+    Object.keys(all).forEach(k => { if (!ps || !ps.length || ps.indexOf(all[k].period) >= 0) out[k] = all[k]; });
+    return out;
   },
 
-  // เสียงดนตรีสังเคราะห์จำลอง (Audio Timbre Synthesizer ผ่าน Web Audio API)
-  playSample(instId) {
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      const ctx = new AC();
-      const t = ctx.currentTime;
+  // ---- ผังที่นั่ง: จัดเป็นแถวตามค่า y แล้วเรียงซ้าย→ขวาตามค่า x (ไม่ทับซ้อนโดยโครงสร้าง) ----
+  layoutRows(seating, threshold) {
+    const th = threshold == null ? 12 : threshold;
+    const idx = seating.map((s, i) => i).sort((a, b) => (seating[a].y - seating[b].y) || (seating[a].x - seating[b].x));
+    const rows = [];
+    idx.forEach(i => {
+      const last = rows[rows.length - 1];
+      if (last && seating[i].y - seating[last[0]].y <= th) last.push(i); else rows.push([i]);
+    });
+    rows.forEach(r => r.sort((a, b) => (seating[a].x - seating[b].x) || (a - b)));
+    return rows;
+  },
 
+  // การ์ดเครื่องดนตรี: รวมข้อมูลเครื่อง (instruments) + บทบาทเฉพาะวง (seating)
+  getInstrumentCard(cat, ensKey, seatIdx) {
+    const d = this.getData();
+    const ens = d && d.categories[cat] && d.categories[cat].ensembles[ensKey];
+    const seat = ens && ens.seating[seatIdx];
+    if (!seat) return null;
+    const ins = d.instruments[seat.inst] || {};
+    const synth = ins.synth || 'generic';
+    return {
+      id: seat.inst, name: ins.name || seat.inst, en: ins.en || '', cls: ins.cls || '', detail: ins.detail || '',
+      role: seat.role || '', tone: seat.tone || ins.tone || '', synth: synth,
+      how: ins.how || (d.howBySynth || {})[synth] || '',
+      review: !!(ins.review || ens.review), ensembleName: ens.name, wk5: ens.wk5 || '',
+      audio: ins.audio || null, image: ins.image || null, hasSample: this.hasSample(seat.inst)
+    };
+  },
+
+  // ---- เสียงจำลอง (Web Audio) จาก synthPresets ในข้อมูล — ไม่ใช่เสียงเครื่องดนตรีจริง ----
+  audioCtor() {
+    if (typeof window === 'undefined') return null;
+    return window.AudioContext || window.webkitAudioContext || null;
+  },
+  hasSample(instId) {
+    const d = this.getData();
+    const ins = d && d.instruments[instId];
+    if (!ins) return false;
+    if (ins.audio) return true;
+    return !!(d.synthPresets[ins.synth] && this.audioCtor());
+  },
+  // เสียงจริง (ไฟล์จาก Commons ที่ระบุใน ensemble_audio.json → ins.audio) — ถ้าเล่นไม่ได้จะใช้เสียงจำลองแทนและบอกบนจอ
+  playReal(ins) {
+    try {
+      if (typeof Audio === 'undefined' || !ins || !ins.audio || !ins.audio.file) return false;
+      if (this._aud) { try { this._aud.pause(); } catch (e) { /* ข้าม */ } }
+      const a = new Audio(ins.audio.file);
+      this._aud = a;
+      const fallback = () => {
+        const s = typeof document !== 'undefined' && document.getElementById && document.getElementById('ens-audio-status');
+        if (s) s.textContent = 'เล่นเสียงจริงไม่ได้ในขณะนี้ (ไฟล์ไม่พร้อม/ออฟไลน์) — ได้ยินเป็นเสียงจำลองแทน';
+        this.playSynth(ins);
+      };
+      a.addEventListener('error', fallback);
+      const r = a.play();
+      if (r && typeof r.catch === 'function') r.catch(fallback);
+      return true;
+    } catch (e) { return false; }
+  },
+  playSample(instId) {
+    const d0 = this.getData();
+    const ins0 = d0 && d0.instruments[instId];
+    if (ins0 && ins0.audio && this.playReal(ins0)) return;
+    if (ins0) this.playSynth(ins0);
+  },
+  playSynth(ins) {
+    try {
+      const d = this.getData();
+      if (!d || !ins) return;
+      const pr = d.synthPresets[ins.synth] || d.synthPresets.generic;
+      const AC = this.audioCtor();
+      if (!AC || !pr) return;
+      if (!this._ctx) this._ctx = new AC();
+      const ctx = this._ctx;
+      if (ctx.resume) ctx.resume();
+      const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
-      // ปรับแต่งคลื่นเสียงและฮาร์มอนิกส์ตามธรรมชาติของเครื่องดนตรี
-      if (instId.includes('ranat') || instId.includes('ponglang')) {
-        // เครื่องตีไม้: transient เร็ว หางเสียงสั้น
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(659.25, t); // E5
-        gain.gain.setValueAtTime(0.7, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-        osc.start(t);
-        osc.stop(t + 0.36);
-      } else if (instId.includes('saw') || instId.includes('violin') || instId.includes('string')) {
-        // เครื่องสี: คลื่นฟันปลา sawtooth หวานลากยาว
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(440, t); // A4
-        gain.gain.setValueAtTime(0.01, t);
-        gain.gain.linearRampToValueAtTime(0.4, t + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
-        osc.start(t);
-        osc.stop(t + 1.25);
-      } else if (instId.includes('khlui') || instId.includes('woodwind')) {
-        // เครื่องเป่า: sine นุ่มนวล โหยหวน
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, t); // C5
-        gain.gain.setValueAtTime(0.01, t);
-        gain.gain.linearRampToValueAtTime(0.5, t + 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
-        osc.start(t);
-        osc.stop(t + 1.45);
-      } else if (instId.includes('ching')) {
-        // ฉิ่ง: เสียงแหลมกังวานใสพิเศษ
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(2093, t); // C7
-        gain.gain.setValueAtTime(0.8, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
-        osc.start(t);
-        osc.stop(t + 0.95);
-      } else {
-        // เสียงทั่วไป
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(329.63, t); // E4
-        gain.gain.setValueAtTime(0.5, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-        osc.start(t);
-        osc.stop(t + 0.52);
-      }
-
+      osc.type = pr.wave;
+      osc.frequency.setValueAtTime(pr.freq, t);
+      gain.gain.setValueAtTime(0.01, t);
+      gain.gain.linearRampToValueAtTime(pr.peak, t + Math.max(0.003, pr.attack));
+      gain.gain.exponentialRampToValueAtTime(0.001, t + pr.attack + pr.decay);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + pr.attack + pr.decay + 0.05);
     } catch (e) {
       console.log('Audio preview error', e);
     }
   },
 
-  openModal(defaultCategory = 'thai', ensembleKey = null) {
+  openModal(defaultCategory = 'thai', ensembleKey = null, period = null) {
     const modal = document.getElementById('modal-ensemble-explorer');
     if (!modal) return;
-
-    this.activeCategory = defaultCategory;
-    const catData = this.data[defaultCategory];
-    const keys = Object.keys(catData.ensembles);
-    this.activeEnsembleKey = ensembleKey && catData.ensembles[ensembleKey] ? ensembleKey : keys[0];
-    this.selectedInstrument = null;
-
+    if (!this.getData()) { alert('ข้อมูลวงดนตรียังโหลดไม่เสร็จ ลองรีเฟรชหน้าแล้วเปิดใหม่'); return; }
+    this.period = this._pset(period);
+    let cats = this.categoriesFor(this.period);
+    if (!cats.length) { this.period = null; alert('ยังไม่มีวงดนตรีของคาบนี้ใน วก.5'); return; }
+    this.activeCategory = cats.indexOf(defaultCategory) >= 0 ? defaultCategory : cats[0];
+    const keys = Object.keys(this.ensemblesIn(this.activeCategory));
+    this.activeEnsembleKey = ensembleKey && keys.indexOf(ensembleKey) >= 0 ? ensembleKey : keys[0];
+    this.selectedSeat = null;
+    this.quiz = null;
     modal.classList.add('active');
     this.render();
   },
@@ -212,145 +179,260 @@ const EnsembleExplorer = {
 
   switchCategory(catKey) {
     this.activeCategory = catKey;
-    const catData = this.data[catKey];
-    this.activeEnsembleKey = Object.keys(catData.ensembles)[0];
-    this.selectedInstrument = null;
+    this.activeEnsembleKey = Object.keys(this.ensemblesIn(catKey))[0];
+    this.selectedSeat = null;
+    this.quiz = null;
     this.render();
+  },
+
+  // เลื่อนไปยังส่วนที่เพิ่งเปลี่ยน (มือถือ: รายชื่อวงยาว ผัง/การ์ดอยู่ใต้จอ) — ไม่ทำอะไรถ้าไม่มี DOM
+  _scrollTo(id, block) {
+    try {
+      const el = typeof document !== 'undefined' && document.getElementById && document.getElementById(id);
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: block || 'start' });
+    } catch (e) { /* เบราว์เซอร์เก่า: ข้าม */ }
   },
 
   selectEnsemble(key) {
     this.activeEnsembleKey = key;
-    this.selectedInstrument = null;
+    this.selectedSeat = null;
+    this.quiz = null;
     this.render();
+    this._scrollTo('ensemble-info-banner', 'start');
   },
 
-  selectInstrument(inst) {
-    this.selectedInstrument = inst;
-    this.playSample(inst.id);
-    this.renderInspector();
+  selectSeat(idx) {
+    this.selectedSeat = idx;
+    this.quiz = null;
+    const card = this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, idx);
+    if (card && card.hasSample) this.playSample(card.id);
+    this.render();
+    this._scrollTo('ensemble-instrument-inspector', 'nearest');
+  },
+
+  // ---- แสดงผล ----
+  reviewBadge(on) {
+    const d = this.getData();
+    return on ? `<span class="ens-draft">${this.esc(d.reviewLabel)}</span>` : '';
+  },
+
+  // ภาพวง: ภาพจริงจาก Commons (พร้อมเครดิต) หรือภาพประกอบ SVG ที่ติดป้าย 'ภาพประกอบ'
+  placeholderSVG(ens) {
+    const E = s => this.esc(s);
+    const dots = ens.seating.map((s, i) => `<circle cx="${(10 + Number(s.x) * 0.8).toFixed(1)}" cy="${(14 + Number(s.y) * 0.5).toFixed(1)}" r="5" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1"/>`).join('');
+    return `<svg viewBox="0 0 100 70" class="ens-ph" role="img" aria-label="ภาพประกอบ: ผังวง ${E(ens.name)}" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="98" height="68" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/><path d="M8 60 Q50 44 92 60" fill="none" stroke="#94a3b8" stroke-dasharray="3 2"/>${dots}<text x="50" y="9" text-anchor="middle" font-size="6" fill="#475569">ภาพประกอบ</text></svg>`;
+  },
+  imageHTML(ens) {
+    const E = s => this.esc(s);
+    const im = ens.image;
+    // ไม่มีภาพที่ตรวจแล้ว: นักเรียนไม่เห็นกรอบภาพ (ไม่มีกรอบว่าง/ภาพแทน) · ครูเห็นโน้ต "ครูเตรียมภาพ"
+    if (!im) return this.isTeacher() && ens.imageTeacherNote ? `<div class="ens-fig-note">📷 ${this.esc(ens.imageTeacherNote)}</div>` : '';
+    return `<div class="ens-fig"><img class="ens-img" src="${E(im.file)}" alt="${E(im.alt)}" loading="lazy" onerror="var f=this.parentNode;if(f&&f.style)f.style.display='none';">
+      <div class="ens-credit">ภาพ: ${E(im.alt)} · ${E(im.author)} · ${E(im.license)} · <a href="${E(im.page)}" target="_blank" rel="noopener">Wikimedia Commons</a></div></div>`;
   },
 
   render() {
-    const cat = this.data[this.activeCategory];
-    const ens = cat.ensembles[this.activeEnsembleKey];
+    const d = this.getData();
+    if (!d) return;
+    const cats = this.categoryKeys();
+    const allowed = this.categoriesFor(this.period);
+    const ensMap = this.ensemblesIn(this.activeCategory);
+    const ens = ensMap[this.activeEnsembleKey];
     if (!ens) return;
+    const E = s => this.esc(s), C = s => this.esc(this.clean(s));
+    const teacher = this.isTeacher();
 
-    // 1. Render Category Tabs
-    ['thai', 'folk', 'western'].forEach(k => {
+    cats.forEach(k => {
       const btn = document.getElementById(`ens-cat-${k}`);
-      if (btn) btn.className = `academic-tab-btn ${this.activeCategory === k ? 'active' : ''}`;
+      if (btn) {
+        btn.className = `academic-tab-btn ${this.activeCategory === k ? 'active' : ''}`;
+        btn.style.display = allowed.indexOf(k) >= 0 ? '' : 'none';
+      }
     });
 
-    // 2. Render Ensemble Selector Pills
     const selectorContainer = document.getElementById('ensemble-pills-selector');
     if (selectorContainer) {
-      selectorContainer.innerHTML = Object.entries(cat.ensembles).map(([k, e]) => `
-        <button type="button" class="btn-nav-action ${this.activeEnsembleKey === k ? 'primary' : ''}" style="font-size:0.82rem; padding:4px 12px;" onclick="EnsembleExplorer.selectEnsemble('${k}')">
-          ${e.name}
+      selectorContainer.innerHTML = Object.keys(ensMap).map(k => `
+        <button type="button" class="btn-nav-action ens-pill ${this.activeEnsembleKey === k ? 'primary' : ''}" onclick="EnsembleExplorer.selectEnsemble('${E(k)}')">
+          ${E(ensMap[k].name)}
         </button>
       `).join('');
     }
 
-    // 3. Render Ensemble Info Banner
     const infoEl = document.getElementById('ensemble-info-banner');
     if (infoEl) {
+      const folkRegions = this.activeCategory === 'folk'
+        ? `<div class="ens-sub">ครบ 4 ภาคตาม วก.5: ${d.regions.map(r => {
+            const key = Object.keys(ensMap).filter(k => ensMap[k].region === r)[0];
+            return key ? `<a href="javascript:void(0)" class="ens-region" style="${key === this.activeEnsembleKey ? 'font-weight:800;' : ''}" onclick="EnsembleExplorer.selectEnsemble('${E(key)}')">${E(r)}</a>` : E(r);
+          }).join(' • ')}</div>` : '';
+      const facts = [];
+      if (ens.region) facts.push(`ภูมิภาค: <strong>${E(this.clean(ens.region))}</strong>`);
+      if (ens.size) facts.push(`ขนาดวง: <strong>${C(ens.size)}</strong>`);
+      if (this.clean(ens.era)) facts.push(`ยุค/ที่มา: <strong>${C(ens.era)}</strong>`);
+      if (this.clean(ens.occasion)) facts.push(`โอกาสที่ใช้: ${C(ens.occasion)}`);
+      const teacherNotes = teacher ? this.teacherNotesHTML(ens) : '';
       infoEl.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem;">
-          <div>
-            <h3 style="margin:0; font-size:1.15rem; color:#1e3a8a; font-weight:800;">${ens.name}</h3>
-            <div style="font-size:0.82rem; color:#475569; margin-top:2px;">ยุค/ที่มา: <strong>${ens.era}</strong> • โอกาสที่ใช้: ${ens.occasion}</div>
-          </div>
-          <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:4px 10px; font-size:0.8rem; color:#1d4ed8;">
-            🔊 <strong>สีสันของเสียง (Timbre):</strong> ${ens.soundChar}
-          </div>
-        </div>
+        <h3 class="ens-title">${E(ens.name)}</h3>
+        ${this.imageHTML(ens)}
+        <div class="ens-sub">${facts.join(' • ')}</div>
+        <div class="ens-sub ens-ref">อ้างอิง: ${E(ens.wk5)}</div>
+        ${folkRegions}
+        ${this.clean(ens.soundChar) ? `<div class="ens-timbre">🔊 <strong>สีสันของเสียง (Timbre):</strong> ${C(ens.soundChar)}</div>` : ''}
+        ${teacherNotes}
       `;
     }
 
-    // 4. Render Visual Stage Seating Chart
     const stageEl = document.getElementById('ensemble-stage-canvas');
     if (stageEl) {
+      const rows = this.layoutRows(ens.seating);
       stageEl.innerHTML = `
-        <div style="position:relative; width:100%; height:320px; background:radial-gradient(circle at center, #f8fafc 40%, #e2e8f0 100%); border:2px solid #cbd5e1; border-radius:12px; overflow:hidden;">
-          <!-- Stage Footlight Arc -->
-          <div style="position:absolute; bottom:0; left:5%; width:90%; height:35px; border-top:3px dashed #94a3b8; border-radius:50% 50% 0 0; opacity:0.6;"></div>
-          <div style="position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:1px;">
-            🎭 ด้านหน้าเวที (Audience / ด้านหน้าผู้ฟัง)
-          </div>
-
-          <!-- Seating Nodes -->
-          ${ens.seating.map((inst, idx) => `
-            <div onclick="EnsembleExplorer.selectInstrument(EnsembleExplorer.data['${this.activeCategory}'].ensembles['${this.activeEnsembleKey}'].seating[${idx}])"
-                 style="position:absolute; left:${inst.x}%; top:${inst.y}%; transform:translate(-50%, -50%); cursor:pointer; text-align:center; transition:transform 0.15s ease;"
-                 onmouseover="this.style.transform='translate(-50%, -50%) scale(1.1)'"
-                 onmouseout="this.style.transform='translate(-50%, -50%) scale(1)'">
-              <div style="width:42px; height:42px; border-radius:50%; background:${this.selectedInstrument?.id === inst.id ? '#2563eb' : '#ffffff'}; border:2px solid ${this.selectedInstrument?.id === inst.id ? '#1d4ed8' : '#3b82f6'}; box-shadow:0 2px 6px rgba(0,0,0,0.12); display:flex; align-items:center; justify-content:center; margin:0 auto; color:${this.selectedInstrument?.id === inst.id ? '#ffffff' : '#1e3a8a'}; font-weight:800; font-size:0.85rem;">
-                ${idx + 1}
-              </div>
-              <div style="font-size:0.75rem; font-weight:700; color:#1e293b; background:rgba(255,255,255,0.9); padding:1px 6px; border-radius:4px; margin-top:3px; white-space:nowrap; border:1px solid #e2e8f0;">
-                ${inst.name}
-              </div>
-            </div>
-          `).join('')}
+        <div class="ens-stage" role="group" aria-label="ผังที่นั่ง ${E(ens.name)}">
+          <div class="ens-stage-back">ด้านหลังเวที</div>
+          ${rows.map(r => `<div class="ens-row">${r.map(idx => {
+            const card = this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, idx);
+            const sel = this.selectedSeat === idx;
+            return `<button type="button" class="ens-seat${sel ? ' sel' : ''}" aria-pressed="${sel ? 'true' : 'false'}" data-seat="${idx}" onclick="EnsembleExplorer.selectSeat(${idx})"><span class="ens-seat-n">${idx + 1}</span><span class="ens-seat-name">${E(card.name)}</span>${card.audio ? '<span class="ens-seat-real" title="มีเสียงจริง">🎧 เสียงจริง</span>' : ''}</button>`;
+          }).join('')}</div>`).join('')}
+          <div class="ens-stage-front">🎭 ด้านหน้าเวที (ผู้ฟัง)</div>
         </div>
       `;
     }
-
     this.renderInspector();
   },
 
-  renderInspector() {
-    const inspectorEl = document.getElementById('ensemble-instrument-inspector');
-    if (!inspectorEl) return;
-
-    if (!this.selectedInstrument) {
-      inspectorEl.innerHTML = `
-        <div style="text-align:center; padding:1.5rem; color:#64748b; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">
-          👉 <strong>แตะที่เครื่องดนตรีบนผังเวที</strong> เพื่อฟังเสียงจำลองและศึกษาบทบาทหน้าที่ในวง (Indicator ศ 2.1 ม.1/4)
-        </div>
-      `;
-      return;
-    }
-
-    const inst = this.selectedInstrument;
-    inspectorEl.innerHTML = `
-      <div style="background:#ffffff; border:1.5px solid #3b82f6; border-radius:8px; padding:1rem; box-shadow:0 3px 8px rgba(37,99,235,0.08);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-          <div>
-            <span style="font-size:0.75rem; background:#dbeafe; color:#1e40af; font-weight:700; padding:2px 8px; border-radius:4px;">
-              ${inst.family}
-            </span>
-            <h4 style="margin:4px 0 0; font-size:1.15rem; color:#1e3a8a; font-weight:800;">${inst.name}</h4>
-          </div>
-          <button type="button" class="btn-nav-action primary" onclick="EnsembleExplorer.playSample('${inst.id}')" style="display:inline-flex; align-items:center; gap:4px;">
-            🔊 ฟังเสียงตัวอย่าง (Sample)
-          </button>
-        </div>
-        <div style="font-size:0.85rem; line-height:1.6; color:#334155;">
-          <div>🎯 <strong>บทบาทหน้าที่ในวง:</strong> ${inst.role}</div>
-          <div style="margin-top:2px;">🎨 <strong>เอกลักษณ์ของเสียง (Timbre):</strong> ${inst.tone}</div>
-        </div>
-      </div>
-    `;
+  // ข้อสังเกตสำหรับครู (เห็นเฉพาะครู · พับไว้)
+  teacherNotesHTML(ens) {
+    const d = this.getData(), E = s => this.esc(s);
+    const marks = [];
+    ['era', 'soundChar', 'occasion', 'region'].forEach(f => { if (this.hasDraftMark(ens[f])) marks.push(f + ': ' + ens[f]); });
+    return `<details class="ens-teacher"><summary>ข้อสังเกตสำหรับครู</summary>
+      <div>${ens.review ? this.reviewBadge(true) : ''} ${E(d.reviewNote)}</div>
+      ${ens.note ? `<div>${E(ens.note)}</div>` : ''}
+      ${ens.image && ens.image.teacherNote ? `<div>📷 ${E(ens.image.teacherNote)}</div>` : ''}
+      ${marks.length ? `<div>ฟิลด์ที่ยังเป็นร่าง (นักเรียนไม่เห็นข้อความร่าง): ${marks.map(E).join(' · ')}</div>` : ''}
+      <div>ผังที่นั่งจัดเป็นแถวตามตำแหน่งในข้อมูล (ไม่ใช่ผังจริงของวง) — ถ้าต้องการผังจริง แก้ x/y ใน ensemble_source.json</div>
+    </details>`;
   },
 
-  // มินิเกมทดสอบโสตทักษะ (Audio Quiz)
-  startQuiz() {
-    const qList = [
-      { q: "วงดนตรีไทยประเภทใดที่มีเครื่องดนตรีครบทั้ง ดีด สี ตี และเป่า บรรเลงร่วมกันอย่างกลมกลืน?", a: "วงมโหรี", choices: ["วงปี่พาทย์ไม้แข็ง", "วงเครื่องสาย", "วงมโหรี", "วงปี่พาทย์มอญ"] },
-      { q: "เครื่องดนตรีชิ้นใดทำหน้าที่เป็น 'เครื่องนำทำนอง' และเปรียบเสมือนหัวหน้าวงในวงปี่พาทย์ไม้แข็ง?", a: "ระนาดเอก", choices: ["ฆ้องวงใหญ่", "ระนาดเอก", "ปี่ใน", "ตะโพน"] },
-      { q: "วงดนตรีพื้นบ้านล้านนาของจังหวัดพะเยาที่มีสะล้อ ซึง และปี่จุม เรียกว่าวงอะไร?", a: "วงสะล้อซอซึง", choices: ["วงกลองยาว", "วงสะล้อซอซึง", "วงโปงลาง", "วงรองเง็ง"] },
-      { q: "ในวงดุริยางค์ซิมโฟนีสากล เครื่องสายชิ้นใดทำหน้าที่เป็นแนวเสียงเบสต่ำสุดรองรับฮาร์โมนี?", a: "Double Bass", choices: ["Violin 1", "Viola", "Cello", "Double Bass"] },
-      { q: "เครื่องประกอบจังหวะชิ้นใดของไทยที่มีหน้าที่ 'กำกับหน้าทับและคุมอัตราจังหวะ' ให้วงบรรเลงพร้อมเพรียง?", a: "ฉิ่ง", choices: ["ฉิ่ง", "กรับ", "ฉาบ", "โหม่ง"] }
-    ];
-    const rand = qList[Math.floor(Math.random() * qList.length)];
-    const chosen = prompt(`🎧 มินิเกมทดสอบความรู้วงดนตรี (Active Quiz):\n\n${rand.q}\n\nตัวเลือก: ${rand.choices.join(' | ')}\n\n(พิมพ์คำตอบลงในช่องด้านล่าง):`);
-    if (!chosen) return;
-    if (chosen.trim() === rand.a) {
-      alert(`🎉 ถูกต้องยอดเยี่ยม! คำตอบคือ "${rand.a}" เก่งมากครับ!`);
-    } else {
-      alert(`💡 คำตอบที่ถูกต้องคือ "${rand.a}" ครับ ลองศึกษาผังวงเพิ่มเติมดูนะครับ!`);
+  // เครดิตเสียงจริง (CC BY-SA ต้องระบุผู้สร้าง สิทธิ์ ลิงก์ และการแก้ไข)
+  audioCredit(a) {
+    const E = s => this.esc(s);
+    return `${E(a.author)} · ${E(a.license)} · <a href="${E(a.page)}" target="_blank" rel="noopener">Wikimedia Commons</a> · ${E(a.change)}`;
+  },
+
+  renderInspector() {
+    const el = document.getElementById('ensemble-instrument-inspector');
+    if (!el) return;
+    const E = s => this.esc(s);
+    if (this.quiz) { this.renderQuiz(el); return; }
+
+    const ens = this.ensemblesIn(this.activeCategory)[this.activeEnsembleKey];
+    if (!ens) return;
+    // กลุ่มตามประเภทเครื่องดนตรี (วก.5: ไทย = ดีด สี ตี เป่า · สากล = สาย ลมไม้ ทองเหลือง ลิ่มนิ้ว กระทบ)
+    const groups = {};
+    ens.seating.forEach((s, i) => { const c = this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, i); (groups[c.cls || 'อื่น ๆ'] = groups[c.cls || 'อื่น ๆ'] || []).push({ i: i, c: c }); });
+    // ป้ายแหล่งเสียง: เครื่องที่มีไฟล์เสียงจริง = 🎧 พร้อมเครดิต · เครื่องอื่น = เสียงจำลอง (สังเคราะห์)
+    const reals = [], seen = {};
+    ens.seating.forEach((s, i) => { const c = this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, i); if (c.audio && !seen[c.id]) { seen[c.id] = 1; reals.push(c); } });
+    const hasSim = ens.seating.some((s, i) => !this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, i).audio);
+    const legend = (reals.length ? reals.map(c => `🎧 <strong>${E(c.name)}</strong> = เสียงจริง (${E(c.audio.label)}) · ${this.audioCredit(c.audio)}`).join('<br>') : '')
+      + (reals.length && hasSim ? '<br>' : '') + (hasSim ? '🔈 เครื่องอื่น = <strong>เสียงจำลอง</strong> (สังเคราะห์จากคอมพิวเตอร์ ไม่ใช่เสียงเครื่องจริง)' : '');
+    const groupHtml = `
+      <div class="ens-groups">
+        <strong>จัดเครื่องดนตรีในวงตามประเภท:</strong>
+        ${Object.keys(groups).map(g => `<div class="ens-grp"><span class="ens-cls">${E(g)}</span> ${groups[g].map(x => `<button type="button" class="ens-chip" onclick="EnsembleExplorer.selectSeat(${x.i})">${x.c.audio ? '🎧 ' : ''}${E(x.c.name)}</button>`).join(' ')}</div>`).join('')}
+      </div>
+      <div class="ens-legend">${legend}</div>`;
+
+    if (this.selectedSeat == null) {
+      el.innerHTML = `
+        <div class="ens-hint">
+          👉 <strong>แตะที่เครื่องดนตรีในผังที่นั่ง</strong> เพื่อดูชื่อ ประเภท บทบาทในวง วิธีเล่น และฟังเสียงจำลอง (ศ 2.1 ม.1/4)
+        </div>${groupHtml}`;
+      return;
     }
+    const c = this.getInstrumentCard(this.activeCategory, this.activeEnsembleKey, this.selectedSeat);
+    const sound = c.audio
+      ? `<button type="button" class="btn-nav-action primary ens-play" onclick="EnsembleExplorer.playSample('${E(c.id)}')">🎧 ฟังเสียงจริง</button><div class="ens-badge real">เสียงจริง</div>`
+      : c.hasSample
+        ? `<button type="button" class="btn-nav-action primary ens-play" onclick="EnsembleExplorer.playSample('${E(c.id)}')">🔊 ฟังเสียงจำลอง</button><div class="ens-badge sim">เสียงจำลอง</div>`
+        : `<span class="ens-nosound">🔇 เบราว์เซอร์/อุปกรณ์นี้เล่นเสียงจำลองไม่ได้ (ยังอ่านข้อมูลเครื่องได้ตามปกติ)</span>`;
+    el.innerHTML = `
+      <div class="ens-card">
+        <div class="ens-card-head">
+          <div>
+            <span class="ens-cls">ประเภท: ${E(c.cls || '-')}${c.detail ? ' (' + E(c.detail) + ')' : ''}</span>
+            <h4 class="ens-card-name">${E(c.name)}</h4>
+            ${c.en ? `<div class="ens-card-en">${E(c.en)}</div>` : ''}
+          </div>
+          <div class="ens-card-sound">${sound}</div>
+        </div>
+        <div class="ens-card-body">
+          <div>🎯 <strong>บทบาทหน้าที่ในวง:</strong> ${E(c.role)}</div>
+          ${c.how ? `<div>🖐 <strong>วิธีเล่น:</strong> ${E(c.how)}</div>` : ''}
+          ${this.clean(c.tone) ? `<div>🎨 <strong>เอกลักษณ์ของเสียง (Timbre):</strong> ${E(this.clean(c.tone))}</div>` : ''}
+          <div class="ens-card-note">ในวง: ${E(c.ensembleName)}${c.audio ? '' : (c.hasSample ? ' • เสียงที่กดฟังเป็นเสียงสังเคราะห์จำลอง ไม่ใช่เสียงเครื่องจริง' : '')}</div>
+          ${c.audio ? `<div class="ens-card-note">🎧 เสียงจริง: ${E(c.audio.label)} · ${this.audioCredit(c.audio)}<br><span id="ens-audio-status"></span></div>` : ''}
+        </div>
+      </div>${groupHtml}`;
+  },
+
+  // ---- แบบทดสอบทบทวน (ไม่นับคะแนน · ไม่บันทึกผลที่ใด): สร้างจากข้อมูล (ภาคของวงพื้นบ้าน + ประเภทของเครื่องดนตรี) ----
+  buildQuestions() {
+    const d = this.getData();
+    const qs = [];
+    const seen = {};
+    this.categoriesFor(this.period).forEach(ck => {
+      const set = ck === 'western' ? d.classSets.western : d.classSets.thai;
+      const ensMap = this.ensemblesIn(ck);
+      Object.keys(ensMap).forEach(ek => {
+        const e = ensMap[ek];
+        if (ck === 'folk' && e.region) qs.push({ q: `วง "${e.name}" เป็นวงดนตรีพื้นบ้านของภาคใด?`, a: e.region, choices: d.regions.slice() });
+        e.seating.forEach(s => {
+          const ins = d.instruments[s.inst];
+          if (!ins || set.indexOf(ins.cls) < 0 || seen[ck + ':' + s.inst]) return;
+          seen[ck + ':' + s.inst] = 1;
+          qs.push({ q: `"${ins.name}" จัดเป็นเครื่องดนตรีประเภทใด?`, a: ins.cls, choices: set.slice() });
+        });
+      });
+    });
+    return qs;
+  },
+
+  startQuiz() {
+    if (!this.getData()) return;
+    const qs = this.buildQuestions();
+    if (!qs.length) return;
+    this.quiz = { q: qs[Math.floor(Math.random() * qs.length)], answered: null, score: (this.quiz && this.quiz.score) || { ok: 0, all: 0 } };
+    this.renderInspector();
+  },
+
+  answerQuiz(i) {
+    if (!this.quiz || this.quiz.answered != null) return;
+    this.quiz.answered = i;
+    this.quiz.score.all++;
+    if (this.quiz.q.choices[i] === this.quiz.q.a) this.quiz.score.ok++;
+    this.renderInspector();
+  },
+
+  nextQuiz() { this.startQuiz(); },
+  endQuiz() { this.quiz = null; this.renderInspector(); },
+
+  renderQuiz(el) {
+    const E = s => this.esc(s), z = this.quiz, q = z.q;
+    const done = z.answered != null;
+    el.innerHTML = `
+      <div class="ens-quiz">
+        <div class="ens-quiz-h">🎮 แบบทดสอบทบทวน (ไม่นับคะแนนเก็บ) • ตอบถูก ${z.score.ok}/${z.score.all}</div>
+        <div class="ens-quiz-q">${E(q.q)}</div>
+        <div class="ens-quiz-c">
+          ${q.choices.map((c, i) => `<button type="button" class="btn-nav-action ens-choice ${done && c === q.a ? 'primary' : ''}" ${done ? 'disabled' : ''} onclick="EnsembleExplorer.answerQuiz(${i})">${E(c)}</button>`).join('')}
+        </div>
+        ${done ? `<div class="ens-quiz-r" style="color:${q.choices[z.answered] === q.a ? '#15803d' : '#b45309'};">${q.choices[z.answered] === q.a ? '✓ ถูกต้อง' : '✗ คำตอบที่ถูกคือ "' + E(q.a) + '"'}</div>
+          <div style="margin-top:6px;"><button type="button" class="btn-nav-action primary ens-choice" onclick="EnsembleExplorer.nextQuiz()">ข้อต่อไป</button> <button type="button" class="btn-nav-action ens-choice" onclick="EnsembleExplorer.endQuiz()">กลับไปผังวง</button></div>` : ''}
+        <div class="ens-quiz-n">ใช้ทบทวนเท่านั้น — ไม่บันทึก ไม่ส่งครู และไม่นับเป็นคะแนน</div>
+      </div>`;
   }
 };
 

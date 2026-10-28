@@ -1,0 +1,5 @@
+{
+ "version": "2026.10.28-2",
+ "codeHash": "0571b6cff97b36aa3b080d752392c3f6b30a51713f2a44a9002645ddf06d4c43",
+ "note": "ล็อกเวอร์ชัน GAS: สร้างโดย tests/test_gas_version_check.js --update-lock"
+}

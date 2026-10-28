@@ -2,6 +2,33 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
+<!-- ms-legacy-guard: ES5 ล้วน ห้ามใช้ไวยากรณ์ใหม่ในบล็อกนี้ — แจ้งเป็นภาษาไทยเมื่อแอปเปิดไม่ขึ้นบนเครื่องเก่า -->
+<script>
+(function () {
+  var errs = [];
+  window.__msErrors = errs;
+  window.addEventListener('error', function (e) { try { errs.push(String(e && e.message || e)); } catch (x) {} });
+  function show() {
+    if (document.getElementById('ms-legacy-banner')) return;
+    var d = document.createElement('div'); d.id = 'ms-legacy-banner';
+    d.setAttribute('style', 'position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#fff3cd;color:#664d03;padding:14px 16px;font:16px/1.5 sans-serif;border-bottom:3px solid #ffc107');
+    d.innerHTML = '<b>แอป MusicSmart เปิดไม่สำเร็จบนเครื่อง/เบราว์เซอร์นี้</b><br>' +
+      'อาจเป็นเพราะเบราว์เซอร์เก่าเกินไป — แนะนำให้อัปเดต Google Chrome หรือ Android System WebView (ขั้นต่ำ Chrome 51 / Android 7 ขึ้นไป; iPhone ใช้ iOS 13 ขึ้นไป) ' +
+      'หรือเปิดด้วยเครื่องอื่น/คอมพิวเตอร์ แล้วแจ้งครูผู้สอน' +
+      (errs.length ? '<br><small>รหัสข้อผิดพลาด: ' + String(errs[0]).replace(/</g, '&lt;').slice(0, 120) + '</small>' : '');
+    (document.body || document.documentElement).appendChild(d);
+  }
+  window.__msShowLegacyBanner = show;
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var booted = false;
+      try { booted = (typeof App !== 'undefined') && (typeof Store !== 'undefined'); } catch (x) { booted = false; }
+      if (!booted) show();
+    }, 3500);
+  });
+})();
+</script>
+  <script src="js/legacy-polyfills.js?v=20261028_20"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MusicSmart • ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE - โรงเรียนพะเยาพิทยาคม</title>
   <meta name="description" content="MusicSmart ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE แพลตฟอร์มบริหารจัดการชั้นเรียน วัดประเมินผล และวิจัยในชั้นเรียน สาระการเรียนรู้ดนตรี โรงเรียนพะเยาพิทยาคม">
@@ -11,7 +38,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=33">
+  <link rel="stylesheet" href="css/styles.css?v=36">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- PWA Progressive Web App & Mobile App Tags -->
@@ -63,7 +90,7 @@
       <div class="header-middle" id="header-middle-teacher">
         <div id="btn-semester-trigger" class="semester-badge" onclick="App.openSemesterModal()" title="คลิกเพื่อจัดการเทอมและคลังย้อนหลัง">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          <span id="header-semester-label">ภาคเรียนที่ 2/2569</span>
+          <span id="header-semester-label">…</span>
         </div>
 
         <nav id="header-course-nav" class="course-tabs-nav">
@@ -123,28 +150,28 @@
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
                     เครื่องมือดนตรีดิจิทัล
                   </div>
-                  <button class="tools-item-btn" onclick="Metronome.open(); App.closeToolsMenu();">
+                  <button class="tools-item-btn" data-tool="metronome" onclick="Metronome.open(); App.closeToolsMenu();">
                     <span class="tool-icon" style="background: #e0f2fe; color: #0284c7;">🥁</span>
                     <div class="tool-text">
                       <div class="tool-name">เมโทรนอมเคาะจังหวะ</div>
                       <div class="tool-desc">กำหนดความเร็ว BPM & จังหวะตก Visual Beat</div>
                     </div>
                   </button>
-                  <button class="tools-item-btn" onclick="VirtualKalimba.openModal(); App.closeToolsMenu();">
+                  <button class="tools-item-btn" data-tool="kalimba" onclick="VirtualKalimba.openModal(); App.closeToolsMenu();">
                     <span class="tool-icon" style="background: #dbeafe; color: #1d4ed8;">🎹</span>
                     <div class="tool-text">
                       <div class="tool-name">ซ้อมคาลิมบ้า (Virtual)</div>
                       <div class="tool-desc">ห้องซ้อมดนตรี 17 เสียง & Backing Track</div>
                     </div>
                   </button>
-                  <button class="tools-item-btn" onclick="App.openMusicAidsModal(); App.closeToolsMenu();">
+                  <button class="tools-item-btn" data-tool="notation" onclick="App.openMusicAidsModal(); App.closeToolsMenu();">
                     <span class="tool-icon" style="background: #fef08a; color: #854d0e;">🎼</span>
                     <div class="tool-text">
                       <div class="tool-name">สื่อการสอนโน้ตสากล & ผังคาลิมบ้า</div>
                       <div class="tool-desc">บรรทัด 5 เส้น, กุญแจซอล, เพลง Round</div>
                     </div>
                   </button>
-                  <button class="tools-item-btn" onclick="EnsembleExplorer.openModal(); App.closeToolsMenu();">
+                  <button class="tools-item-btn" onclick="App.openEnsemble(); App.closeToolsMenu();">
                     <span class="tool-icon" style="background: #fdf2f8; color: #db2777;">🎺</span>
                     <div class="tool-text">
                       <div class="tool-name">สำรวจวงดนตรีเสมือนจริง</div>
@@ -178,6 +205,13 @@
                     <div class="tool-text">
                       <div class="tool-name">วิจัย CAR (วPA คศ.4)</div>
                       <div class="tool-desc">สถิติ Paired t-test & E1/E2</div>
+                    </div>
+                  </button>
+                  <button class="tools-item-btn" id="btn-evidence-hub" onclick="EvidenceHub.open(); App.closeToolsMenu();">
+                    <span class="tool-icon" style="background: #fef9c3; color: #a16207;">🏅</span>
+                    <div class="tool-text">
+                      <div class="tool-name">ศูนย์หลักฐาน คศ.4 (ครู)</div>
+                      <div class="tool-desc">ผลสัมฤทธิ์ • นวัตกรรม • วิจัย • PA • ให้คำปรึกษา</div>
                     </div>
                   </button>
                   <button class="tools-item-btn" onclick="QuizEngine.openQuizModal(1); App.closeToolsMenu();">
@@ -271,10 +305,10 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
             <span>ติดตั้งแอป</span>
           </button>
-          <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมดนตรี คาลิมบ้า 17 คีย์">
+          <button class="btn-nav-action" data-tool="kalimba" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมดนตรี คาลิมบ้า 17 คีย์">
             <span>🎹 คาลิมบ้า</span>
           </button>
-          <button class="btn-nav-action" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
+          <button class="btn-nav-action" data-tool="metronome" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
             <span>🥁 เมโทรนอม</span>
           </button>
           <button id="btn-student-calendar" class="btn-nav-action" style="background: #fefce8; color: #854d0e; border-color: #fde68a; font-weight: 700;" onclick="TaskCalendar.open()" title="ปฏิทินกำหนดส่งงาน + แจ้งเตือน">
@@ -321,7 +355,7 @@
     <div id="archive-notification-banner" class="archive-view-banner" style="display: none;">
       <div>
         <strong>กำลังดูข้อมูลประวัติย้อนหลัง:</strong>
-        <span id="archive-banner-text">ภาคเรียนที่ 1/2569</span> (โหมดอ่านอย่างเดียว)
+        <span id="archive-banner-text">…</span> (โหมดอ่านอย่างเดียว)
       </div>
       <button class="btn-nav-action" onclick="App.exitArchiveView()">กลับสู่ภาคเรียนปัจจุบัน</button>
     </div>
@@ -530,7 +564,7 @@
 
           <!-- Teaching Steps Timeline -->
           <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--ppk-navy-dark); margin-top: 1.25rem; margin-bottom: 0.75rem;">
-            ลำดับขั้นตอนการจัดกิจกรรมการเรียนรู้ (50 นาที)
+            ลำดับขั้นตอนการจัดกิจกรรมการเรียนรู้ <span id="steps-total-label"></span>
           </h4>
           <div id="steps-timeline" class="lesson-timeline-steps">
             <!-- Injected -->
@@ -551,13 +585,13 @@
           </div>
 
           <!-- Visual Music Notation & Staff Visualizer Action Card -->
-          <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-radius: var(--radius-sm); border: 1.5px solid #bfdbfe; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+          <div data-tool="notation" data-tool-scope="lesson" style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border-radius: var(--radius-sm); border: 1.5px solid #bfdbfe; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
             <div>
               <div style="font-weight: 800; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
                 <span>🎼</span> สื่อการสอนโน้ตสากลบนบรรทัด 5 เส้น และผังลิ้นเสียงคาลิมบ้า 17 คีย์
               </div>
               <div style="font-size: 0.78rem; color: #475569; margin-top: 2px;">
-                แผนภาพโน้ตสากล กุญแจซอล เทียบโน้ตไทย Solfege ตารางค่าตัวโน้ต และโน้ตเพลงฝึกหัด (หนูมาลี, Twinkle, เพลงวน Round)
+                แผนภาพโน้ตสากล กุญแจซอล เทียบโน้ตไทย Solfege ตารางค่าตัวโน้ต และแบบฝึก/บทเพลงตาม วก.5 (ดึงจากข้อมูลในแอป)
               </div>
             </div>
             <button class="btn-nav-action primary" style="background: #2563eb; border-color: #2563eb; font-weight: 700; padding: 0.45rem 1rem; font-size: 0.85rem;" onclick="App.openMusicAidsModal()">
@@ -679,8 +713,8 @@
 
           <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             <span style="font-size: 0.82rem; color: var(--text-muted); font-weight: 600;">ให้ทั้งห้อง:</span>
-            <button class="btn-nav-action" onclick="App.batchScoreAll(3)">ให้ 3 ทุกคน</button>
-            <button class="btn-nav-action" onclick="App.batchScoreAll(2)">ให้ 2 ทุกคน</button>
+            <button class="btn-nav-action" onclick="App.batchLevelAll(4)">ให้ระดับ 4 ทุกคน</button>
+            <button class="btn-nav-action" onclick="App.batchLevelAll(3)">ให้ระดับ 3 ทุกคน</button>
           </div>
         </div>
 
@@ -791,7 +825,7 @@
               </button>
             </div>
             <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
-              รหัสนักเรียน: <strong id="student-portal-id">-</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">-</strong> เลขที่ <strong id="student-portal-no">-</strong> • รายวิชา: <strong id="student-portal-subject">ศ21102 ดนตรีสากล 1</strong>
+              รหัสนักเรียน: <strong id="student-portal-id">-</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">-</strong> เลขที่ <strong id="student-portal-no">-</strong> • รายวิชา: <strong id="student-portal-subject">-</strong>
             </div>
           </div>
         </div>
@@ -848,7 +882,7 @@
           <div class="attendance-mini-breakdown" id="student-attendance-breakdown" style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem;">
             มาเรียน 1 ครั้ง • ขาด 0 • ลา 0
           </div>
-          <div class="metric-footnote">เกณฑ์เวลาเรียนขั้นต่ำ 80% ตามระเบียบ สพฐ.</div>
+          <div class="metric-footnote" id="student-att-footnote">เกณฑ์เวลาเรียนขั้นต่ำตามระเบียบ</div>
         </div>
 
         <!-- Metric 3: Score Summary -->
@@ -858,15 +892,15 @@
             <span class="metric-icon" style="color: #d97706;">⭐</span>
           </div>
           <div class="metric-value-row">
-            <span class="metric-big-number" id="student-score-text">3 / 3</span>
-            <span class="metric-pct-tag" id="student-score-pct" style="background: #fef3c7; color: #92400e;">100%</span>
+            <span class="metric-big-number" id="student-score-text">0 / 80</span>
+            <span class="metric-pct-tag" id="student-score-pct" style="background: #fef3c7; color: #92400e;">รอประเมิน</span>
           </div>
           <div class="score-aspect-bars" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 4px;">
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
-              <span>ทฤษฎีดนตรีสากล:</span> <strong id="score-theory-text">3/3</strong>
+              <span>คะแนนสะสมระหว่างภาค:</span> <strong id="score-theory-text">0 คะแนน</strong>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem;">
-              <span>ทักษะปฏิบัติและการมีส่วนร่วม:</span> <strong id="score-practice-text">ผ่านเกณฑ์</strong>
+              <span>ทักษะปฏิบัติและการมีส่วนร่วม:</span> <strong id="score-practice-text">รอการประเมิน</strong>
             </div>
           </div>
           <div class="metric-footnote">คะแนนเก็บระหว่างภาคเรียน</div>
@@ -906,18 +940,18 @@
             <div class="workspace-header">
               <div>
                 <span class="workspace-period-badge" id="student-workspace-period-badge">คาบที่ 1</span>
-                <h3 class="workspace-title" id="student-workspace-title">บรรทัด 5 เส้น และกุญแจซอล (Treble Clef)</h3>
+                <h3 class="workspace-title" id="student-workspace-title">ปฐมนิเทศรายวิชาดนตรี 1 ทำความเข้าใจเป้าหมายการเรียนรู้ และแนะนำการใช้งานแอปพลิเคชัน MusicSmart</h3>
               </div>
               <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <button class="btn-nav-action" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
+                <button class="btn-nav-action" data-tool="metronome" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                   🥁 เมโทรนอม (Metronome)
                 </button>
-                <button class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมและเครื่องจำลองคาลิมบ้า 17 คีย์">
+                <button class="btn-nav-action" data-tool="kalimba" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมและเครื่องจำลองคาลิมบ้า 17 คีย์">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
                   🎵 ซ้อมคาลิมบ้า (Virtual Kalimba)
                 </button>
-                <button class="btn-nav-action" style="background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()" title="เปิดแผนภาพโน้ตสากลและผังลิ้นเสียงคาลิมบ้า">
+                <button class="btn-nav-action" data-tool="notation" style="background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()" title="เปิดแผนภาพโน้ตสากลและผังลิ้นเสียงคาลิมบ้า">
                   🎼 สื่อโน้ตสากล & ผังคาลิมบ้า
                 </button>
                 <div id="student-submission-status-chip">
@@ -938,6 +972,9 @@
               </div>
 
               <!-- Smart Assessment Quick Actions for Student -->
+              <!-- ห้องสอบกลางภาค/ปลายภาค: แสดงข้อสอบเมื่อครูเปิดห้องสอบเท่านั้น (ข้อสอบอยู่บนเซิร์ฟเวอร์ ไม่อยู่ในไฟล์เว็บ) -->
+              <div id="student-exam-card" style="margin-bottom: 1.25rem; padding: 0.85rem 1.25rem; background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm);"></div>
+
               <div id="student-assessment-quick-bar" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
                 <div style="display: flex; align-items: center; gap: 0.65rem;">
                   <div style="width: 34px; height: 34px; border-radius: 50%; background: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; font-weight: 700;">
@@ -945,10 +982,10 @@
                   </div>
                   <div>
                     <div id="student-quiz-action-title" style="font-weight: 700; color: #166534; font-size: 0.92rem;">
-                      แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียนท้ายหน่วย
+                      ทบทวนก่อนสอบ (ไม่นับคะแนน)
                     </div>
                     <div id="student-quiz-action-desc" style="font-size: 0.78rem; color: #15803d;">
-                      10 ข้อ 10 คะแนน • วัดตามพิมพ์เขียว Test Blueprint (ดึงเข้าสมุดคะแนนอัตโนมัติ)
+                      ทบทวนเท่านั้น ไม่นับคะแนน (ตาม วก.5)
                     </div>
                   </div>
                 </div>
@@ -964,14 +1001,14 @@
               </div>
 
               <!-- In-Page Assignment Submission Area -->
-              <div class="assignment-submission-box">
+              <div class="assignment-submission-box" id="student-submission-box">
                 <div class="submission-header">
                   <h4 style="font-size: 1rem; font-weight: 700; color: var(--ppk-navy-dark); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     แบบฝึกหัดและภารกิจส่งงานในคาบเรียน (In-Page Submission)
                   </h4>
-                  <span id="student-assignment-max-score" style="font-size: 0.82rem; font-weight: 600; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 4px;">
-                    คะแนนเต็ม: 3 คะแนน
+                  <span id="student-assignment-max-score" style="font-size: 0.82rem; font-weight: 600; color: #0369a1; background: #e0f2fe; padding: 2px 8px; border-radius: 4px;">
+                    ไม่เก็บคะแนน (ปฐมนิเทศ)
                   </span>
                 </div>
 
@@ -988,9 +1025,9 @@
                 </div>
 
                 <!-- Direct File / Video Clip Attachment -->
-                <div class="form-group" style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.85rem;">
+                <div class="form-group" id="student-upload-block" style="display:none; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.85rem;">
                   <label class="form-label" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                    <span>📎 แนบไฟล์งาน / คลิปวิดีโอ / ไฟล์เสียง (ส่งเข้า Google Drive ครู):</span>
+                    <span>📎 แนบไฟล์งาน / คลิปวิดีโอ / ไฟล์เสียง (ปิดใช้งาน — ส่งเป็นข้อความ/ลิงก์):</span>
                     <span style="font-size: 0.75rem; font-weight: 500; color: #0284c7;">(รูป jpg/png/heic/webp • เสียง mp3/m4a/aac/wav/ogg • วิดีโอ mp4/mov/webm • PDF ไม่เกิน 50 MB)</span>
                   </label>
                   <input type="file" id="student-submission-file" class="form-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,audio/*,.m4a,.aac,video/mp4,video/quicktime,video/webm,application/pdf,.pdf" style="background: #ffffff; padding: 0.45rem; font-size: 0.85rem;" onchange="App.onStudentFileSelected(this)" />
@@ -1006,7 +1043,7 @@
                 <!-- Optional Attachment Link -->
                 <div class="form-group">
                   <label class="form-label" for="student-submission-url" style="font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                    🔗 หรือ วางลิงก์คลิปวิดีโอ (YouTube / Google Drive / TikTok):
+                    🔗 วางลิงก์ผลงาน/คลิป (YouTube / Google Drive / TikTok):
                   </label>
                   <input type="url" id="student-submission-url" class="form-input" placeholder="https://www.youtube.com/... หรือ https://drive.google.com/..." />
                   <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">
@@ -1399,8 +1436,8 @@
               <line x1="886" y1="60" x2="886" y2="140" stroke="#0f172a" stroke-width="2" />
               <line x1="890" y1="60" x2="890" y2="140" stroke="#0f172a" stroke-width="4" />
 
-              <!-- Treble Clef Symbol Text (Classical Font fallback) -->
-              <text x="50" y="132" font-size="88" fill="#1e293b" font-weight="normal" style="user-select: none;">𝄞</text>
+              <!-- กุญแจซอล: เส้นโค้ง SVG (KalimbaMedia.clefPath(50,60,20)) ไม่พึ่งฟอนต์ -->
+              <path id="aids-clef" class="clef" d="M61.25,158.75 C61.25,171.25 78.75,173.75 79.50,157.50 L83.00,60.00 C84.00,42.50 73.75,32.50 67.00,47.50 C60.00,65.00 62.50,85.00 70.00,97.50 C82.50,112.50 98.75,115.00 97.50,131.25 C96.25,146.25 75.00,151.25 63.75,138.75 C53.75,127.50 61.25,108.75 77.50,108.00 C88.00,107.50 91.50,118.75 84.50,125.50 C80.00,129.50 72.50,126.00 73.50,120.50" fill="none" stroke="#1e293b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 
               <!-- Line Number Labels on Left -->
               <text x="25" y="64" font-size="11" fill="#94a3b8" font-weight="700">5</text>
@@ -1654,54 +1691,8 @@
 
         <!-- TAB 3: Song Sheets -->
         <div id="pane-aids-songs" style="display: none;">
-          <!-- Song 1: Mary Had a Little Lamb -->
-          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-              <div>
-                <h4 style="margin: 0; color: #1e3a8a; font-size: 1.05rem; font-weight: 800;">
-                  🐑 บทเพลงที่ 1: เพลงหนูมาลี (Mary Had a Little Lamb) — สำหรับชั้น ม.1
-                </h4>
-                <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                  อัตราจังหวะ 4/4 • ความเร็ว 60-80 BPM • ใช้เฉพาะลิ่มเสียงกลาง 1, 2, 3, 5
-                </div>
-              </div>
-              <button class="btn-nav-action" style="font-size: 0.8rem; background: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-weight: 700;" onclick="VirtualKalimba.playSong(1)">
-                ▶ ฟังตัวอย่างทำนองเพลง
-              </button>
-            </div>
-
-            <!-- Score Visual Box -->
-            <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.95rem; line-height: 1.8; overflow-x: auto;">
-              <div style="color: #0369a1; font-weight: 700;">[ท่อนที่ 1]</div>
-              <div>แท็บตัวเลข: | <strong>3</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;- &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;| <strong>3</strong> &nbsp;<strong>5</strong> &nbsp;<strong>5</strong> &nbsp;- &nbsp;|</div>
-              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| มี &nbsp;เร &nbsp;โด &nbsp;เร &nbsp;| มี &nbsp;มี &nbsp;มี &nbsp;- &nbsp;| เร &nbsp;เร &nbsp;เร &nbsp;- &nbsp;| มี &nbsp;ซอล ซอล - &nbsp;|</div>
-              <div>เนื้อร้อง: &nbsp;&nbsp;| หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ลูก แมว เหมียว | ลูก แมว เหมียว |</div>
-              <div style="margin-top: 0.75rem; color: #0369a1; font-weight: 700;">[ท่อนที่ 2]</div>
-              <div>แท็บตัวเลข: | <strong>3</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;| <strong>1</strong> &nbsp;- &nbsp;- &nbsp;- &nbsp;|</div>
-              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| มี &nbsp;เร &nbsp;โด &nbsp;เร &nbsp;| มี &nbsp;มี &nbsp;มี &nbsp;มี &nbsp;| เร &nbsp;เร &nbsp;มี &nbsp;เร &nbsp;| โด &nbsp;- &nbsp;- &nbsp;- &nbsp;|</div>
-              <div>เนื้อร้อง: &nbsp;&nbsp;| หนู มา ลี มี &nbsp;| ลูก แมว เหมียว | ขน มัน ดู คล้าย | สำ &nbsp;ลี &nbsp;- &nbsp;- &nbsp;|</div>
-            </div>
-          </div>
-
-          <!-- Song 2: Twinkle Twinkle Little Star -->
-          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
-              <div>
-                <h4 style="margin: 0; color: #1e3a8a; font-size: 1.05rem; font-weight: 800;">
-                  ⭐ บทเพลงที่ 2: เพลงดาวดวงน้อย (Twinkle Twinkle Little Star) — สำหรับชั้น ม.1
-                </h4>
-                <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                  อัตราจังหวะ 4/4 • ฝึกโน้ตก้าวกระโดดจากลิ่ม 1 ไปลิ่ม 5
-                </div>
-              </div>
-            </div>
-            <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 1rem; font-family: monospace; font-size: 0.95rem; line-height: 1.8; overflow-x: auto;">
-              <div>แท็บตัวเลข: | <strong>1</strong> &nbsp;<strong>1</strong> &nbsp;<strong>5</strong> &nbsp;<strong>5</strong> &nbsp;| <strong>6</strong> &nbsp;<strong>6</strong> &nbsp;<strong>5</strong> &nbsp;- &nbsp;| <strong>4</strong> &nbsp;<strong>4</strong> &nbsp;<strong>3</strong> &nbsp;<strong>3</strong> &nbsp;| <strong>2</strong> &nbsp;<strong>2</strong> &nbsp;<strong>1</strong> &nbsp;- &nbsp;|</div>
-              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| โด &nbsp;โด &nbsp;ซอล ซอล | ลา &nbsp;ลา &nbsp;ซอล - &nbsp;| ฟา &nbsp;ฟา &nbsp;มี &nbsp;มี &nbsp;| เร &nbsp;เร &nbsp;โด &nbsp;- &nbsp;|</div>
-              <div style="margin-top: 0.5rem;">แท็บตัวเลข: | <strong>5</strong> &nbsp;<strong>5</strong> &nbsp;<strong>4</strong> &nbsp;<strong>4</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;| <strong>5</strong> &nbsp;<strong>5</strong> &nbsp;<strong>4</strong> &nbsp;<strong>4</strong> &nbsp;| <strong>3</strong> &nbsp;<strong>3</strong> &nbsp;<strong>2</strong> &nbsp;- &nbsp;|</div>
-              <div>โน้ตไทย: &nbsp;&nbsp;&nbsp;| ซอล ซอล ฟา &nbsp;ฟา &nbsp;| มี &nbsp;มี &nbsp;เร &nbsp;- &nbsp;| ซอล ซอล ฟา &nbsp;ฟา &nbsp;| มี &nbsp;มี &nbsp;เร &nbsp;- &nbsp;|</div>
-            </div>
-          </div>
+          <!-- แบบฝึก/บทเพลง ม.1: เติมจากข้อมูล วก.5 (KALIMBA_MEDIA + โน้ตที่ครูใส่) ด้วย App.renderAidsSongs() — ไม่ฝังเพลงในไฟล์นี้ -->
+          <div id="aids-m1-songs" style="margin-bottom: 1.25rem;"></div>
 
           <!-- Song 3: Row, Row, Row Your Boat (Canon / Round) -->
           <div style="background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%); border: 2px solid #86efac; border-radius: 12px; padding: 1.25rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
@@ -1814,7 +1805,7 @@
       <div class="modal-body">
         <div style="background: var(--bg-subtle); padding: 0.85rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.85rem;">
           <div>การเข้าเรียน: <strong id="refl-stat-attendance">100%</strong></div>
-          <div>ผู้สอน: <strong id="refl-stat-instructor">คุณครูพงศธร โพธิแก้ว</strong></div>
+          <div>ผู้สอน: <strong id="refl-stat-instructor">-</strong></div>
         </div>
 
         <div class="form-group" style="background: #fffbeb; border: 1px solid #fde68a; padding: 0.85rem; border-radius: var(--radius-sm);">
@@ -1838,6 +1829,24 @@
         <div class="form-group">
           <label class="form-label">3. แนวทางแก้ไขและพัฒนา (Solutions):</label>
           <textarea id="refl-solutions" class="form-textarea" rows="2"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">วันที่ลงชื่อครูผู้สอน (วว/ดด/ปปปป):</label>
+          <input id="refl-teacher-date" class="form-input" type="text" placeholder="เว้นว่างไว้ถ้าจะเขียนเอง">
+        </div>
+
+        <div class="form-group" style="border-top:1px dashed #cbd5e1;padding-top:0.75rem;">
+          <label class="form-label">4. ความคิดเห็นของฝ่ายบริหาร (กรอกเมื่อฝ่ายบริหารแจ้ง):</label>
+          <textarea id="refl-admin-opinion" class="form-textarea" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ชื่อผู้ลงนามฝ่ายบริหาร (ถ้ามี):</label>
+          <input id="refl-admin-name" class="form-input" type="text">
+        </div>
+        <div class="form-group">
+          <label class="form-label">วันที่ลงนามฝ่ายบริหาร:</label>
+          <input id="refl-admin-date" class="form-input" type="text">
         </div>
       </div>
       <div class="modal-footer">
@@ -1978,7 +1987,7 @@
               </div>
               <div>
                 <label class="form-label">รหัสผ่าน / PIN เริ่มต้น:</label>
-                <input type="text" id="new-teacher-secret" class="form-input" placeholder="เช่น 1234" value="1234">
+                <input type="text" id="new-teacher-secret" class="form-input" placeholder="ตั้งรหัสผ่าน/PIN เริ่มต้น">
               </div>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
@@ -2067,9 +2076,9 @@
         <div style="display: flex; align-items: center; gap: 0.75rem;">
           <img src="images/ppk_crest.png" alt="PPK Crest" style="height: 38px; width: auto;" onerror="this.style.display='none'">
           <div>
-            <h3 id="timetable-modal-title" class="modal-title" style="margin: 0; font-size: 1.12rem;">ตารางสอน 612 ครูพงศธร โพธิแก้ว ภาคเรียนที่ 2/2569 โรงเรียนพะเยาพิทยาคม</h3>
+            <h3 id="timetable-modal-title" class="modal-title" style="margin: 0; font-size: 1.12rem;">ตารางสอน</h3>
             <div id="timetable-modal-sub" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
-              กลุ่มสาระการเรียนรู้ศิลปะ (ดนตรีสากล) • ห้องปฏิบัติการดนตรี: <strong>อส.5</strong> • ออกให้ ณ วันที่ 20.10.2569
+              
             </div>
           </div>
         </div>
@@ -2077,7 +2086,7 @@
           <button class="btn-nav-action" style="background: #fdf2f8; color: #9d174d; border-color: #fbcfe8; font-weight: 700;" onclick="App.openTeachingAssignmentModal()" title="มอบหมายคาบสอนให้กับนักศึกษาฝึกสอน และบันทึกคำแนะนำนิเทศการสอน">
             🎓 มอบหมาย นักศึกษาฝึกสอน & นิเทศการสอน
           </button>
-          <button class="btn-nav-action" onclick="App.resetToOfficialTimetable()" title="คืนค่าตารางสอนทางการตามเอกสาร 2/2569">
+          <button class="btn-nav-action" onclick="App.resetToOfficialTimetable()" title="คืนค่าตารางสอนทางการตามเอกสารของภาคเรียนปัจจุบัน">
             🔄 คืนค่าตารางทางการ
           </button>
           <button class="btn-nav-action" onclick="App.toggleTimetableMode()" id="btn-toggle-tt-mode" title="สลับระหว่างโหมดแก้ไขกับมุมมองทางการ">
@@ -2092,7 +2101,7 @@
       <div class="modal-body" id="timetable-modal-body">
         <div style="background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.55rem 0.85rem; margin-bottom: 0.65rem; display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.82rem; align-items: center;">
           <span style="color: #92400e;"><strong>ช่วงพักเบรก:</strong> หลังคาบ 2 พัก 20 นาที (10.00 - 10.20 น.) • หลังคาบ 4 พัก 20 นาที (12.00 - 12.20 น.) • หลังคาบ 7 พัก 10 นาที (14.50 - 15.00 น.)</span>
-          <span style="color: var(--ppk-navy);"><strong>ห้องเรียน:</strong> ทุกคาบสอนจัดการเรียนรู้อยู่ที่ห้อง <strong>อส.5</strong> (อาคารศิลปะ 5)</span>
+          <span style="color: var(--ppk-navy);"><strong>ห้องเรียน:</strong> ห้องเรียนเป็นไปตามตารางสอน</span>
         </div>
 
         <!-- Mentoring & Teaching Assignment Strip -->
@@ -2469,12 +2478,44 @@
             <div>
               <div style="font-size: 0.78rem; font-weight: 700; color: var(--ppk-blue);">ภาคเรียนปัจจุบันที่เปิดใช้งาน</div>
               <div id="active-semester-display-title" style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin-top: 2px;">
-                ภาคเรียนที่ 1 ปีการศึกษา 2569
+                …
               </div>
             </div>
             <button class="btn-nav-action" onclick="App.backupJSON()">สำรองข้อมูลเทอมนี้ (.json)</button>
           </div>
         </div>
+
+        <!-- ตั้งค่าปีการศึกษา/ภาคเรียน/รหัสวิชา: ระบบคำนวณจากวันที่ + ค่านี้ -->
+        <div class="section-panel" id="term-config-panel" style="margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; font-size: 0.95rem; color: var(--ppk-navy-dark); margin-bottom: 0.35rem;">ตั้งค่าปีการศึกษา ภาคเรียน และรหัสวิชา (ระบบเปลี่ยนภาคเรียนเองตามวันที่)</div>
+          <p id="term-config-now" style="font-size: 0.8rem; margin-bottom: 0.75rem;"></p>
+          <div style="font-size: 0.78rem; font-weight: 700; margin-bottom: 0.3rem;">ปฏิทินภาคเรียน (ปีการศึกษา • ภาค • วันเริ่ม • วันสิ้นสุด) — ปีถัดไปต่อให้อัตโนมัติ แก้วันที่จริงได้เสมอ</div>
+          <div id="term-config-calendar"></div>
+          <button type="button" class="btn-nav-action" onclick="App.addTermConfigRow()" style="margin-bottom: 0.75rem;">+ เพิ่มภาคเรียน</button>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.75rem;">
+            <div><label class="form-label">คำนำหน้ารหัสวิชา ม.1 (+เลขภาคเรียน)</label><input id="tc-prefix-m1" class="form-input" type="text"></div>
+            <div><label class="form-label">คำนำหน้ารหัสวิชา ม.2 (+เลขภาคเรียน)</label><input id="tc-prefix-m2" class="form-input" type="text"></div>
+            <div><label class="form-label">กำหนดรหัสวิชา ม.1 เอง (ไม่บังคับ)</label><input id="tc-code-override-m1" class="form-input" type="text"></div>
+            <div><label class="form-label">กำหนดรหัสวิชา ม.2 เอง (ไม่บังคับ)</label><input id="tc-code-override-m2" class="form-input" type="text"></div>
+          </div>
+          <div style="border: 1px dashed #cbd5e1; border-radius: 8px; padding: 0.6rem; margin-bottom: 0.75rem;">
+            <label style="font-size: 0.82rem; font-weight: 700;"><input type="checkbox" id="tc-override-enabled"> บังคับใช้ภาคเรียนนี้แทนการคำนวณตามวันที่ (override)</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-top: 0.4rem;">
+              <input id="tc-override-year" class="form-input" type="number" placeholder="ปีการศึกษา">
+              <select id="tc-override-term" class="form-select"><option value="1">ภาคเรียนที่ 1</option><option value="2">ภาคเรียนที่ 2</option><option value="3">ภาคฤดูร้อน</option></select>
+              <input id="tc-override-until" class="form-input" type="date" title="หมดอายุ override (ไม่บังคับ)">
+            </div>
+          </div>
+          <label style="font-size: 0.82rem; display: block; margin-bottom: 0.75rem;"><input type="checkbox" id="tc-auto-rollover"> เมื่อถึงวันเริ่มภาคเรียนใหม่ ให้เก็บข้อมูลภาคเดิมเข้าคลังย้อนหลังและเริ่มภาคใหม่อัตโนมัติ (ไม่ลบข้อมูล)</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-complete-period" onclick="App.saveTermConfigForm()">บันทึกการตั้งค่า</button>
+            <button type="button" class="btn-nav-action" onclick="App.resetTermConfigForm()">คืนค่าเริ่มต้น</button>
+            <span id="term-config-msg" style="font-size: 0.8rem; color: #15803d;"></span>
+          </div>
+        </div>
+
+        <!-- ห้องสอบกลางภาค/ปลายภาค (ครู) -->
+        <div class="section-panel" id="exam-admin-panel" style="margin-bottom: 1.25rem;"></div>
 
         <!-- Start New Term Section -->
         <div class="section-panel" style="margin-bottom: 1.25rem;">
@@ -2488,13 +2529,13 @@
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
             <div>
               <label class="form-label">ปีการศึกษาใหม่:</label>
-              <input type="text" id="new-term-year-input" class="form-input" value="2569">
+              <input type="text" id="new-term-year-input" class="form-input" value="">
             </div>
             <div>
               <label class="form-label">ภาคเรียนใหม่:</label>
               <select id="new-term-no-select" class="form-select">
                 <option value="1">ภาคเรียนที่ 1</option>
-                <option value="2" selected>ภาคเรียนที่ 2</option>
+                <option value="2">ภาคเรียนที่ 2</option>
                 <option value="3">ภาคเรียนฤดูร้อน (Summer)</option>
               </select>
             </div>
@@ -2601,7 +2642,7 @@
           <div>
             <h3 class="modal-title">คลังเอกสารวิชาการและแผนการจัดการเรียนรู้ (วก. 1 - วก. 7)</h3>
             <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 1px;">
-              โรงเรียนพะเยาพิทยาคม • กลุ่มสาระการเรียนรู้ศิลปะ (ดนตรี 1 ศ21101 ม.1) • T-PACE Framework & วPA คศ.4
+              โรงเรียนพะเยาพิทยาคม • กลุ่มสาระการเรียนรู้ศิลปะ (ดนตรี 1 <span id="footer-subject-code"></span> ม.1) • T-PACE Framework & วPA คศ.4
             </p>
           </div>
         </div>
@@ -2817,7 +2858,7 @@
       </div>
 
       <!-- Toolbar: Quick Fill & Score Readout -->
-      <div style="padding: 0.65rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
+      <div class="rm-toolbar" style="padding: 0.65rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
         <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem;">
           <span style="color: var(--text-muted);">เลือกให้ทั้งตาราง:</span>
           <button class="btn-nav-action" style="padding: 2px 8px; font-size: 0.78rem;" onclick="RubricMatrix.selectLevelAll(4)">ดีเยี่ยม (4)</button>
@@ -2884,14 +2925,14 @@
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
             <div>
               <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">
-                📊 พิกัดอารมณ์เพลง 2 แกน (Valence–Arousal Grid) &amp; คลังคีย์เวิร์ดวิเคราะห์ความเห็นต่าง (Outlier Debate)
+                📊 พิกัดอารมณ์เพลง 2 แกน (Valence–Arousal Grid) &amp; คลังคีย์เวิร์ดวิเคราะห์
               </div>
               <div style="font-size: 0.78rem; color: #475569;">
-                คลิกจุดพิกัดอารมณ์และเลือกคีย์เวิร์ดที่ได้ยินเพื่อสร้าง Word Cloud ของห้องเรียน พร้อมดึงหลักฐานเข้าสู่ขั้นที่ 1–2 อัตโนมัติ
+                คลิกจุดพิกัดอารมณ์และเลือกคีย์เวิร์ดที่ได้ยินเพื่อใช้เป็นหลักฐานประกอบการเขียน 4 ขั้นตอน (เป็นของตนเอง ยังไม่มีสถิติรวมทั้งห้อง)
               </div>
             </div>
             <button type="button" class="btn-nav-action primary" style="font-size: 0.78rem; padding: 4px 10px;" onclick="FeldmanCriticism.autoPopulateFromAnalytics()">
-              ⚡ ดึงข้อมูลคีย์เวิร์ดและพิกัดเข้าสู่ขั้นที่ 1–3 อัตโนมัติ
+              💡 ดูคำถามช่วยคิดและสรุปสิ่งที่เลือกไว้
             </button>
           </div>
 
@@ -2900,7 +2941,7 @@
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem;">
               <div style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 0.4rem; display: flex; justify-content: space-between;">
                 <span>🎯 กราฟพิกัดอารมณ์ 2 มิติ (คลิกเพื่อพล็อตจุด)</span>
-                <span id="feldman-coord-readout" style="color: #2563eb;">(Valence: +6, Arousal: -4 สงบ/Alpha)</span>
+                <span id="feldman-coord-readout" style="color: #2563eb;">(ยังไม่ได้เลือกจุด)</span>
               </div>
               <div id="feldman-2d-grid" onclick="FeldmanCriticism.onGridClick(event)" style="position: relative; height: 170px; background: linear-gradient(135deg, #fef2f2 0%, #eff6ff 50%, #f0fdf4 100%); border: 1px solid #94a3b8; border-radius: 6px; cursor: crosshair; overflow: hidden;">
                 <!-- Axes -->
@@ -2928,7 +2969,7 @@
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 0.4rem;">
-                  ☁️ คลังคีย์เวิร์ดห้องเรียน (คลิกคีย์เวิร์ดเพื่อเลือกใช้เป็นหลักฐาน)
+                  ☁️ คลังคีย์เวิร์ด (คลิกคีย์เวิร์ดเพื่อเลือกใช้เป็นหลักฐาน)
                 </div>
                 <div id="feldman-wordcloud-box" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; padding: 0.4rem; background: #f8fafc; border-radius: 6px; min-height: 92px;">
                   <!-- Injected via FeldmanCriticism.renderWordCloud() -->
@@ -3107,24 +3148,13 @@
       <!-- Kalimba Controls & Song Selector -->
       <div style="padding: 1rem 1.5rem; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-          <label style="font-size: 0.85rem; font-weight: 600; color: #93c5fd;">บทเพลงฝึกซ้อม:</label>
-          <select id="kalimba-song-select" class="form-select" style="background: #0f172a; color: #ffffff; border-color: #475569; min-width: 220px;" onchange="VirtualKalimba.onSongChange(this.value)">
-            <!-- Injected dynamically -->
+          <label for="kalimba-song-select" style="font-size: 0.85rem; font-weight: 600; color: #93c5fd;">แบบฝึก/บทเพลงตาม วก.5 (แยกตามคาบ):</label>
+          <select id="kalimba-song-select" class="form-select" style="background: #0f172a; color: #ffffff; border-color: #475569; min-width: 260px; max-width: 100%;" onchange="VirtualKalimba.onSongSelectChange(this.value)">
+            <!-- เติมจากข้อมูล วก.5 (KALIMBA_MEDIA) + โน้ตที่ครูใส่ ด้วย VirtualKalimba.populateSongsSelect() -->
           </select>
-          <button id="btn-kalimba-play" class="btn-nav-action primary" style="background: #10b981; border: none; font-weight: 700;" onclick="VirtualKalimba.togglePlay()">
-            ▶️ เล่นตัวอย่าง (Play Along)
-          </button>
-          <button class="btn-nav-action" style="background: #334155; color: #ffffff; border: 1px solid #475569;" onclick="VirtualKalimba.stopPlay()">
-            ⏹️ หยุด
-          </button>
+          <button id="kalimba-vk-edit" type="button" class="btn-nav-action" style="display:none; background: #334155; color: #ffffff; border: 1px solid #475569;" onclick="VirtualKalimba.openEditor()">✏️ ใส่/แก้โน้ต (ครู)</button>
         </div>
-
-        <!-- Tempo / BPM Slider -->
-        <div style="display: flex; align-items: center; gap: 0.65rem;">
-          <span style="font-size: 0.85rem; color: #94a3b8;">ความเร็ว (BPM):</span>
-          <input type="range" id="kalimba-bpm-slider" min="50" max="160" value="90" style="width: 100px; accent-color: #38bdf8;" oninput="VirtualKalimba.setTempo(this.value)">
-          <span id="kalimba-bpm-display" style="font-size: 0.9rem; font-weight: 700; color: #38bdf8; min-width: 45px;">90</span>
-        </div>
+        <button id="kalimba-vk-mute" type="button" class="km-mute" style="width:auto;margin:0;" aria-pressed="false" onclick="VirtualKalimba.toggleMute()">🔊 ปิดเสียงคาลิมบ้า (ฝึกกับเมโทรนอมเท่านั้น)</button>
       </div>
 
       <!-- Current Note Display Banner -->
@@ -3139,10 +3169,16 @@
       </div>
 
       <!-- Kalimba Soundboard & Tines Container -->
-      <div style="flex: 1; overflow-y: auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);">
+      <div style="flex: 1; overflow-y: auto; padding: 1rem 1.5rem 2rem; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);">
+        <div id="kalimba-vk-widget" style="width: 100%; max-width: 820px; margin-bottom: 1rem;"><!-- วิดเจ็ตแบบฝึก: บรรทัด 5 เส้น + ผังลิ่ม + เมโทรนอม + เล่น (KalimbaMedia.Widget) --></div>
+      </div>
+      <!-- DOCK: คาลิมบ้าอยู่ส่วนล่างของจอ (โน้ต/เมโทรนอมอยู่ด้านบน) -->
+      <div id="kalimba-vk-dock" style="flex: 0 0 auto; width: 100%; padding: 0.4rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center; background: #0f172a; border-top: 1px solid #334155;">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.5rem;">คาลิมบ้า 17 ลิ่ม — แตะลิ่มเพื่อดีดเอง · ลิ่มจะสว่างตามโน้ตที่แบบฝึกกำลังเล่น</div>
         
         <!-- Wooden Soundboard Body Styling -->
         <div class="kalimba-soundboard" style="max-width: 820px; width: 100%; position: relative;">
+
 
           <!-- Bridge rod + clamp bar (tine tails are pinned under these) -->
           <div class="kalimba-bridge"></div>
@@ -3234,15 +3270,15 @@
     <div class="modal-card" style="max-width: 980px; width: 95vw; max-height: 94vh; display: flex; flex-direction: column;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #fdf2f8; color: #db2777; display: flex; align-items: center; justify-content: center;">
+          <div class="ens-ico" style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #fdf2f8; color: #db2777; display: flex; align-items: center; justify-content: center;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
           </div>
           <div>
             <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--ppk-navy-dark); margin: 0;">
               ห้องสำรวจวงดนตรีเสมือนจริง (Interactive Ensemble Explorer)
             </h3>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-              สื่อนวัตกรรมเชิงโต้ตอบ: ผังที่นั่งวงดนตรีไทย พื้นบ้าน 4 ภาค และสากล • ตัวชี้วัด ศ 2.1 ม.1/4, ม.2/1
+            <div class="ens-subttl" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              สื่อนวัตกรรมเชิงโต้ตอบ: ผังที่นั่งวงดนตรีไทย พื้นบ้าน 4 ภาค และสากล • ตัวชี้วัด ศ 2.1 ม.1/4
             </div>
           </div>
         </div>
@@ -3250,13 +3286,13 @@
       </div>
 
       <!-- Categories & Quiz Bar -->
-      <div style="padding: 0.75rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
+      <div class="ens-bar" style="padding: 0.75rem 1.5rem; background: var(--bg-subtle); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-subtle);">
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
           <button id="ens-cat-thai" class="academic-tab-btn active" onclick="EnsembleExplorer.switchCategory('thai')">
             🇹🇭 วงดนตรีไทย
           </button>
           <button id="ens-cat-folk" class="academic-tab-btn" onclick="EnsembleExplorer.switchCategory('folk')">
-            🌾 วงดนตรีพื้นบ้าน 4 ภาค (ล้านนา/อีสาน)
+            🌾 วงดนตรีพื้นบ้าน 4 ภาค (เหนือ/อีสาน/กลาง/ใต้)
           </button>
           <button id="ens-cat-western" class="academic-tab-btn" onclick="EnsembleExplorer.switchCategory('western')">
             🎻 วงดนตรีสากล
@@ -3264,13 +3300,13 @@
         </div>
         <div>
           <button class="btn-nav-action primary" onclick="EnsembleExplorer.startQuiz()" style="display: inline-flex; align-items: center; gap: 5px;">
-            🎮 มินิเกมทายวงดนตรี (Audio Quiz)
+            🎮 แบบทดสอบทบทวน (ไม่นับคะแนนเก็บ)
           </button>
         </div>
       </div>
 
       <!-- Body -->
-      <div style="flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+      <div class="ens-body" style="flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
         <!-- Ensemble pills selector -->
         <div id="ensemble-pills-selector" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
           <!-- Injected via EnsembleExplorer -->
@@ -3293,8 +3329,8 @@
       </div>
 
       <div class="modal-footer" style="justify-content: space-between; background: #ffffff;">
-        <span style="font-size: 0.8rem; color: var(--text-muted);">
-          💡 คลิกเลือกเครื่องดนตรีบนผังเวทีเพื่อฟังเสียงจำลอง (Web Audio Timbre) และศึกษาหน้าที่ในวง
+        <span class="ens-foot-hint" style="font-size: 0.8rem; color: var(--text-muted);">
+          💡 แตะเครื่องดนตรีในผังเพื่อดูการ์ดข้อมูลและฟังเสียงจำลอง
         </span>
         <button type="button" class="btn-nav-action" onclick="EnsembleExplorer.closeModal()">ปิดหน้าต่าง</button>
       </div>
@@ -3631,6 +3667,91 @@
           </div>
         </div>
 
+        <!-- วก.5 fields -->
+        <details style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.75rem; background: #f8fafc;">
+          <summary style="cursor: pointer; font-weight: 700; color: #1e293b;">📄 ข้อมูลสำหรับแบบ วก.5 (หนึ่งรายการต่อหนึ่งบรรทัด — ช่องที่ว่างจะพิมพ์ว่างในแบบ)</summary>
+          <div style="display: grid; gap: 0.6rem; margin-top: 0.6rem;">
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ตัวชี้วัด/มาตรฐาน (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-standards" class="form-input" rows="3"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ความคิดรวบยอด:</label>
+              <textarea id="editor-wk5-key-concept" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">สาระการเรียนรู้/เนื้อหา (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-content" class="form-input" rows="3"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">จุดประสงค์ด้านความรู้ (K) (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-obj-k" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">จุดประสงค์ด้านทักษะ (P) (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-obj-p" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">จุดประสงค์ด้านเจตคติ (A) (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-obj-a" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">สมรรถนะ/คุณลักษณะที่ต้องการ (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-competencies" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ชิ้นงาน/ภาระงาน (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-work" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">เกณฑ์ประเมินด้านความรู้ (K):</label>
+              <textarea id="editor-wk5-assess-k" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">เกณฑ์ประเมินด้านทักษะ (P):</label>
+              <textarea id="editor-wk5-assess-p" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">เกณฑ์ประเมินด้านเจตคติ (A):</label>
+              <textarea id="editor-wk5-assess-a" class="form-input" rows="2"></textarea>
+            </div>
+            <div>
+              <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">เครื่องมือวัดผล (บรรทัดละ 1 รายการ):</label>
+              <textarea id="editor-wk5-tools" class="form-input" rows="2"></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 5fr; gap: 0.5rem;">
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ขั้นนำ (นาที):</label>
+                <input type="number" min="0" max="120" id="editor-wk5-act-intro-min" class="form-input">
+              </div>
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">กิจกรรมขั้นนำ (บรรทัดละ 1 รายการ):</label>
+                <textarea id="editor-wk5-act-intro" class="form-input" rows="2"></textarea>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 5fr; gap: 0.5rem;">
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ขั้นสอน (นาที):</label>
+                <input type="number" min="0" max="120" id="editor-wk5-act-teach-min" class="form-input">
+              </div>
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">กิจกรรมขั้นสอน (บรรทัดละ 1 รายการ):</label>
+                <textarea id="editor-wk5-act-teach" class="form-input" rows="2"></textarea>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 5fr; gap: 0.5rem;">
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">ขั้นสรุป (นาที):</label>
+                <input type="number" min="0" max="120" id="editor-wk5-act-wrap-min" class="form-input">
+              </div>
+              <div>
+                <label class="form-label" style="font-size: 0.78rem; font-weight: 700;">กิจกรรมขั้นสรุป (บรรทัดละ 1 รายการ):</label>
+                <textarea id="editor-wk5-act-wrap" class="form-input" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+        </details>
+
         <!-- Mentor Tips -->
         <div>
           <label class="form-label" style="font-weight: 700; color: #1e293b;">
@@ -3710,11 +3831,11 @@
       <span class="mnav-icon">📖</span>
       <span class="mnav-label">บทเรียน</span>
     </button>
-    <button class="mobile-nav-btn" id="mnav-metronome" onclick="Metronome.open()" title="เมโทรนอม">
+    <button class="mobile-nav-btn" data-tool="metronome" id="mnav-metronome" onclick="Metronome.open()" title="เมโทรนอม">
       <span class="mnav-icon">🥁</span>
       <span class="mnav-label">เมโทรนอม</span>
     </button>
-    <button class="mobile-nav-btn" id="mnav-ensemble" onclick="EnsembleExplorer.open()" title="วงดนตรี">
+    <button class="mobile-nav-btn" id="mnav-ensemble" onclick="App.openEnsemble('thai')" title="วงดนตรี">
       <span class="mnav-icon">🎺</span>
       <span class="mnav-label">วงดนตรี</span>
     </button>
@@ -3727,30 +3848,53 @@
   <!-- Scripts -->
   <script src="data/students.js?v=20261021_01"></script>
   <script src="data/public-config.js?v=20261021_02"></script>
-  <script src="data/lessons.js?v=20261020_03"></script>
-  <script src="data/academic_docs.js?v=20261020_03"></script>
-  <script src="data/quizzes.js?v=20261020_03"></script>
-  <script src="js/google-sheet-sync.js?v=20261028_03"></script>
-  <script src="data/store.js?v=20261028_03"></script>
-  <script src="js/student-auth.js?v=20261028_01"></script>
+  <script src="data/lessons.js?v=20261028_20"></script>
+  <script src="data/academic_docs.js?v=20261028_20"></script>
+<script src="data/wk5_plans.js?v=20261028_20"></script>
+<script src="data/period_policy.js?v=20261028_20"></script>
+<script src="js/period-policy.js?v=20261028_20"></script>
+<script src="data/media_routes.js?v=20261028_20"></script>
+<script src="js/media-views.js?v=20261028_20"></script>
+  <script src="data/quizzes.js?v=20261028_20"></script>
+  <script src="js/google-sheet-sync.js?v=20261028_20"></script>
+  <script src="data/term-config.js?v=20261028_20"></script>
+  <script src="data/store.js?v=20261028_20"></script>
+  <script src="js/student-auth.js?v=20261028_20"></script>
   <script src="js/pwa-install.js?v=20261021_02"></script>
   <script src="js/student-submit.js?v=20261021_04"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
+  <script src="js/exam-client.js?v=20261028_20"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
-  <script src="js/teacher-auth.js?v=20261021_09"></script>
-  <script src="js/intern.js?v=20261021_10"></script>
+  <script src="js/teacher-auth.js?v=20261028_20"></script>
+  <script src="js/intern.js?v=20261028_20"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/student-upload.js?v=20261021_08"></script>
   <script src="js/tuner.js?v=20261020_03"></script>
   <script src="js/audio-tools.js?v=20261020_03"></script>
   <script src="js/quiz-engine.js?v=20261020_03"></script>
-  <script src="js/rubric-matrix.js?v=20261020_03"></script>
-  <script src="js/feldman-criticism.js?v=20261020_03"></script>
-  <script src="js/car-analytics.js?v=20261020_03"></script>
-  <script src="js/official-forms.js?v=20261020_03"></script>
-  <script src="js/ensemble-explorer.js?v=20261026_01"></script>
+  <script src="js/rubric-matrix.js?v=20261028_20"></script>
+  <script src="js/group-observation.js?v=20261028_20"></script>
+  <script src="js/feldman-criticism.js?v=20261028_20"></script>
+  <script src="js/timbre-listening.js?v=20261028_20"></script>
+  <script src="js/car-analytics.js?v=20261028_20"></script>
+  <script src="data/evidence_config.js?v=20261028_20"></script>
+  <script src="js/evidence-core.js?v=20261028_20"></script>
+  <script src="js/evidence-hub.js?v=20261028_20"></script>
+  <script src="js/official-forms.js?v=20261028_20"></script>
+  <script src="data/ensemble_data.js?v=20261028_20"></script>
+  <script src="js/ensemble-explorer.js?v=20261028_20"></script>
   <script src="js/virtual-kalimba.js?v=20261020_03"></script>
-  <script src="js/app.js?v=20261028_03"></script>
+  <script src="data/kalimba_media.js?v=20261028_20"></script>
+  <script src="data/media_manifest.js?v=20261028_20"></script>
+  <script src="js/kalimba-devices.js?v=20261028_20"></script>
+  <script src="js/kalimba-notes.js?v=20261028_20"></script>
+  <script src="js/kalimba-practice.js?v=20261028_20"></script>
+  <script src="js/kalimba-media.js?v=20261028_20"></script>
+  <script src="js/kalimba-note-editor.js?v=20261028_20"></script>
+  <script src="js/period-media.js?v=20261028_20"></script>
+  <script src="js/lyric-core.js?v=20261028_20"></script>
+  <script src="js/lyric-studio.js?v=20261028_20"></script>
+  <script src="js/app.js?v=20261028_20"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>

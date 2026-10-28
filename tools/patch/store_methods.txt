@@ -1,0 +1,84 @@
+  // --- ภาระงานรายคาบ (อ่านจาก วก.5 + น้ำหนัก K/P/A — ไม่ฮาร์ดโค้ด) ---
+  // คืนข้อมูลที่ทั้งฝั่งนักเรียน (ข้อความภารกิจ) และฝั่งครู (คะแนนเต็ม/รับคะแนนได้หรือไม่) ใช้ร่วมกัน
+  getPeriodTask(grade, period) {
+    const p = Number(period);
+    const lesson = this._lessonOf ? this._lessonOf(grade, p) : this.getLesson(grade, p);
+    let plan = null;
+    try { plan = (this.getWk5Plan && this.getWk5Plan(grade, p)) || (lesson && lesson.wk5) || null; } catch (e) { plan = (lesson && lesson.wk5) || null; }
+    const work = plan && Array.isArray(plan.work) ? plan.work.map(x => String(x || '').trim()).filter(Boolean) : [];
+    const w = this.getPeriodWeights(grade, p);
+    const exam = !!(w && w.exam);
+    const total = w && w.total ? w.total : 0;
+    const asm = (plan && plan.assessment) || {};
+    const text = work.concat([asm.k, asm.p, asm.a].map(x => String(x || ''))).join(' ');
+    const kinds = ['text'];
+    if (/คลิป|วิดีโอ|วีดิโอ|วีดีโอ|video/i.test(text)) kinds.push('video');
+    if (/ไฟล์|แนบ|ภาพถ่าย|รูปถ่าย/.test(text)) kinds.push('file');
+    if (/ลิงก์|ลิงค์|link|url/i.test(text)) kinds.push('link');
+    return {
+      period: p,
+      topic: lesson && lesson.topic ? lesson.topic : '',
+      work,
+      hasWork: work.length > 0,
+      weights: w ? { k: w.k, p: w.p, a: w.a } : { k: 0, p: 0, a: 0 },
+      max: total,
+      exam,
+      scored: total > 0 && !exam,
+      canScore: total > 0 && !exam,
+      acceptsSubmission: !exam,
+      kinds,
+      note: exam ? 'คาบสอบ: คะแนนมาจากระบบสอบ' : (total > 0 ? '' : 'คาบนี้ไม่เก็บคะแนนรายชิ้น')
+    };
+  },
+
+  // บันทึกคะแนนรายคาบของนักเรียน 1 คน ลงสมุดคะแนน (session.scores) โดยไม่เลื่อนคาบถัดไปของห้อง
+  // ปฏิเสธ (ไม่ตัดค่าเงียบๆ): คาบไม่เก็บคะแนน / คาบสอบ / ค่าไม่ใช่ตัวเลข / เกินคะแนนเต็ม
+  setPeriodScore(className, period, studentId, score) {
+    const grade = this.gradeKeyOf(className);
+    const w = this.getPeriodWeights(grade, period);
+    if (!w || !w.total) return { ok: false, reason: 'no_score_period', max: 0 };
+    if (w.exam) return { ok: false, reason: 'exam_period', max: w.total };
+    const n = Number(score);
+    if (score === '' || score === null || score === undefined || !Number.isFinite(n) || n < 0) return { ok: false, reason: 'invalid', max: w.total };
+    if (n > w.total + 1e-9) return { ok: false, reason: 'over_max', max: w.total };
+    const val = this._round2(n);
+    const all = this.getAllSessions();
+    const key = this.getSessionKey(className, period);
+    const now = new Date();
+    const base = all[key] || { className, period, timestamp: now.toISOString(), dateStr: now.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) };
+    const scores = Object.assign({}, base.scores || {});
+    scores[studentId] = val;
+    all[key] = Object.assign({}, base, { scores });
+    if (!this.save(STORAGE_KEYS.SESSIONS, all)) return { ok: false, reason: 'save_failed', max: w.total };
+    return { ok: true, score: val, max: w.total };
+  },
+
+  // --- Teacher Feedback Loop on Student Submissions ---
+  saveSubmissionTeacherFeedback(className, period, studentId, feedbackText, score) {
+    const subs = this.getAllSubmissions();
+    const key = `${className}_p${period}_${studentId}`;
+    if (!subs[key]) {
+      subs[key] = {
+        className,
+        period,
+        studentId,
+        content: '',
+        url: '',
+        submittedAt: new Date().toISOString()
+      };
+    }
+    const instructor = this.getInstructor ? this.getInstructor() : { name: 'คุณครู' };
+    const hasScore = score !== undefined && score !== null && String(score) !== '';
+    const res = hasScore ? this.setPeriodScore(className, period, studentId, score) : { ok: true };
+    const prev = subs[key].teacherFeedback && subs[key].teacherFeedback.score !== undefined ? subs[key].teacherFeedback.score : null;
+    subs[key].teacherFeedback = {
+      feedback: (feedbackText || '').trim(),
+      score: hasScore ? (res.ok ? res.score : prev) : null,
+      scoreStatus: hasScore ? (res.ok ? 'saved' : res.reason) : 'none',
+      teacherName: instructor.name,
+      teacherRole: instructor.role,
+      feedbackAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    };
+    this._lastFeedbackResult = Object.assign({ hasScore }, res);
+    return this.save(STORAGE_KEYS.SUBMISSIONS, subs);
+  },

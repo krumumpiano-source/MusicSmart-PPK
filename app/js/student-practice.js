@@ -238,7 +238,9 @@ const StudentPanels = {
     let m = document.getElementById('modal-student-panel');
     if (!m) {
       m = document.createElement('div'); m.id = 'modal-student-panel'; m.className = 'modal-overlay';
-      m.innerHTML = '<div class="modal-content" style="max-width:560px;"><div class="modal-header"><h3 id="student-panel-title"></h3><button class="modal-close" onclick="StudentPanels.close()">✕</button></div><div id="student-panel-body" class="modal-body" style="max-height:70vh;overflow:auto;"></div></div>';
+      m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'student-panel-title');
+      m.innerHTML = '<div class="modal-card student-panel-card" style="max-width:640px;"><div class="modal-header"><h3 id="student-panel-title" class="modal-title"></h3><button type="button" class="modal-close-btn" aria-label="ปิด" onclick="StudentPanels.close()">✕</button></div><div id="student-panel-body" class="modal-body"></div></div>';
+      m.addEventListener('click', function (ev) { if (ev.target === m) StudentPanels.close(); });
       document.body.appendChild(m);
     }
     if (this._onClose && this._onClose !== onClose) { try { this._onClose(); } catch (e) { /* */ } }

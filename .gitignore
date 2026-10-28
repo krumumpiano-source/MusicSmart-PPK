@@ -16,6 +16,9 @@ scratch/
 แผนไฟล์เก่า/
 _archive_old_m1_backup/
 
+# Archived scratch outputs (kept locally, never committed)
+tools/_archive/
+
 # OS & Log Files
 Thumbs.db
 Desktop.ini
@@ -32,3 +35,6 @@ raw_user_input.txt
 .env*
 node_modules/
 .venv/
+
+# ข้อสอบกลางภาค/ปลายภาคฉบับจริง (ข้อสอบ+เฉลย) — ห้าม commit/ห้าม deploy; อัปโหลดขึ้น Apps Script ผ่านหน้าครูเท่านั้น
+tools/exams_private/
