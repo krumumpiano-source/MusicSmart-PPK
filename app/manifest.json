@@ -1,0 +1,36 @@
+{
+  "name": "MusicSmart • ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE",
+  "short_name": "MusicSmart",
+  "description": "ระบบนิเวศการเรียนรู้ดนตรีดิจิทัลรูปแบบ T-PACE Framework โรงเรียนพะเยาพิทยาคม",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "education",
+    "music"
+  ],
+  "id": "./index.html"
+}

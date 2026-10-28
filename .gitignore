@@ -1,0 +1,34 @@
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Editor & AI Tooling Caches
+.kilo/
+.kilocode/
+.qodo/
+.gemini/
+scratch/
+
+# Local documents with very long paths (prevent Linux checkout limits)
+เอกสารแผนการสอน/
+แผนไฟล์เก่า/
+_archive_old_m1_backup/
+
+# OS & Log Files
+Thumbs.db
+Desktop.ini
+*.log
+*.tmp
+
+# Student personal data (PDPA) - never commit or deploy real rosters
+app/data/students.js
+scores.txt
+raw_user_input.txt
+*_extracted.json
+
+# Secrets & environments
+.env*
+node_modules/
+.venv/
