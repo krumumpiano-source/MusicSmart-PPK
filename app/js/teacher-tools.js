@@ -109,6 +109,10 @@ const Analytics = {
 // ทวงงาน / ส่งคำแนะนำ (ฝั่งครู)
 const Notices = {
   async _post(items) {
+    if (typeof TeacherPull !== 'undefined' && TeacherPull.isCloud()) {
+      if (typeof CloudSync === 'undefined') throw new Error('ระบบ Cloud ยังไม่พร้อม');
+      return CloudSync.postNotices(items);
+    }
     if (typeof TeacherPull === 'undefined' || !TeacherPull.isConfigured()) throw new Error('กรุณาตั้งค่า URL และรหัสซิงค์ก่อน');
     const cfg = GoogleSheetSync.getConfig();
     return GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'post_notices', items });
@@ -133,7 +137,45 @@ const StudentNotices = {
   get() { try { return JSON.parse(localStorage.getItem(this.KEY) || '{"items":[],"since":0,"seen":[]}'); } catch (e) { return { items: [], since: 0, seen: [] }; } },
   save(d) { localStorage.setItem(this.KEY, JSON.stringify(d)); },
 
+  // โหมด Cloud: คะแนน/คำแนะนำครูอยู่ในงานของนักเรียนบนเซิร์ฟเวอร์ — ดึงมาแสดงเป็นการ์ดคำแนะนำ
+  async _fetchCloud() {
+    if (typeof CloudApi === 'undefined' || !CloudApi.Auth.isStudent()) return null;
+    let rows;
+    try { rows = await CloudApi.Submissions.mine(); } catch (e) { return null; }
+    const d = this.get();
+    rows.forEach(r => {
+      const hasScore = r.score !== null && r.score !== undefined;
+      if (!r.feedback && !hasScore) return;
+      const m = /^a:(.+)$/.exec(String(r.assignment_key || ''));
+      if (!m) return;
+      const id = `cloudfb:${r.id}:${r.updated_at}`;
+      if (d.items.some(x => x.id === id)) return;
+      const n = { id, kind: 'feedback', ref: m[1], message: r.feedback || '(ให้คะแนนแล้ว)', score: hasScore ? r.score : null, teacher: 'คุณครู', createdMs: Date.parse(r.updated_at) || Date.now() };
+      d.items.push(n);
+      if (n.createdMs > (d.since || 0)) d.since = n.createdMs;
+      this.applyFeedback(r.student_id, n);
+    });
+    // การแจ้งเตือนจากครู (ทวงงาน / คำแนะนำรายคน) จากตาราง notices บนเซิร์ฟเวอร์
+    if (typeof CloudSync !== 'undefined') {
+      try {
+        const sid = (CloudApi.Auth.session() || {}).student?.student_id || '';
+        const notices = await CloudSync.fetchMyNotices(d.since || 0);
+        notices.forEach(n => {
+          if (d.items.some(x => x.id === n.id)) return;
+          d.items.push(n);
+          if (n.createdMs > (d.since || 0)) d.since = n.createdMs;
+          if (n.kind === 'feedback' && sid) this.applyFeedback(sid, n);
+        });
+      } catch (e) { /* ไม่มีการเชื่อมต่อ: แสดงเฉพาะข้อมูลที่มีอยู่ */ }
+    }
+    d.items = d.items.slice(-100);
+    this.save(d);
+    this.render();
+    return rows;
+  },
+
   async fetch() {
+    if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode()) return this._fetchCloud();
     if (typeof StudentOutbox === 'undefined' || !StudentOutbox.isActive()) return null;
     const u = StudentOutbox.currentStudent();
     if (!StudentOutbox.sessionValid(u)) return null;
@@ -253,5 +295,6 @@ const TeacherDashboard = {
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.addEventListener) {
   setTimeout(() => { try { StudentNotices.render(); StudentNotices.fetch(); } catch (e) { /* ignore */ } }, 2500);
+  setTimeout(() => { if (typeof CloudSync !== 'undefined') CloudSync.init(); }, 3000);
 }
 if (typeof module !== 'undefined' && module.exports) module.exports = { Analytics, Notices, StudentNotices, TeacherDashboard };

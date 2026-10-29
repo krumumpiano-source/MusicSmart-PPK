@@ -136,9 +136,10 @@
       const data = await request('GET', '/api/submissions/mine');
       return data.submissions || [];
     },
-    // ครู: ดูงานของห้อง (กรองตามงานได้)
+    // ครู: ดูงานของห้อง (กรองตามงานได้) — ไม่ระบุห้อง = ดึงทุกห้อง
     async listForClass(className, assignmentKey) {
-      const q = new URLSearchParams({ class: className });
+      const q = new URLSearchParams();
+      if (className) q.set('class', className);
       if (assignmentKey) q.set('assignment', assignmentKey);
       const data = await request('GET', '/api/submissions?' + q.toString());
       return data.submissions || [];

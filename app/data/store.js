@@ -938,6 +938,11 @@ const Store = {
       }
     }
 
+    // โหมด Cloud: ส่งคาบ (เช็คชื่อ/คะแนน) ขึ้น D1 — ล้มเหลวแล้วจะลองใหม่ครั้งถัดไป
+    if (typeof CloudSync !== 'undefined' && CloudSync.pushSession) {
+      CloudSync.pushSession(className, period).catch(() => {});
+    }
+
     return all[key];
   },
 

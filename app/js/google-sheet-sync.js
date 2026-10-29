@@ -114,7 +114,8 @@ const GoogleSheetSync = {
     this.saveOutbox(outbox);
 
     const cfg = this.getConfig();
-    if (cfg.autoSync && cfg.webAppUrl && (typeof navigator === 'undefined' || navigator.onLine)) {
+    const cloudOn = typeof CloudSync !== 'undefined' && CloudSync.isTeacher();
+    if (cfg.autoSync && (cfg.webAppUrl || cloudOn) && (typeof navigator === 'undefined' || navigator.onLine)) {
       this.flushOutbox();
     }
     return item;
@@ -129,6 +130,7 @@ const GoogleSheetSync = {
       this.updateUIStatus();
       return;
     }
+    if (typeof CloudSync !== 'undefined' && CloudSync.isTeacher()) return this._flushCloud(opts);
     const cfg = this.getConfig();
     if (!cfg.webAppUrl) {
       this.updateUIStatus();
@@ -171,6 +173,60 @@ const GoogleSheetSync = {
       if (!opts.silent || this._lastToastError !== msg) {
         this._lastToastError = msg;
         this.showToast(`⚠️ ส่งข้อมูลเข้า Google Sheet ไม่สำเร็จ (${kept.length} รายการรอส่ง) — ${msg}`, 'error');
+      }
+      return { success: false, message: msg };
+    } finally {
+      this.isFlushing = false;
+      this.setSyncingBadge(false);
+      this.updateUIStatus();
+    }
+  },
+
+  /**
+   * โหมด Cloud: ส่งคิวของครูไปที่ Worker (/api/sync/batch) ทีละ 100 รายการ
+   * รายการที่เซิร์ฟเวอร์ตอบกลับแล้ว (applied / archived / duplicate / error) จะถูกนำออกจากคิว
+   * ส่วนที่ส่งไม่สำเร็จเพราะเครือข่าย/เซิร์ฟเวอร์ จะคงอยู่ในคิวเพื่อลองใหม่
+   */
+  async _flushCloud(opts = {}) {
+    const outbox = this.getOutbox();
+    if (outbox.length === 0) {
+      this.updateUIStatus();
+      return { success: true };
+    }
+    this.isFlushing = true;
+    this.setSyncingBadge(true);
+    try {
+      const doneIds = new Set();
+      let rejected = 0;
+      let lastErr = '';
+      for (let i = 0; i < outbox.length; i += 100) {
+        const chunk = outbox.slice(i, i + 100);
+        const reply = await CloudApi.request('POST', '/api/sync/batch', {
+          items: chunk.map(it => ({ id: it.id, type: it.type, data: it.data }))
+        });
+        (reply.results || []).forEach(r => {
+          if (r.id) doneIds.add(r.id);
+          if (r.status === 'error') { rejected++; lastErr = r.message || 'error'; }
+        });
+      }
+      this.saveOutbox(this.getOutbox().filter(it => !doneIds.has(it.id)));
+      const cfg = this.getConfig();
+      this.saveConfig({
+        lastSyncAt: new Date().toISOString(),
+        syncCount: (cfg.syncCount || 0) + doneIds.size,
+        syncStatus: rejected ? 'error' : 'synced',
+        lastError: rejected ? `ข้อมูล ${rejected} รายการไม่ผ่านการตรวจสอบ: ${lastErr}` : ''
+      });
+      return { success: true, rejected };
+    } catch (err) {
+      console.warn('GoogleSheetSync: cloud flush failed, items kept in outbox', err);
+      const kept = this.getOutbox().map(it => ({ ...it, attempts: (it.attempts || 0) + 1 }));
+      this.saveOutbox(kept);
+      const msg = (err && err.message) ? err.message : String(err);
+      this.saveConfig({ syncStatus: 'error', lastError: msg });
+      if (!opts.silent || this._lastToastError !== msg) {
+        this._lastToastError = msg;
+        this.showToast(`⚠️ ส่งข้อมูลขึ้นเซิร์ฟเวอร์ไม่สำเร็จ (${kept.length} รายการรอส่ง) — ${msg}`, 'error');
       }
       return { success: false, message: msg };
     } finally {

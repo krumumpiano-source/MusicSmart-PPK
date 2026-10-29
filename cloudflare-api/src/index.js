@@ -745,6 +745,183 @@ async function syncOps(request, env) {
   return json({ results });
 }
 
+// ---------- วันกำหนดส่งงานรายคาบ ----------
+
+function validPeriod(v) {
+  const n = optInt(v);
+  if (n === null || n < 1 || n > 40) throw bad('คาบเรียนต้องอยู่ระหว่าง 1-40', 'bad_period');
+  return n;
+}
+
+async function setDueDate(env, p) {
+  const className = reqStr(p.class_name, 'class_name', 60);
+  const period = validPeriod(p.period);
+  const dueRaw = p.due_at === undefined || p.due_at === null ? '' : String(p.due_at).trim();
+  if (!dueRaw) {
+    await env.DB.prepare('DELETE FROM due_dates WHERE class_name = ? AND period = ?').bind(className, period).run();
+    return { ok: true, deleted: true };
+  }
+  const ms = Date.parse(dueRaw);
+  if (!Number.isFinite(ms)) throw bad('due_at ไม่ถูกต้อง', 'bad_due');
+  await env.DB.prepare(
+    `INSERT INTO due_dates (class_name, period, due_at, title, updated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (class_name, period) DO UPDATE SET
+       due_at = excluded.due_at, title = excluded.title, updated_at = excluded.updated_at`
+  )
+    .bind(className, period, new Date(ms).toISOString(), optText(p.title, 200), nowIso())
+    .run();
+  return { ok: true };
+}
+
+async function listDueDates(env, auth, url) {
+  let rows;
+  if (auth.role === 'student') {
+    rows = await env.DB.prepare('SELECT * FROM due_dates WHERE class_name = ?').bind(auth.class_name || '').all();
+  } else {
+    const cls = url.searchParams.get('class');
+    rows = cls
+      ? await env.DB.prepare('SELECT * FROM due_dates WHERE class_name = ?').bind(cls).all()
+      : await env.DB.prepare('SELECT * FROM due_dates').all();
+  }
+  return json({ due_dates: rows.results });
+}
+
+// ---------- การแจ้งเตือนจากครูถึงนักเรียน ----------
+
+const NOTICE_KINDS = ['reminder', 'feedback'];
+
+async function postNotices(env, auth, items) {
+  if (!Array.isArray(items)) throw bad('items ต้องเป็นรายการ');
+  if (items.length > MAX_SYNC_OPS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS} รายการ`);
+  let posted = 0;
+  const errors = [];
+  for (const it of items) {
+    if (!isPlainObject(it)) {
+      errors.push('รายการไม่ถูกต้อง');
+      continue;
+    }
+    let sid;
+    try {
+      sid = normSid(it.studentId ?? it.student_id);
+    } catch (e) {
+      errors.push('รหัสนักเรียนไม่ถูกต้อง');
+      continue;
+    }
+    const kind = NOTICE_KINDS.includes(it.kind) ? it.kind : null;
+    if (!kind) {
+      errors.push(`${sid}: kind ไม่ถูกต้อง`);
+      continue;
+    }
+    const st = await env.DB.prepare('SELECT class_name FROM students WHERE student_id = ?').bind(sid).first();
+    if (!st) {
+      errors.push(`${sid}: ไม่พบนักเรียน`);
+      continue;
+    }
+    let score = null;
+    if (it.score !== null && it.score !== undefined && it.score !== '') {
+      const n = Number(it.score);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        errors.push(`${sid}: คะแนนไม่ถูกต้อง`);
+        continue;
+      }
+      score = n;
+    }
+    const message = optText(it.message, 2000) || (kind === 'feedback' ? '(ให้คะแนนแล้ว)' : '');
+    if (!message) {
+      errors.push(`${sid}: ไม่มีข้อความ`);
+      continue;
+    }
+    await env.DB.prepare(
+      `INSERT INTO notices (id, student_id, class_name, ref, kind, message, score, teacher, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(crypto.randomUUID(), sid, st.class_name, optText(it.ref, 120), kind, message, score, optText(it.teacher, 120) || 'คุณครู', nowIso())
+      .run();
+    posted++;
+  }
+  return { ok: true, posted, errors };
+}
+
+async function myNotices(env, auth, url) {
+  let sinceMs = Number(url.searchParams.get('since')) || 0;
+  if (!Number.isFinite(sinceMs) || sinceMs < 0) sinceMs = 0;
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM notices WHERE student_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 100'
+  )
+    .bind(auth.sid, new Date(sinceMs).toISOString())
+    .all();
+  const notices = results.reverse().map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    ref: r.ref,
+    message: r.message,
+    score: r.score,
+    teacher: r.teacher,
+    createdMs: Date.parse(r.created_at)
+  }));
+  return json({ notices });
+}
+
+// ---------- คิวซิงค์ของครู (รับจากแอป แล้วบันทึกให้ครบ) ----------
+
+// รายการที่มีตารางเฉพาะแล้วจะถูกนำไปใช้ทันที ส่วนอื่นเก็บลง sync_archive (idempotent ด้วย id)
+async function syncBatch(request, env, auth) {
+  const b = await readJson(request);
+  if (!Array.isArray(b.items)) throw bad('ต้องส่ง items เป็นรายการ');
+  if (b.items.length > MAX_SYNC_OPS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS} รายการ`);
+  const results = [];
+  for (const it of b.items) {
+    const id = typeof it?.id === 'string' ? it.id.slice(0, 120) : '';
+    if (!id) {
+      results.push({ id: null, status: 'error', message: 'ไม่มี id' });
+      continue;
+    }
+    const seen = await env.DB.prepare('SELECT 1 AS x FROM sync_archive WHERE item_id = ?').bind(id).first();
+    if (seen) {
+      results.push({ id, status: 'duplicate' });
+      continue;
+    }
+    const type = String(it.type || '').slice(0, 60);
+    const data = isPlainObject(it.data) ? it.data : {};
+    const dataStr = JSON.stringify(data);
+    if (dataStr.length > 100 * 1024) {
+      results.push({ id, status: 'error', message: 'ข้อมูลใหญ่เกินไป' });
+      continue;
+    }
+    try {
+      let status = 'archived';
+      if (type === 'set_due_date') {
+        await setDueDate(env, {
+          class_name: data.className,
+          period: data.period,
+          due_at: data.dueAt,
+          title: data.title
+        });
+        status = 'applied';
+      } else if (type === 'research_car') {
+        await putResearch(env, {
+          class_name: data.className,
+          student_id: data.studentId,
+          pre: data.pre,
+          post: data.post,
+          formative: data.formative
+        });
+        status = 'applied';
+      }
+      await env.DB.prepare(
+        'INSERT OR IGNORE INTO sync_archive (item_id, type, data, received_at, received_by) VALUES (?, ?, ?, ?, ?)'
+      )
+        .bind(id, type, dataStr, nowIso(), auth.sub)
+        .run();
+      results.push({ id, status });
+    } catch (e) {
+      if (e instanceof HttpError) results.push({ id, status: 'error', message: e.message });
+      else throw e;
+    }
+  }
+  return json({ results });
+}
+
 // ---------- เส้นทาง (router) ----------
 
 async function route(request, env) {
@@ -823,6 +1000,28 @@ async function route(request, env) {
   }
 
   if (path === '/api/sync' && m === 'POST') return syncOps(request, env);
+
+  if (path === '/api/due-dates' && m === 'GET') {
+    const a = await requireAuth(request, env, ['teacher', 'student']);
+    return listDueDates(env, a, url);
+  }
+  if (path === '/api/due-dates' && m === 'POST') {
+    await requireAuth(request, env, ['teacher']);
+    return json(await setDueDate(env, await readJson(request)));
+  }
+  if (path === '/api/notices' && m === 'POST') {
+    const a = await requireAuth(request, env, ['teacher']);
+    const b = await readJson(request);
+    return json(await postNotices(env, a, b.items));
+  }
+  if (path === '/api/notices/mine' && m === 'GET') {
+    const a = await requireAuth(request, env, ['student']);
+    return myNotices(env, a, url);
+  }
+  if (path === '/api/sync/batch' && m === 'POST') {
+    const a = await requireAuth(request, env, ['teacher']);
+    return syncBatch(request, env, a);
+  }
 
   return json({ error: 'not_found', message: 'ไม่พบเส้นทาง' }, 404);
 }

@@ -209,7 +209,8 @@ const Recording = {
     return r;
   },
   open(period) {
-    const up = typeof StudentUpload !== 'undefined';
+    // โหมด Cloud: ไม่มีการอัปโหลดไฟล์เข้า Drive — ส่งเฉพาะลิงก์
+    const up = typeof StudentUpload !== 'undefined' && !(typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode());
     StudentPanels.show('🎧 ส่งคลิปฝึกซ้อม', `${up ? `<div style="background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:8px;padding:0.5rem 0.7rem;margin-bottom:0.5rem;">
         <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">📤 อัปโหลดไฟล์ตรงเข้า Drive ครู (ไม่เกิน 50 MB)</div>
         <label class="btn-nav-action" style="cursor:pointer;">🎙️ อัดเสียง<input type="file" accept="audio/*" capture style="display:none;" onchange="StudentUpload.pick(this,'rec-file-preview')"></label>

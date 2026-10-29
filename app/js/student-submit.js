@@ -276,6 +276,10 @@ const DueDates = {
     if (dueAt) all[k] = { className, period: Number(period), dueAt: new Date(dueAt).toISOString(), title: title || '' };
     else delete all[k];
     localStorage.setItem(this.KEY, JSON.stringify(all));
+    if (typeof CloudSync !== 'undefined' && CloudSync.isTeacher()) {
+      await CloudSync.pushDueDate(className, period, dueAt, title);
+      return { success: true, server: true };
+    }
     if (TeacherPull.isConfigured()) {
       const cfg = GoogleSheetSync.getConfig();
       await GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'set_due_date', className, period: Number(period), dueAt: dueAt ? new Date(dueAt).toISOString() : '', title: title || '' });
@@ -290,8 +294,11 @@ const TeacherPull = {
   LATE_DAYS: 7,
   pulling: false,
 
+  isCloud() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode(); },
+
   isConfigured() {
     if (typeof InternMode !== 'undefined' && InternMode.isActive()) return true;
+    if (this.isCloud()) return typeof CloudApi !== 'undefined' && CloudApi.Auth.isTeacher();
     if (typeof GoogleSheetSync === 'undefined') return false;
     const c = GoogleSheetSync.getConfig();
     return !!(c.webAppUrl && c.syncToken);
@@ -372,7 +379,71 @@ const TeacherPull = {
     return GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'upload_quiz_bank', units });
   },
 
+  // โหมด Cloud: แปลงแถวจาก D1 ให้เป็นรูปแบบเดียวกับแถวจากชีต (รองรับ a:<ห้อง>_p<คาบ> และ r:<ห้อง>_p<คาบ>_<id>)
+  _cloudInfo(r) {
+    const ak = String(r.assignment_key || '');
+    let m = /^a:(.+)_p(\d+)$/.exec(ak);
+    if (m) return { kind: 'assignment', cls: m[1], no: Number(m[2]) };
+    m = /^r:(.+)_p(\d+)_[^_]+$/.exec(ak);
+    if (m) return { kind: 'recording', cls: m[1], no: Number(m[2]) };
+    return null;
+  },
+
+  async _pullCloud(opts = {}) {
+    if (this.pulling) return { skipped: true };
+    if (!this.isConfigured()) {
+      if (!opts.silent) alert('กรุณาเข้าสู่ระบบครูก่อน');
+      return { success: false, code: 'unconfigured' };
+    }
+    this.pulling = true;
+    try {
+      const rows = await CloudApi.Submissions.listForClass('');
+      const mapped = [];
+      const infos = [];
+      rows.forEach(r => {
+        const info = this._cloudInfo(r);
+        if (!info || !info.no) return;
+        infos.push({ r, info });
+        if (info.kind === 'assignment') {
+          mapped.push({ kind: 'assignment', student_id: r.student_id, class: info.cls, period_or_unit: info.no,
+            content: r.note || '', url: r.video_url || '', submission_type: r.submission_type || '', title: r.title || '',
+            received_at: r.submitted_at || r.updated_at, upload_id: null, due_at: null });
+        } else {
+          mapped.push({ kind: 'recording', student_id: r.student_id, class: info.cls, period_or_unit: info.no, client_id: 'cloud:' + r.id,
+            content: r.note || '', url: r.video_url || '', submission_type: 'คลิปฝึกซ้อม (ลิงก์)', title: r.title || 'คลิปฝึกซ้อม',
+            received_at: r.submitted_at || r.updated_at, upload_id: null });
+        }
+      });
+      const m = this.merge(mapped);
+      // เก็บ cloudId ไว้ใช้ตอนให้คะแนน และรับคะแนน/คำแนะนำที่ครูบันทึกบนเซิร์ฟเวอร์ ถ้าเครื่องนี้ยังไม่มี
+      const all = Store.getAllSubmissions();
+      infos.forEach(({ r, info }) => {
+        if (info.kind !== 'assignment') return;
+        const key = `${info.cls}_p${info.no}_${r.student_id}`;
+        const rec = all[key];
+        if (!rec) return;
+        rec.cloudId = r.id;
+        const local = rec.teacherFeedback;
+        const hasLocal = local && (local.feedback || (local.score !== null && local.score !== undefined && local.score !== ''));
+        if (!hasLocal && (r.feedback || (r.score !== null && r.score !== undefined))) {
+          rec.teacherFeedback = { feedback: r.feedback || '', score: (r.score === undefined ? null : r.score), teacherName: 'คุณครู', teacherRole: 'ครูผู้สอน', feedbackAt: this.thaiTime(r.updated_at) };
+        }
+      });
+      Store.save('ppk_student_submissions', all);
+      localStorage.setItem(this.SINCE_KEY + '_at', new Date().toISOString());
+      const msg = `📥 ดึงงานนักเรียนจากเซิร์ฟเวอร์แล้ว: งาน ${m.subs} รายการ`;
+      if (!opts.silent) GoogleSheetSync.showToast(msg, 'success');
+      return { success: true, ...m };
+    } catch (e) {
+      if (!opts.silent) GoogleSheetSync.showToast('⚠️ ดึงงานไม่สำเร็จ: ' + (e.message || e), 'error');
+      return { success: false, message: e.message };
+    } finally {
+      this.pulling = false;
+    }
+  },
+
   async pull(opts = {}) {
+    if (this.isCloud() && !(typeof InternMode !== 'undefined' && InternMode.isActive())) return this._pullCloud(opts);
     if (typeof InternMode !== 'undefined' && InternMode.isActive()) {
       const r = await InternMode.sync().catch(e => ({ success: false, message: e.message }));
       if (!opts.silent) GoogleSheetSync.showToast(r.success ? `📥 ซิงค์ห้องที่สอนแล้ว: งาน ${r.submissions} รายการ` : '⚠️ ' + (r.message || 'ซิงค์ไม่สำเร็จ'), r.success ? 'success' : 'error');

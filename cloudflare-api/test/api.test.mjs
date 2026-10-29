@@ -34,6 +34,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0004_submission_meta.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0005_teacher_sync.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -342,4 +343,94 @@ test('submissions keep title / note / submission_type and update them on resubmi
   r = await call(env, 'POST', '/api/submissions', { assignment_key: 'r:ม.1/1_p1_abc', clip_no: 1, video_url: 'https://example.com/b' }, st);
   assert.equal(r.body.submission.title, null, 'ค่าที่ไม่ส่งมาจะถูกล้างเป็น null');
   assert.equal(r.body.submission.video_url, 'https://example.com/b');
+});
+
+test('due dates: teacher sets per class, students see only their class, empty due_at clears', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const s3 = await call(env, 'POST', '/api/auth/student', { student_id: '90003', pin: '123456' });
+  let r = await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/1', period: 3, due_at: '2026-11-05T10:00:00+07:00', title: 'งานคาบ 3' }, teacher);
+  assert.equal(r.status, 200);
+  r = await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/1', period: 41, due_at: '2026-11-05T10:00:00Z' }, teacher);
+  assert.equal(r.status, 400);
+  r = await call(env, 'GET', '/api/due-dates', undefined, s1.body.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.due_dates.length, 1);
+  assert.equal(r.body.due_dates[0].period, 3);
+  assert.equal(r.body.due_dates[0].due_at, '2026-11-05T03:00:00.000Z');
+  r = await call(env, 'GET', '/api/due-dates', undefined, s3.body.token);
+  assert.equal(r.body.due_dates.length, 0);
+  r = await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/1', period: 3, due_at: '' }, teacher);
+  assert.equal(r.status, 200);
+  r = await call(env, 'GET', '/api/due-dates', undefined, s1.body.token);
+  assert.equal(r.body.due_dates.length, 0);
+});
+
+test('due dates: students cannot write', async () => {
+  const env = makeEnv();
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const r = await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/1', period: 1, due_at: '2026-11-05T10:00:00Z' }, s1.body.token);
+  assert.equal(r.status, 403);
+});
+
+test('notices: teacher posts to students, student reads only own, since filter works', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const s2 = await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '123456' });
+  let r = await call(env, 'POST', '/api/notices', { items: [
+    { studentId: '90001', kind: 'reminder', ref: 'ม.1/1_p2', message: 'กรุณาส่งงาน' },
+    { studentId: '99999', kind: 'reminder', ref: 'x', message: 'ไม่มีคนนี้' },
+    { studentId: '90001', kind: 'feedback', ref: 'ม.1/1_p2', message: 'ดีมาก', score: 2.5, teacher: 'ครูทดสอบ' },
+    { studentId: '90001', kind: 'bogus', message: 'x' }
+  ] }, teacher);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.posted, 2);
+  assert.equal(r.body.errors.length, 2);
+  r = await call(env, 'GET', '/api/notices/mine', undefined, s1.body.token);
+  assert.equal(r.body.notices.length, 2);
+  assert.equal(r.body.notices[1].score, 2.5);
+  assert.equal(typeof r.body.notices[0].createdMs, 'number');
+  const since = r.body.notices[1].createdMs;
+  r = await call(env, 'GET', '/api/notices/mine?since=' + since, undefined, s1.body.token);
+  assert.equal(r.body.notices.length, 0);
+  r = await call(env, 'GET', '/api/notices/mine', undefined, s2.body.token);
+  assert.equal(r.body.notices.length, 0);
+  assert.equal((await call(env, 'POST', '/api/notices', { items: [] }, s1.body.token)).status, 403);
+});
+
+test('sync batch: applies due date, archives others, dedupes by id, students blocked', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const items = [
+    { id: 'sync_1', type: 'set_due_date', data: { className: 'ม.1/1', period: 4, dueAt: '2026-12-01T09:00:00.000Z', title: 'คาบ 4' } },
+    { id: 'sync_2', type: 'session_log', data: { className: 'ม.1/1', period: 4, presentCount: 30 } },
+    { type: 'session_log', data: {} }
+  ];
+  let r = await call(env, 'POST', '/api/sync/batch', { items }, teacher);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.results.map((x) => x.status), ['applied', 'archived', 'error']);
+  r = await call(env, 'POST', '/api/sync/batch', { items: [items[0], items[1]] }, teacher);
+  assert.deepEqual(r.body.results.map((x) => x.status), ['duplicate', 'duplicate']);
+  const row = env._raw.prepare("SELECT type, data FROM sync_archive WHERE item_id = 'sync_2'").get();
+  assert.equal(row.type, 'session_log');
+  assert.equal(JSON.parse(row.data).presentCount, 30);
+  assert.equal((await call(env, 'POST', '/api/sync/batch', { items }, s1.body.token)).status, 403);
+});
+
+test('sync batch: research_car items are applied to research scores', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const items = [
+    { id: 'rc_1', type: 'research_car', data: { className: 'ม.1/1', studentId: '90001', pre: 40, post: 70, formative: 55, gain: 30 } },
+    { id: 'rc_2', type: 'research_car', data: { className: 'ม.1/1', studentId: '90001', pre: 500, post: 70 } }
+  ];
+  const r = await call(env, 'POST', '/api/sync/batch', { items }, teacher);
+  assert.deepEqual(r.body.results.map((x) => x.status), ['applied', 'error']);
+  const row = env._raw.prepare("SELECT pre, post, formative FROM research_scores WHERE student_id = '90001'").get();
+  assert.equal(row.pre, 40);
+  assert.equal(row.post, 70);
+  assert.equal(row.formative, 55);
 });

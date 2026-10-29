@@ -59,6 +59,7 @@ const StudentAuth = {
       const sess = await CloudApi.Auth.studentLogin(id, pin);
       const user = this._cloudUser(sess);
       Store.setCurrentUser(user);
+      if (typeof CloudSync !== 'undefined') CloudSync.init();
       return { success: true, user, mode: 'cloud', pinCreated: !!sess.pinCreated };
     } catch (e) {
       if (e.status === 0) return { success: false, code: 'network', mode: 'cloud', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต' };

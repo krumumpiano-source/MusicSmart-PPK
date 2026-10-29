@@ -714,7 +714,9 @@ const App = {
     // 1. ตรวจสอบข้อมูลใน Store ก่อน (รองรับทั้งครูหลัก และ นศ.ฝึกสอนที่ได้รับการอนุมัติแล้วในเครื่อง)
     const localTeacher = Store.getTeacherByEmail ? Store.getTeacherByEmail(identifier) : null;
     const isLocalApproved = localTeacher ? (!Store.isTeacherApproved || Store.isTeacherApproved(localTeacher)) : false;
-    if (localTeacher && isLocalApproved) {
+    // โหมด Cloud: บัญชีแอดมินต้องยืนยันรหัสกับเซิร์ฟเวอร์เสมอ (ไม่ใช้รหัสในเครื่อง)
+    const cloudAdminOnly = !!(localTeacher && localTeacher.isAdmin && typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode());
+    if (localTeacher && isLocalApproved && !cloudAdminOnly) {
       if (localTeacher.needsFirstTimeSetup) {
         this.openFirstTimeSetupModal(localTeacher);
         return;
@@ -1834,7 +1836,9 @@ const App = {
     const boxEl = document.getElementById('student-submission-box');
     if (boxEl) boxEl.style.display = (pol && pol.kind !== 'task') ? 'none' : '';
     const upEl = document.getElementById('student-upload-block');
-    if (upEl) upEl.style.display = (pol && !pol.fileUpload) ? 'none' : '';
+    const cloudOn = typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode();
+    // โหมด Cloud: ไม่มีการอัปโหลดไฟล์ (นักเรียนส่งเป็นลิงก์ไฟล์ของตนเอง)
+    if (upEl) upEl.style.display = ((pol && !pol.fileUpload) || cloudOn) ? 'none' : '';
     if (pol && pol.kind !== 'task' && statusChipEl) statusChipEl.innerHTML = '';
 
     if (maxScoreEl) {
@@ -4350,7 +4354,18 @@ const App = {
     listEl.appendChild(bar);
   },
 
-  saveStudentFeedback(className, period, studentId) {
+  // โหมด Cloud: ส่งคะแนน (0-100) และคำแนะนำของงานนี้ไปที่ Worker — ต้องมี cloudId จากการดึงงานก่อน
+  async _pushGradeCloud(className, period, studentId, feedbackText, scoreVal) {
+    const sub = Store.getAllSubmissions()[`${className}_p${period}_${studentId}`];
+    if (!sub || !sub.cloudId) return { skipped: true };
+    const patch = { feedback: feedbackText || '' };
+    const n = Number(scoreVal);
+    if (scoreVal !== null && scoreVal !== undefined && scoreVal !== '' && Number.isFinite(n)) patch.score = n;
+    await CloudApi.Submissions.grade(sub.cloudId, patch);
+    return { ok: true };
+  },
+
+  async saveStudentFeedback(className, period, studentId) {
     const textEl = document.getElementById(`feedback-text-${studentId}`);
     const scoreEl = document.getElementById(`feedback-score-${studentId}`);
     const feedbackText = textEl ? textEl.value.trim() : '';
@@ -4371,8 +4386,17 @@ const App = {
       this.renderSubmissionsTab();
       return;
     }
-    // ส่งคำแนะนำถึงมือถือนักเรียน (ถ้าตั้งค่าซิงค์แล้ว)
-    if (typeof Notices !== 'undefined' && typeof TeacherPull !== 'undefined' && TeacherPull.isConfigured()) {
+    let cloudMsg = '';
+    if (typeof TeacherPull !== 'undefined' && TeacherPull.isCloud()) {
+      // โหมด Cloud: ส่งคะแนน/คำแนะนำไปที่ D1 (นักเรียนจะเห็นผ่านการ์ดคำแนะนำเมื่อเข้าระบบ)
+      try {
+        const r = await this._pushGradeCloud(className, period, studentId, feedbackText, scoreVal);
+        if (r.skipped) cloudMsg = '\n⚠️ ยังไม่พบงานของนักเรียนคนนี้บนเซิร์ฟเวอร์ — บันทึกไว้ในเครื่องครูเท่านั้น (กด 📥 ดึงงานนักเรียนแล้วลองใหม่)';
+      } catch (err) {
+        cloudMsg = '\n⚠️ บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ: ' + err.message + ' (ค่าที่บันทึกไว้ในเครื่องยังอยู่)';
+      }
+    } else if (typeof Notices !== 'undefined' && typeof TeacherPull !== 'undefined' && TeacherPull.isConfigured()) {
+      // ระบบเดิม (Google Sheet): ส่งคำแนะนำถึงมือถือนักเรียนผ่านชีต
       Notices.postFeedback(className, period, studentId, feedbackText, scoreVal)
         .catch(err => GoogleSheetSync.showToast('⚠️ ส่งคำแนะนำถึงมือถือนักเรียนไม่สำเร็จ: ' + err.message, 'error'));
     }
@@ -4380,7 +4404,7 @@ const App = {
       this.state.scores[studentId] = Number(scoreVal);
     }
 
-    alert('✅ บันทึกคำแนะนำและคะแนนให้นักเรียนเรียบร้อยแล้ว!\nนักเรียนจะเห็นข้อความนี้ทันทีเมื่อเข้าสู่ระบบ');
+    alert('✅ บันทึกคำแนะนำและคะแนนให้นักเรียนเรียบร้อยแล้ว!\nนักเรียนจะเห็นข้อความนี้ทันทีเมื่อเข้าสู่ระบบ' + cloudMsg);
     this.renderSubmissionsTab();
     this.renderAssessmentTab();
   },

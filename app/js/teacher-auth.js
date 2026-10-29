@@ -44,8 +44,29 @@ const TeacherAuth = {
   },
 
   // rawPassword (ถ้ามี) = ค่าที่พิมพ์/วางมาก่อนตัดช่องว่างหัวท้าย — ใช้ลองซ้ำเมื่อรหัสที่ตั้งไว้ก่อนหน้านี้มีช่องว่างติดมา
+  isCloud() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode(); },
+
+  // โหมด Cloudflare Worker: ตรวจรหัสครูที่ D1 แล้วเก็บโทเค็นไว้ใน CloudApi
+  async _cloudLogin(email, password) {
+    try {
+      const sess = await CloudApi.Auth.teacherLogin(email, password);
+      localStorage.setItem(this.SERVER_FLAG, '1');
+      await this._saveOffline(email, password).catch(() => {});
+      if (typeof CloudSync !== 'undefined') CloudSync.init();
+      return { success: true, user: this._setUser(email, sess.name) };
+    } catch (e) {
+      if (e && e.status === 0) {
+        if (await this._checkOffline(email, password)) return { success: true, offline: true, user: this._setUser(email, '', { offline: true }) };
+        return { success: false, code: 'network', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต' };
+      }
+      if (e && e.status === 429) return { success: false, code: 'locked', message: e.message };
+      return { success: false, code: (e && e.code) || 'invalid_credentials', message: (e && e.message) || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
+    }
+  },
+
   async login(emailRaw, password, rawPassword) {
     const email = String(emailRaw || '').trim().toLowerCase();
+    if (this.isCloud() && typeof CloudApi !== 'undefined') return this._cloudLogin(email, password);
     const url = this.apiUrl();
     const legacy = async () => {
       if (this.serverManaged()) return { success: false, message: 'ไม่มีอินเทอร์เน็ต และเครื่องนี้ยังไม่เคยเข้าสู่ระบบแบบออฟไลน์ได้ กรุณาต่อเน็ตแล้วลองใหม่' };
