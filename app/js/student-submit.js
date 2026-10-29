@@ -151,14 +151,25 @@ const StudentOutbox = {
     const batch = items.slice(0, this.MAX_BATCH);
     const done = new Set();
     const rejected = {};
+    const results = {};
     let transientMessage = '';
     try {
       for (const it of batch) {
-        const p = this._cloudPayload(it);
-        if (p.reason) { rejected[it.clientId] = p.reason; continue; }
+        let send;
+        if (it.kind === 'quiz_answers') {
+          const d = it.data || {};
+          send = () => CloudApi.request('POST', '/api/quiz/units/' + encodeURIComponent(Number(d.unitNo) || 0) + '/submit', {
+            client_id: it.clientId, answers: d.answers || {}, practice: !!d.practice, time_spent: Number(d.timeSpentSeconds) || 0
+          });
+        } else {
+          const p = this._cloudPayload(it);
+          if (p.reason) { rejected[it.clientId] = p.reason; continue; }
+          send = () => CloudApi.Submissions.submitVideo(p.payload);
+        }
         try {
-          await CloudApi.Submissions.submitVideo(p.payload);
+          const r = await send();
           done.add(it.clientId);
+          if (it.kind === 'quiz_answers' && r) results[it.clientId] = { score: r.score, total: r.total, percentage: r.percentage, practice: !!r.practice };
         } catch (e) {
           if (e.status === 401) { this.needsReauth = true; transientMessage = 'กรุณาใส่ PIN อีกครั้งเพื่อส่งงาน'; break; }
           if (e.status === 0 || e.status === 429 || e.status >= 500) { transientMessage = 'เชื่อมต่อไม่ได้ จะส่งใหม่อัตโนมัติ'; break; }
@@ -167,7 +178,12 @@ const StudentOutbox = {
       }
       const remaining = [];
       this.getItems().forEach(it => {
-        if (done.has(it.clientId)) { this.setStatus(it.taskKey, 'sent'); return; }
+        if (done.has(it.clientId)) {
+          const res = results[it.clientId];
+          this.setStatus(it.taskKey, 'sent', res ? { result: res } : undefined);
+          if (res && typeof this.onResult === 'function') { try { this.onResult(it, res); } catch (e) { /* ignore */ } }
+          return;
+        }
         const reason = rejected[it.clientId];
         if (reason) { this.setStatus(it.taskKey, 'failed', { permanent: true, message: this.reasonText(reason) }); return; }
         if (batch.some(b => b.clientId === it.clientId) && transientMessage) this.setStatus(it.taskKey, 'failed', { message: transientMessage });
@@ -186,7 +202,7 @@ const StudentOutbox = {
 
   reasonText(code) {
     return ({ too_long: 'คำตอบยาวเกิน 5,000 ตัวอักษร', bad_url: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://', empty: 'ไม่มีคำตอบหรือลิงก์',
-      bad_period: 'คาบเรียนไม่ถูกต้อง', invalid_url: 'ลิงก์ต้องเป็น https:// และห้ามมีชื่อผู้ใช้/รหัสผ่านในลิงก์', unsupported_cloud: 'ประเภทงานนี้ยังไม่รองรับในระบบใหม่', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้' })[code] || 'ข้อมูลไม่ถูกต้อง';
+      bad_period: 'คาบเรียนไม่ถูกต้อง', invalid_url: 'ลิงก์ต้องเป็น https:// และห้ามมีชื่อผู้ใช้/รหัสผ่านในลิงก์', unsupported_cloud: 'ประเภทงานนี้ยังไม่รองรับในระบบใหม่', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้', practice_limit: 'ทำแบบฝึกหน่วยนี้ครบจำนวนครั้งแล้ว', bad_unit: 'หน่วยการเรียนรู้ไม่ถูกต้อง' })[code] || 'ข้อมูลไม่ถูกต้อง';
   },
 
   TASKS_KEY: 'ppk_student_tasks',
@@ -198,6 +214,17 @@ const StudentOutbox = {
   async refreshTasks() {
     const u = this.currentStudent();
     if (!this.isActive() || !this.sessionValid(u)) return null;
+    if (this.isCloudMode()) {
+      try {
+        const r = await CloudApi.request('GET', '/api/due-dates');
+        const dueDates = (r.due_dates || []).map(d => ({ className: d.class_name, period: Number(d.period), dueAt: d.due_at, title: d.title || '' }));
+        this._save(this.TASKS_KEY, { dueDates, fetchedAt: new Date().toISOString() });
+        return { status: 'success', dueDates };
+      } catch (e) {
+        if (e && e.status === 401) this.needsReauth = true;
+        return null;
+      }
+    }
     try {
       const r = await StudentAuth._post({ action: 'studentTasks', sessionToken: u.sessionToken });
       if (r.status === 'success') { this._save(this.TASKS_KEY, { dueDates: r.dueDates || [], fetchedAt: new Date().toISOString() }); return r; }
@@ -371,11 +398,12 @@ const TeacherPull = {
 
   // อัปโหลดคลังข้อสอบ (มีเฉลย) ขึ้นชีตของครู เพื่อให้เซิร์ฟเวอร์ตรวจคะแนนนักเรียน
   async uploadQuizBank() {
-    if (!this.isConfigured()) throw new Error('กรุณาตั้งค่า URL และรหัสซิงค์ก่อน');
+    if (!this.isConfigured()) throw new Error(this.isCloud() ? 'กรุณาเข้าสู่ระบบครูก่อน' : 'กรุณาตั้งค่า URL และรหัสซิงค์ก่อน');
     if (typeof QUIZZES_DATA === 'undefined') throw new Error('ไม่พบคลังข้อสอบ');
-    const cfg = GoogleSheetSync.getConfig();
     const units = QUIZZES_DATA.units.map(u => ({ unit_no: u.unit_no, title: u.title,
       questions: u.questions.map(q => ({ id: q.id, question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation, bloom: q.bloom })) }));
+    if (this.isCloud()) return CloudApi.request('PUT', '/api/quiz/bank', { units });
+    const cfg = GoogleSheetSync.getConfig();
     return GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'upload_quiz_bank', units });
   },
 
@@ -414,6 +442,12 @@ const TeacherPull = {
             received_at: r.submitted_at || r.updated_at, upload_id: null });
         }
       });
+      // คะแนนแบบทดสอบที่ตรวจบนเซิร์ฟเวอร์ (ไม่รวมแบบฝึก)
+      const qr = await CloudApi.request('GET', '/api/quiz/attempts');
+      (qr.attempts || []).forEach(a => {
+        mapped.push({ kind: 'quiz', student_id: a.student_id, class: a.class_name || '', period_or_unit: a.unit_no,
+          score: a.score, total: a.total, percentage: a.percentage, time_spent_sec: a.time_spent || 0, received_at: a.created_at });
+      });
       const m = this.merge(mapped);
       // เก็บ cloudId ไว้ใช้ตอนให้คะแนน และรับคะแนน/คำแนะนำที่ครูบันทึกบนเซิร์ฟเวอร์ ถ้าเครื่องนี้ยังไม่มี
       const all = Store.getAllSubmissions();
@@ -431,7 +465,7 @@ const TeacherPull = {
       });
       Store.save('ppk_student_submissions', all);
       localStorage.setItem(this.SINCE_KEY + '_at', new Date().toISOString());
-      const msg = `📥 ดึงงานนักเรียนจากเซิร์ฟเวอร์แล้ว: งาน ${m.subs} รายการ`;
+      const msg = `📥 ดึงงานนักเรียนจากเซิร์ฟเวอร์แล้ว: งาน ${m.subs} • แบบทดสอบ ${m.quizzes} รายการ`;
       if (!opts.silent) GoogleSheetSync.showToast(msg, 'success');
       return { success: true, ...m };
     } catch (e) {

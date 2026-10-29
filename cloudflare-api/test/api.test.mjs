@@ -7,26 +7,52 @@ import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 
 // อะแดปเตอร์ให้ node:sqlite มี API แบบเดียวกับ D1 (prepare().bind().run()/all()/first())
+// นับ query ต่อคำขอ (batch() นับเป็น 1) เพื่อยืนยันว่าไม่เกินเพดาน 50 query ของ D1 แผนฟรี
+const D1_FREE_QUERY_LIMIT = 50;
+
 class Stmt {
-  constructor(raw, sql) {
+  constructor(raw, sql, counter) {
     this.raw = raw;
     this.sql = sql;
+    this.counter = counter;
     this.params = [];
   }
   bind(...p) {
     this.params = p.map((v) => (v === undefined ? null : v));
     return this;
   }
-  async run() {
+  async run(inBatch = false) {
+    if (!inBatch) this.counter.n++;
     const r = this.raw.prepare(this.sql).run(...this.params);
     return { success: true, meta: { changes: Number(r.changes) } };
   }
   async all() {
+    this.counter.n++;
     return { results: this.raw.prepare(this.sql).all(...this.params) };
   }
   async first() {
+    this.counter.n++;
     return this.raw.prepare(this.sql).get(...this.params) ?? null;
   }
+}
+
+function makeDb(raw, counter) {
+  return {
+    prepare: (sql) => new Stmt(raw, sql, counter),
+    async batch(stmts) {
+      counter.n++;
+      raw.exec('BEGIN');
+      try {
+        const out = [];
+        for (const s of stmts) out.push(await s.run(true));
+        raw.exec('COMMIT');
+        return out;
+      } catch (e) {
+        raw.exec('ROLLBACK');
+        throw e;
+      }
+    }
+  };
 }
 
 function makeEnv() {
@@ -35,12 +61,15 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0004_submission_meta.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0005_teacher_sync.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0006_quiz.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
     ('90003','ม.1/2',1,'เด็กชาย','ทดสอบ2','นามสมมุติ','ทด2','2026-01-01')`);
+  const counter = { n: 0 };
   return {
-    DB: { prepare: (sql) => new Stmt(raw, sql) },
+    DB: makeDb(raw, counter),
+    _queries: counter,
     SESSION_SECRET: 'test-session-secret-0123456789abcdef',
     PASSWORD_PEPPER: 'test-pepper-0123456789abcdef0123',
     SETUP_TOKEN: 'setup-token-for-tests-xyz',
@@ -56,7 +85,11 @@ async function call(env, method, path, body, token, headers = {}) {
     headers: h,
     body: body === undefined ? undefined : JSON.stringify(body)
   });
+  if (env._queries) env._queries.n = 0;
   const res = await worker.fetch(req, env);
+  if (env._queries) {
+    assert.ok(env._queries.n <= D1_FREE_QUERY_LIMIT, `${method} ${path} ใช้ ${env._queries.n} query (เกิน ${D1_FREE_QUERY_LIMIT})`);
+  }
   const text = await res.text();
   return { status: res.status, headers: res.headers, body: text ? JSON.parse(text) : null };
 }
@@ -433,4 +466,85 @@ test('sync batch: research_car items are applied to research scores', async () =
   assert.equal(row.pre, 40);
   assert.equal(row.post, 70);
   assert.equal(row.formative, 55);
+});
+
+test('free-plan query budget: 100-item sync batch and 200 notices stay within 50 queries', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const items = Array.from({ length: 100 }, (_, i) => ({ id: 'load_' + i, type: i % 2 ? 'session_log' : 'set_due_date', data: { className: 'ม.1/1', period: (i % 20) + 1, dueAt: '2026-12-01T00:00:00Z' } }));
+  let r = await call(env, 'POST', '/api/sync/batch', { items }, teacher);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.results.filter((x) => x.status !== 'error').length, 100);
+  const notices = Array.from({ length: 200 }, (_, i) => ({ studentId: i % 2 ? '90001' : '90002', kind: 'reminder', ref: 'x', message: 'ส่งงาน ' + i }));
+  r = await call(env, 'POST', '/api/notices', { items: notices }, teacher);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.posted, 200);
+  r = await call(env, 'POST', '/api/sync/batch', { items: Array.from({ length: 101 }, (_, i) => ({ id: 'x' + i, type: 't', data: {} })) }, teacher);
+  assert.equal(r.status, 400);
+});
+
+const QUIZ_UNITS = [
+  { unit_no: 1, title: 'หน่วยที่ 1', questions: [
+    { id: 'q1', question: 'ข้อ 1', choices: [{ key: 'ก', text: 'หนึ่ง' }, { key: 'ข', text: 'สอง' }], correct: 'ก', explanation: 'เพราะ...' },
+    { id: 'q2', question: 'ข้อ 2', choices: [{ key: 'ก', text: 'หนึ่ง' }, { key: 'ข', text: 'สอง' }], correct: 'ข' },
+    { id: 'q3', question: 'ไม่มีเฉลย', choices: [] }
+  ] },
+  { unit_no: 2, title: 'หน่วยที่ 2', questions: [{ id: 'u2q1', question: 'x', choices: [{ key: 'ก', text: 'a' }], correct: 'ก' }] }
+];
+
+test('quiz: teacher uploads bank; students get questions without answers', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  assert.equal((await call(env, 'PUT', '/api/quiz/bank', { units: QUIZ_UNITS }, s1.body.token)).status, 403);
+  let r = await call(env, 'PUT', '/api/quiz/bank', { units: QUIZ_UNITS }, teacher);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.questions, r.body.units], [3, 2]);
+  r = await call(env, 'GET', '/api/quiz/units/1', undefined, s1.body.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.title, 'หน่วยที่ 1');
+  assert.deepEqual(r.body.questions.map((q) => q.id), ['q1', 'q2']);
+  const text = JSON.stringify(r.body);
+  assert.equal(text.includes('correct'), false);
+  assert.equal(text.includes('เพราะ'), false);
+  assert.equal((await call(env, 'GET', '/api/quiz/units/9', undefined, s1.body.token)).status, 404);
+  // อัปโหลดใหม่ = แทนที่ทั้งหมด
+  await call(env, 'PUT', '/api/quiz/bank', { units: [QUIZ_UNITS[1]] }, teacher);
+  assert.equal((await call(env, 'GET', '/api/quiz/units/1', undefined, s1.body.token)).status, 404);
+});
+
+test('quiz: server grades, one scored attempt per unit, client_id idempotent, practice unlimited, grants allow retake', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  await call(env, 'PUT', '/api/quiz/bank', { units: QUIZ_UNITS }, teacher);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const t = s1.body.token;
+  let r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_1', answers: { q1: 'ก', q2: 'ก' }, time_spent: 42 }, t);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.score, r.body.total, r.body.percentage, r.body.practice], [1, 2, 50, false]);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_1', answers: { q1: 'ก', q2: 'ข' } }, t);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.duplicate, true);
+  assert.equal(r.body.score, 1);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_2', answers: { q1: 'ก', q2: 'ข' } }, t);
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'duplicate_quiz');
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'p_1', answers: { q1: 'ก', q2: 'ข' }, practice: true }, t);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.score, 2);
+  r = await call(env, 'POST', '/api/quiz/grants', { student_id: '90001', unit_no: 1, extra: 1 }, teacher);
+  assert.equal(r.status, 200);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_3', answers: { q1: 'ก', q2: 'ข' } }, t);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.score, 2);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_4', answers: { q1: 'ก' } }, t);
+  assert.equal(r.status, 409);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'q_5', answers: { q1: 'toolong' } }, t);
+  assert.equal(r.status, 400);
+  r = await call(env, 'GET', '/api/quiz/attempts?class=' + encodeURIComponent('ม.1/1'), undefined, teacher);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.attempts.length, 2);
+  assert.equal(r.body.attempts[0].unit_no, 1);
+  assert.equal('answers' in r.body.attempts[0], false);
+  assert.equal((await call(env, 'GET', '/api/quiz/attempts', undefined, t)).status, 403);
 });

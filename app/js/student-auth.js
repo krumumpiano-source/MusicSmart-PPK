@@ -24,7 +24,7 @@ const StudentAuth = {
     return '';
   },
 
-  isServerMode() { return !!this.getApiUrl(); },
+  isServerMode() { return this.isCloudMode() || !!this.getApiUrl(); },
 
   // โหมด Cloudflare (Worker + D1): เปิดด้วยค่า MUSICSMART_USE_CLOUD = true ใน public-config.js
   // หรือเปิดชั่วคราวด้วย ?cloud=1 บน URL เพื่อทดสอบ ค่าเริ่มต้นคือปิด จนกว่าจะทดสอบเสร็จ

@@ -14,6 +14,8 @@ const LOCK_MAX_FAILS = 5;
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_SESSION_BYTES = 200 * 1024;
 const MAX_SYNC_OPS = 200;
+const MAX_SYNC_OPS_PER_CALL = 15;
+const MAX_BATCH_ITEMS = 100;
 const MIN_TEACHER_PASSWORD = 12;
 
 const enc = new TextEncoder();
@@ -658,7 +660,7 @@ async function mySubmissions(env, auth) {
 
 // ---------- งานวิจัย CAR ----------
 
-async function putResearch(env, p) {
+function researchStmt(env, p) {
   const className = reqStr(p.class_name, 'class_name', 60);
   const sid = normSid(p.student_id);
   const num = (v) => {
@@ -667,14 +669,16 @@ async function putResearch(env, p) {
     if (!Number.isFinite(n) || n < 0 || n > 100) throw bad('คะแนนต้องอยู่ระหว่าง 0-100');
     return n;
   };
-  await env.DB.prepare(
+  return env.DB.prepare(
     `INSERT INTO research_scores (class_name, student_id, pre, post, formative, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (class_name, student_id) DO UPDATE SET
        pre = excluded.pre, post = excluded.post, formative = excluded.formative, updated_at = excluded.updated_at`
-  )
-    .bind(className, sid, num(p.pre), num(p.post), num(p.formative), nowIso())
-    .run();
+  ).bind(className, sid, num(p.pre), num(p.post), num(p.formative), nowIso());
+}
+
+async function putResearch(env, p) {
+  await researchStmt(env, p).run();
   return { ok: true };
 }
 
@@ -709,7 +713,7 @@ async function syncOps(request, env) {
   const auth = await requireAuth(request, env, ['teacher', 'student']);
   const b = await readJson(request);
   if (!Array.isArray(b.ops)) throw bad('ต้องส่ง ops เป็นรายการ');
-  if (b.ops.length > MAX_SYNC_OPS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS} รายการ`);
+  if (b.ops.length > MAX_SYNC_OPS_PER_CALL) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS_PER_CALL} รายการ`);
 
   const results = [];
   for (const op of b.ops) {
@@ -753,24 +757,46 @@ function validPeriod(v) {
   return n;
 }
 
-async function setDueDate(env, p) {
+function dueDateStmt(env, p) {
   const className = reqStr(p.class_name, 'class_name', 60);
   const period = validPeriod(p.period);
   const dueRaw = p.due_at === undefined || p.due_at === null ? '' : String(p.due_at).trim();
   if (!dueRaw) {
-    await env.DB.prepare('DELETE FROM due_dates WHERE class_name = ? AND period = ?').bind(className, period).run();
-    return { ok: true, deleted: true };
+    return env.DB.prepare('DELETE FROM due_dates WHERE class_name = ? AND period = ?').bind(className, period);
   }
   const ms = Date.parse(dueRaw);
   if (!Number.isFinite(ms)) throw bad('due_at ไม่ถูกต้อง', 'bad_due');
-  await env.DB.prepare(
+  return env.DB.prepare(
     `INSERT INTO due_dates (class_name, period, due_at, title, updated_at) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT (class_name, period) DO UPDATE SET
        due_at = excluded.due_at, title = excluded.title, updated_at = excluded.updated_at`
-  )
-    .bind(className, period, new Date(ms).toISOString(), optText(p.title, 200), nowIso())
-    .run();
+  ).bind(className, period, new Date(ms).toISOString(), optText(p.title, 200), nowIso());
+}
+
+async function setDueDate(env, p) {
+  await dueDateStmt(env, p).run();
   return { ok: true };
+}
+
+// ค้นหาค่าที่มีอยู่แล้วทีละไม่เกิน 90 ค่า (D1 จำกัด 100 พารามิเตอร์ต่อ query); table/col เป็นค่าคงที่ภายในเท่านั้น
+async function existingValues(env, table, col, values) {
+  const out = new Map();
+  const uniq = [...new Set(values)];
+  for (let i = 0; i < uniq.length; i += 90) {
+    const chunk = uniq.slice(i, i + 90);
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM ${table} WHERE ${col} IN (${chunk.map(() => '?').join(',')})`
+    )
+      .bind(...chunk)
+      .all();
+    results.forEach((r) => out.set(r[col], r));
+  }
+  return out;
+}
+
+// แผนฟรีของ D1 จำกัด 50 query ต่อการเรียก Worker; batch() นับเป็น 1 query
+async function runBatch(env, stmts) {
+  for (let i = 0; i < stmts.length; i += 500) await env.DB.batch(stmts.slice(i, i + 500));
 }
 
 async function listDueDates(env, auth, url) {
@@ -793,8 +819,8 @@ const NOTICE_KINDS = ['reminder', 'feedback'];
 async function postNotices(env, auth, items) {
   if (!Array.isArray(items)) throw bad('items ต้องเป็นรายการ');
   if (items.length > MAX_SYNC_OPS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS} รายการ`);
-  let posted = 0;
   const errors = [];
+  const valid = [];
   for (const it of items) {
     if (!isPlainObject(it)) {
       errors.push('รายการไม่ถูกต้อง');
@@ -812,11 +838,6 @@ async function postNotices(env, auth, items) {
       errors.push(`${sid}: kind ไม่ถูกต้อง`);
       continue;
     }
-    const st = await env.DB.prepare('SELECT class_name FROM students WHERE student_id = ?').bind(sid).first();
-    if (!st) {
-      errors.push(`${sid}: ไม่พบนักเรียน`);
-      continue;
-    }
     let score = null;
     if (it.score !== null && it.score !== undefined && it.score !== '') {
       const n = Number(it.score);
@@ -831,15 +852,26 @@ async function postNotices(env, auth, items) {
       errors.push(`${sid}: ไม่มีข้อความ`);
       continue;
     }
-    await env.DB.prepare(
-      `INSERT INTO notices (id, student_id, class_name, ref, kind, message, score, teacher, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(crypto.randomUUID(), sid, st.class_name, optText(it.ref, 120), kind, message, score, optText(it.teacher, 120) || 'คุณครู', nowIso())
-      .run();
-    posted++;
+    valid.push({ sid, kind, score, message, ref: optText(it.ref, 120), teacher: optText(it.teacher, 120) || 'คุณครู' });
   }
-  return { ok: true, posted, errors };
+  const students = await existingValues(env, 'students', 'student_id', valid.map((v) => v.sid));
+  const now = nowIso();
+  const stmts = [];
+  for (const v of valid) {
+    const st = students.get(v.sid);
+    if (!st) {
+      errors.push(`${v.sid}: ไม่พบนักเรียน`);
+      continue;
+    }
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO notices (id, student_id, class_name, ref, kind, message, score, teacher, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(crypto.randomUUID(), v.sid, st.class_name, v.ref, v.kind, v.message, v.score, v.teacher, now)
+    );
+  }
+  if (stmts.length) await runBatch(env, stmts);
+  return { ok: true, posted: stmts.length, errors };
 }
 
 async function myNotices(env, auth, url) {
@@ -865,61 +897,203 @@ async function myNotices(env, auth, url) {
 // ---------- คิวซิงค์ของครู (รับจากแอป แล้วบันทึกให้ครบ) ----------
 
 // รายการที่มีตารางเฉพาะแล้วจะถูกนำไปใช้ทันที ส่วนอื่นเก็บลง sync_archive (idempotent ด้วย id)
+// ทั้งหมดเขียนใน batch เดียว เพื่อไม่ให้เกินเพดาน query ต่อการเรียก Worker
 async function syncBatch(request, env, auth) {
   const b = await readJson(request);
   if (!Array.isArray(b.items)) throw bad('ต้องส่ง items เป็นรายการ');
-  if (b.items.length > MAX_SYNC_OPS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_SYNC_OPS} รายการ`);
+  if (b.items.length > MAX_BATCH_ITEMS) throw bad(`ส่งครั้งละไม่เกิน ${MAX_BATCH_ITEMS} รายการ`);
+  const ids = b.items.map((it) => (typeof it?.id === 'string' ? it.id.slice(0, 120) : ''));
+  const seen = await existingValues(env, 'sync_archive', 'item_id', ids.filter(Boolean));
+  const inBatch = new Set();
+  const stmts = [];
   const results = [];
-  for (const it of b.items) {
-    const id = typeof it?.id === 'string' ? it.id.slice(0, 120) : '';
+  const now = nowIso();
+  b.items.forEach((it, i) => {
+    const id = ids[i];
     if (!id) {
       results.push({ id: null, status: 'error', message: 'ไม่มี id' });
-      continue;
+      return;
     }
-    const seen = await env.DB.prepare('SELECT 1 AS x FROM sync_archive WHERE item_id = ?').bind(id).first();
-    if (seen) {
+    if (seen.has(id) || inBatch.has(id)) {
       results.push({ id, status: 'duplicate' });
-      continue;
+      return;
     }
     const type = String(it.type || '').slice(0, 60);
     const data = isPlainObject(it.data) ? it.data : {};
     const dataStr = JSON.stringify(data);
     if (dataStr.length > 100 * 1024) {
       results.push({ id, status: 'error', message: 'ข้อมูลใหญ่เกินไป' });
-      continue;
+      return;
     }
     try {
       let status = 'archived';
       if (type === 'set_due_date') {
-        await setDueDate(env, {
-          class_name: data.className,
-          period: data.period,
-          due_at: data.dueAt,
-          title: data.title
-        });
+        stmts.push(dueDateStmt(env, { class_name: data.className, period: data.period, due_at: data.dueAt, title: data.title }));
         status = 'applied';
       } else if (type === 'research_car') {
-        await putResearch(env, {
-          class_name: data.className,
-          student_id: data.studentId,
-          pre: data.pre,
-          post: data.post,
-          formative: data.formative
-        });
+        stmts.push(
+          researchStmt(env, {
+            class_name: data.className,
+            student_id: data.studentId,
+            pre: data.pre,
+            post: data.post,
+            formative: data.formative
+          })
+        );
         status = 'applied';
       }
-      await env.DB.prepare(
-        'INSERT OR IGNORE INTO sync_archive (item_id, type, data, received_at, received_by) VALUES (?, ?, ?, ?, ?)'
-      )
-        .bind(id, type, dataStr, nowIso(), auth.sub)
-        .run();
+      stmts.push(
+        env.DB.prepare(
+          'INSERT OR IGNORE INTO sync_archive (item_id, type, data, received_at, received_by) VALUES (?, ?, ?, ?, ?)'
+        ).bind(id, type, dataStr, now, auth.sub)
+      );
+      inBatch.add(id);
       results.push({ id, status });
     } catch (e) {
       if (e instanceof HttpError) results.push({ id, status: 'error', message: e.message });
       else throw e;
     }
-  }
+  });
+  if (stmts.length) await runBatch(env, stmts);
   return json({ results });
+}
+
+// ---------- แบบทดสอบรายหน่วย (ตรวจบนเซิร์ฟเวอร์ ไม่ส่งเฉลยให้นักเรียน) ----------
+
+const MAX_PRACTICE_ATTEMPTS = 100;
+
+function validUnit(v) {
+  const n = optInt(v);
+  if (n === null || n < 1 || n > 40) throw bad('หน่วยการเรียนรู้ไม่ถูกต้อง', 'bad_unit');
+  return n;
+}
+
+function parseJson(s, fallback) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return fallback;
+  }
+}
+
+async function putQuizBank(env, b) {
+  if (!Array.isArray(b.units)) throw bad('ต้องส่ง units เป็นรายการ');
+  const stmts = [env.DB.prepare('DELETE FROM quiz_bank')];
+  const units = new Set();
+  let questions = 0;
+  for (const u of b.units) {
+    if (!isPlainObject(u)) continue;
+    const unitNo = validUnit(u.unit_no);
+    const title = optText(u.title, 200);
+    const qs = Array.isArray(u.questions) ? u.questions : [];
+    qs.forEach((q, i) => {
+      if (!isPlainObject(q)) return;
+      const id = optText(q.id, 40);
+      const correct = optText(q.correct, 4);
+      if (!id || !correct) return;
+      const choices = (Array.isArray(q.choices) ? q.choices : [])
+        .slice(0, 10)
+        .map((c) => ({ key: String(c?.key ?? '').slice(0, 4), text: String(c?.text ?? '').slice(0, 500) }));
+      stmts.push(
+        env.DB.prepare(
+          `INSERT OR REPLACE INTO quiz_bank (unit_no, q_id, ord, title, question, choices, correct, explanation, bloom)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(unitNo, id, i, title, String(q.question ?? '').slice(0, 1000), JSON.stringify(choices), correct, optText(q.explanation, 1000), optText(q.bloom, 40))
+      );
+      units.add(unitNo);
+      questions++;
+    });
+  }
+  if (!questions) throw bad('ไม่มีข้อสอบที่มีเฉลย');
+  // batch เดียว = แทนที่คลังทั้งหมดแบบ all-or-nothing
+  await env.DB.batch(stmts);
+  return { status: 'success', questions, units: units.size };
+}
+
+async function quizRows(env, unitNo) {
+  const { results } = await env.DB.prepare('SELECT * FROM quiz_bank WHERE unit_no = ? ORDER BY ord').bind(unitNo).all();
+  return results;
+}
+
+async function getQuiz(env, unitNo) {
+  const rows = await quizRows(env, unitNo);
+  if (!rows.length) throw new HttpError(404, 'no_quiz', 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้');
+  return json({
+    unitNo,
+    title: rows[0].title || '',
+    questions: rows.map((r) => ({ id: r.q_id, question: r.question, bloom: r.bloom || '', choices: parseJson(r.choices, []) }))
+  });
+}
+
+async function submitQuiz(env, auth, unitNo, b) {
+  const clientId = reqStr(b.client_id, 'client_id', 100);
+  const practice = !!b.practice;
+  if (!isPlainObject(b.answers)) throw bad('answers ต้องเป็นออบเจ็กต์');
+  const keys = Object.keys(b.answers);
+  if (keys.length > 100) throw bad('คำตอบมากเกินไป');
+  for (const k of keys) {
+    if (k.length > 40 || String(b.answers[k]).length > 4) throw bad('คำตอบไม่ถูกต้อง');
+  }
+  const sid = auth.sid;
+  const prev = await env.DB.prepare('SELECT * FROM quiz_attempts WHERE student_id = ? AND client_id = ?').bind(sid, clientId).first();
+  if (prev) {
+    return json({ duplicate: true, score: prev.score, total: prev.total, percentage: prev.percentage, practice: !!prev.practice });
+  }
+  const rows = await quizRows(env, unitNo);
+  if (!rows.length) throw new HttpError(404, 'no_quiz', 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้');
+  const c = await env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM quiz_attempts WHERE student_id = ? AND unit_no = ? AND practice = 0) AS used,
+       (SELECT COUNT(*) FROM quiz_attempts WHERE student_id = ? AND unit_no = ? AND practice = 1) AS practiced,
+       (SELECT COALESCE(SUM(extra), 0) FROM quiz_grants WHERE student_id = ? AND unit_no = ?) AS extra`
+  )
+    .bind(sid, unitNo, sid, unitNo, sid, unitNo)
+    .first();
+  if (!practice && Number(c.used) >= 1 + Number(c.extra)) {
+    throw new HttpError(409, 'duplicate_quiz', 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้');
+  }
+  if (practice && Number(c.practiced) >= MAX_PRACTICE_ATTEMPTS) {
+    throw new HttpError(409, 'practice_limit', 'ทำแบบฝึกหน่วยนี้ครบจำนวนครั้งแล้ว');
+  }
+  let score = 0;
+  rows.forEach((r) => {
+    if (String(b.answers[r.q_id] ?? '') === r.correct) score++;
+  });
+  const total = rows.length;
+  const percentage = Math.round((score / total) * 100);
+  const timeSpent = Math.max(0, Math.min(86400, Math.round(Number(b.time_spent) || 0)));
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO quiz_attempts
+       (id, student_id, class_name, client_id, unit_no, practice, score, total, percentage, time_spent, answers, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(crypto.randomUUID(), sid, auth.class_name || null, clientId, unitNo, practice ? 1 : 0, score, total, percentage, timeSpent, JSON.stringify(b.answers), nowIso())
+    .run();
+  return json({ score, total, percentage, practice, title: rows[0].title || '' });
+}
+
+async function listQuizAttempts(env, url) {
+  const cls = url.searchParams.get('class');
+  const cols = 'id, student_id, class_name, unit_no, score, total, percentage, time_spent, created_at';
+  const stmt = cls
+    ? env.DB.prepare(`SELECT ${cols} FROM quiz_attempts WHERE practice = 0 AND class_name = ? ORDER BY created_at`).bind(cls)
+    : env.DB.prepare(`SELECT ${cols} FROM quiz_attempts WHERE practice = 0 ORDER BY created_at`);
+  const { results } = await stmt.all();
+  return json({ attempts: results });
+}
+
+async function grantQuiz(env, b) {
+  const sid = normSid(b.student_id);
+  const unitNo = validUnit(b.unit_no);
+  const extra = optInt(b.extra ?? 1);
+  if (extra === null || extra < 1 || extra > 5) throw bad('จำนวนสิทธิ์เพิ่มต้องอยู่ระหว่าง 1-5');
+  await env.DB.prepare(
+    `INSERT INTO quiz_grants (student_id, unit_no, extra, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (student_id, unit_no) DO UPDATE SET extra = quiz_grants.extra + excluded.extra, updated_at = excluded.updated_at`
+  )
+    .bind(sid, unitNo, extra, nowIso())
+    .run();
+  return { ok: true };
 }
 
 // ---------- เส้นทาง (router) ----------
@@ -1021,6 +1195,29 @@ async function route(request, env) {
   if (path === '/api/sync/batch' && m === 'POST') {
     const a = await requireAuth(request, env, ['teacher']);
     return syncBatch(request, env, a);
+  }
+
+  const qu = /^\/api\/quiz\/units\/(\d+)$/.exec(path);
+  if (qu && m === 'GET') {
+    await requireAuth(request, env, ['teacher', 'student']);
+    return getQuiz(env, validUnit(qu[1]));
+  }
+  const qs = /^\/api\/quiz\/units\/(\d+)\/submit$/.exec(path);
+  if (qs && m === 'POST') {
+    const a = await requireAuth(request, env, ['student']);
+    return submitQuiz(env, a, validUnit(qs[1]), await readJson(request));
+  }
+  if (path === '/api/quiz/bank' && m === 'PUT') {
+    await requireAuth(request, env, ['teacher']);
+    return json(await putQuizBank(env, await readJson(request)));
+  }
+  if (path === '/api/quiz/attempts' && m === 'GET') {
+    await requireAuth(request, env, ['teacher']);
+    return listQuizAttempts(env, url);
+  }
+  if (path === '/api/quiz/grants' && m === 'POST') {
+    await requireAuth(request, env, ['teacher']);
+    return json(await grantQuiz(env, await readJson(request)));
   }
 
   return json({ error: 'not_found', message: 'ไม่พบเส้นทาง' }, 404);

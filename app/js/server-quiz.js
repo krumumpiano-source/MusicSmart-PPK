@@ -13,7 +13,17 @@ const ServerQuiz = {
   async load(unitNo) {
     const u = StudentOutbox.currentStudent();
     const cacheKey = this.CACHE_PREFIX + unitNo;
-    if (u && StudentOutbox.sessionValid(u)) {
+    if (u && StudentOutbox.isCloudMode()) {
+      try {
+        const r = await CloudApi.request('GET', '/api/quiz/units/' + encodeURIComponent(Number(unitNo)));
+        r.questions = (r.questions || []).map(q => ({ id: q.id, question: q.question, bloom: q.bloom || '', choices: (q.choices || []).map(c => ({ key: c.key, text: c.text })) }));
+        localStorage.setItem(cacheKey, JSON.stringify(r));
+        return r;
+      } catch (e) {
+        if (e && e.status === 401) { StudentOutbox.needsReauth = true; StudentOutbox.render(); return { error: 'reauth', message: 'กรุณาใส่ PIN อีกครั้ง' }; }
+        if (e && e.status && e.status !== 0 && e.status < 500) return { error: e.code || 'error', message: e.message };
+      }
+    } else if (u && StudentOutbox.sessionValid(u)) {
       try {
         const r = await StudentAuth._post({ action: 'studentQuizGet', sessionToken: u.sessionToken, unitNo: Number(unitNo) });
         if (r.status === 'success') {
