@@ -27,6 +27,7 @@ Desktop.ini
 
 # Student personal data (PDPA) - never commit or deploy real rosters
 app/data/students.js
+cloudflare-api/migrations/0002_seed_students.sql
 scores.txt
 raw_user_input.txt
 *_extracted.json
@@ -34,6 +35,8 @@ raw_user_input.txt
 # Secrets & environments
 .env*
 node_modules/
+cloudflare-api/.wrangler/
+cloudflare-api/.dev.vars
 .venv/
 
 # ข้อสอบกลางภาค/ปลายภาคฉบับจริง (ข้อสอบ+เฉลย) — ห้าม commit/ห้าม deploy; อัปโหลดขึ้น Apps Script ผ่านหน้าครูเท่านั้น

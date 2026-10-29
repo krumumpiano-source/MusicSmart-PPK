@@ -20,6 +20,7 @@ const ASSETS_TO_CACHE = [
   './data/public-config.js',
   './js/google-sheet-sync.js',
   './js/student-auth.js',
+  './js/cloud-api.js',
   './js/pwa-install.js',
   './js/student-submit.js',
   './js/server-quiz.js',

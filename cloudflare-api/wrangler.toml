@@ -1,0 +1,14 @@
+name = "musicsmart-api"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+account_id = "183a56f865a8860d48f7fe0414e34289"
+workers_dev = true
+
+# ฐานข้อมูล D1 (แผนฟรี) สร้างแล้วด้วยชื่อ musicsmart-db
+[[d1_databases]]
+binding = "DB"
+database_name = "musicsmart-db"
+database_id = "fc145824-01b4-489b-9277-42624af2f093"
+
+[observability]
+enabled = true

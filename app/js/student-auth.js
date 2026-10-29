@@ -26,6 +26,51 @@ const StudentAuth = {
 
   isServerMode() { return !!this.getApiUrl(); },
 
+  // โหมด Cloudflare (Worker + D1): เปิดด้วยค่า MUSICSMART_USE_CLOUD = true ใน public-config.js
+  // หรือเปิดชั่วคราวด้วย ?cloud=1 บน URL เพื่อทดสอบ ค่าเริ่มต้นคือปิด จนกว่าจะทดสอบเสร็จ
+  isCloudMode() {
+    if (typeof CloudApi === 'undefined' || !CloudApi) return false;
+    try {
+      if (typeof location !== 'undefined' && /[?&]cloud=1(&|$)/.test(location.search || '')) return true;
+    } catch (e) { /* ignore */ }
+    return typeof MUSICSMART_USE_CLOUD !== 'undefined' && MUSICSMART_USE_CLOUD === true;
+  },
+
+  _cloudUser(sess) {
+    const s = sess.student || {};
+    return {
+      sessionToken: sess.token,
+      sessionExp: sess.expiresAt,
+      role: 'student',
+      studentId: String(s.student_id || ''),
+      studentClass: s.class_name || '',
+      name: `${s.prefix || ''}${s.first_name || ''} ${s.last_name || ''}`.trim(),
+      nickname: s.nickname || '',
+      no: s.no,
+      source: 'server',
+      backend: 'cloud',
+      loggedInAt: new Date().toISOString()
+    };
+  },
+
+  // ล็อกอิน/ตั้ง PIN ผ่าน Worker: ครั้งแรกที่ใส่ PIN ระบบจะตั้ง PIN นั้นให้ (ไม่มีขั้นตอนแยก)
+  async _cloudAuth(action, id, pin) {
+    try {
+      const sess = await CloudApi.Auth.studentLogin(id, pin);
+      const user = this._cloudUser(sess);
+      Store.setCurrentUser(user);
+      return { success: true, user, mode: 'cloud', pinCreated: !!sess.pinCreated };
+    } catch (e) {
+      if (e.status === 0) return { success: false, code: 'network', mode: 'cloud', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต' };
+      if (e.status === 429) return { success: false, code: 'rate_limited', mode: 'cloud', message: e.message };
+      if (e.status === 401) {
+        if (action === 'studentSetPin') return { success: false, code: 'pin_exists', mode: 'cloud', message: 'นักเรียนคนนี้มี PIN แล้ว กรุณาเข้าสู่ระบบด้วย PIN เดิม' };
+        return { success: false, code: 'wrong_pin', mode: 'cloud', message: e.message || 'รหัสนักเรียนหรือ PIN ไม่ถูกต้อง' };
+      }
+      return { success: false, code: e.code || 'error', mode: 'cloud', message: e.message || 'เข้าสู่ระบบไม่สำเร็จ' };
+    }
+  },
+
   async _post(body, url) {
     const target = url || this.getApiUrl();
     const res = await fetch(target, {
@@ -60,6 +105,20 @@ const StudentAuth = {
       return { success: true, mode: 'local', hasPin: true, isTestAccount: true, studentClass: s.class,
         displayName: `${s.prefix}${s.first_name} ${s.last_name}` };
     }
+    if (this.isCloudMode()) {
+      // ค้นหาจาก Worker (ไม่ใช้รายชื่อในเครื่อง เพราะเว็บสาธารณะใช้รายชื่อตัวอย่าง)
+      try {
+        const r = await CloudApi.Auth.studentLookup(id);
+        const s = r.student || {};
+        return { success: true, mode: 'cloud', hasPin: !!r.has_pin, locked: !!r.locked,
+          studentClass: s.class_name, displayName: s.display_name || '' };
+      } catch (e) {
+        if (e.status === 404) return { success: false, code: 'not_found', mode: 'cloud' };
+        if (e.status === 429) return { success: false, code: 'rate_limited', mode: 'cloud', message: e.message };
+        if (e.status === 0) return { success: false, code: 'network', mode: 'cloud', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต' };
+        return { success: false, code: e.code || 'error', mode: 'cloud', message: e.message };
+      }
+    }
     if (!this.isServerMode()) {
       const s = Store.getStudentById(id);
       if (!s) return { success: false, code: 'not_found', mode: 'local' };
@@ -84,6 +143,7 @@ const StudentAuth = {
       return { ...res, mode: 'local' };
     }
     if (!/^\d{6}$/.test(p)) return { success: false, code: 'bad_pin', message: 'รหัส PIN ต้องเป็นตัวเลข 6 หลัก (0-9)' };
+    if (this.isCloudMode()) return this._cloudAuth(action, id, p);
     if (!this.isServerMode()) {
       const res = action === 'studentSetPin' ? Store.registerStudentPin(id, p) : Store.verifyStudentLogin(id, p);
       return { ...res, mode: 'local' };
