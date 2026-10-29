@@ -63,7 +63,35 @@ const ExamClient = {
   async _call(action, extra) {
     const u = this._student();
     if (!u || !StudentOutbox.sessionValid(u)) return { status: 'error', code: 'reauth', message: 'กรุณาเข้าสู่ระบบด้วย PIN อีกครั้ง' };
+    if (this._cloud()) return this._cloudCall(action, extra);
     return StudentAuth._post(Object.assign({ action, sessionToken: u.sessionToken }, extra || {}));
+  },
+
+  _cloud() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined'; },
+
+  // โหมด Cloud: แปลง action เดิมเป็น endpoint ของ Worker และคืนรูปแบบเดิม { status, ... }
+  // เครือข่ายขัดข้อง (status 0) โยนต่อเพื่อให้หน้าจอแจ้ง "ต้องต่ออินเทอร์เน็ต" เหมือนเดิม
+  async _cloudCall(action, extra) {
+    const x = extra || {};
+    const routes = {
+      studentExamStatus: ['GET', '/api/exams/status'],
+      studentExamStart: ['POST', '/api/exams/start'],
+      studentExamSubmit: ['POST', '/api/exams/submit', { attemptId: x.attemptId, answers: x.answers }],
+      exam_upload_bank: ['PUT', '/api/exams/bank', { kind: x.kind, items: x.items }],
+      exam_open: ['POST', '/api/exams/sessions', x],
+      exam_close: ['POST', '/api/exams/sessions/' + encodeURIComponent(x.sessionId || '') + '/close'],
+      exam_sessions: ['GET', '/api/exams/sessions'],
+      exam_results: ['GET', '/api/exams/results?sessionId=' + encodeURIComponent(x.sessionId || '')],
+      exam_grant_retake: ['POST', '/api/exams/grants', x]
+    };
+    const rt = routes[action];
+    if (!rt) return { status: 'error', code: 'unsupported', message: 'คำสั่งนี้ไม่รองรับในระบบใหม่' };
+    try {
+      return Object.assign({ status: 'success' }, await CloudApi.request(rt[0], rt[1], rt[2]));
+    } catch (e) {
+      if (e && e.status === 0) throw e;
+      return { status: 'error', code: (e && e.code) || 'error', message: (e && e.message) || 'ไม่สำเร็จ' };
+    }
   },
 
   mountStudent() {
@@ -182,6 +210,11 @@ const ExamClient = {
   // ---------------------------------------------------------------- ครู
   _cfg() { return (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.getConfig) ? GoogleSheetSync.getConfig() : {}; },
   async _tpost(action, extra) {
+    if (this._cloud()) {
+      if (!CloudApi.Auth.isTeacher()) return { status: 'error', message: 'กรุณาเข้าสู่ระบบครูก่อน' };
+      try { return await this._cloudCall(action, extra); }
+      catch (e) { return { status: 'error', message: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ (ต้องออนไลน์)' }; }
+    }
     const cfg = this._cfg();
     if (!cfg.webAppUrl || !cfg.syncToken) return { status: 'error', message: 'ยังไม่ได้ตั้งค่า Google Sheet (URL และรหัสซิงค์) ในหน้าตั้งค่า' };
     try { return await StudentAuth._post(Object.assign({ action, token: cfg.syncToken }, extra || {}), cfg.webAppUrl); }

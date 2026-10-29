@@ -62,6 +62,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0004_submission_meta.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0005_teacher_sync.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0006_quiz.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0007_exams.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -547,4 +548,90 @@ test('quiz: server grades, one scored attempt per unit, client_id idempotent, pr
   assert.equal(r.body.attempts[0].unit_no, 1);
   assert.equal('answers' in r.body.attempts[0], false);
   assert.equal((await call(env, 'GET', '/api/quiz/attempts', undefined, t)).status, 403);
+});
+
+const EXAM_BANK = {
+  kind: 'midterm',
+  items: Array.from({ length: 4 }, (_, i) => ({
+    id: 'm' + i, question: 'โจทย์ ' + i, correctIndex: 1, explanation: 'ลับ', srcPeriod: '3', difficulty: 'ง่าย',
+    choices: [{ text: 'ผิด ก ' + i }, { text: 'ถูก ' + i }, { text: 'ผิด ข ' + i }]
+  }))
+};
+
+async function openMidterm(env, teacher, extra = {}) {
+  const now = Date.now();
+  return call(env, 'POST', '/api/exams/sessions', { kind: 'midterm', className: 'ม.1/1', openAt: now - 1000, closeAt: now + 3600000, durationMin: 25, maxAttempts: 1, ...extra }, teacher);
+}
+
+test('exams: bank validation, open room, student gets shuffled questions without answers, full score, one attempt, retake grant', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const s3 = await call(env, 'POST', '/api/auth/student', { student_id: '90003', pin: '123456' });
+  const t = s1.body.token;
+  let r = await call(env, 'PUT', '/api/exams/bank', { kind: 'midterm', items: [{ id: 'x', question: 'q', choices: [{ text: 'a' }, { text: 'b' }], correctIndex: 0 }] }, teacher);
+  assert.equal(r.status, 400);
+  assert.equal((await openMidterm(env, teacher)).status, 409);
+  r = await call(env, 'PUT', '/api/exams/bank', EXAM_BANK, teacher);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.items, 4);
+  assert.equal((await call(env, 'GET', '/api/exams/status', undefined, t)).body.open, false);
+  r = await openMidterm(env, teacher);
+  assert.equal(r.status, 200);
+  const sessionId = r.body.sessionId;
+  assert.equal((await call(env, 'PUT', '/api/exams/bank', EXAM_BANK, teacher)).body.error, 'session_open');
+  assert.equal((await call(env, 'GET', '/api/exams/status', undefined, s3.body.token)).body.open, false);
+  r = await call(env, 'GET', '/api/exams/status', undefined, t);
+  assert.deepEqual([r.body.open, r.body.attemptsLeft, r.body.canStart, r.body.items], [true, 1, true, 4]);
+  r = await call(env, 'POST', '/api/exams/start', undefined, t);
+  assert.equal(r.status, 200);
+  const text = JSON.stringify(r.body);
+  assert.equal(text.includes('correct'), false);
+  assert.equal(text.includes('ลับ'), false);
+  assert.equal(r.body.questions.length, 4);
+  const attemptId = r.body.attemptId;
+  const again = await call(env, 'POST', '/api/exams/start', undefined, t);
+  assert.equal(again.body.attemptId, attemptId);
+  assert.deepEqual(again.body.questions, r.body.questions);
+  const answers = {};
+  r.body.questions.forEach((q) => { answers[q.id] = q.choices.find((c) => c.text.startsWith('ถูก')).key; });
+  r = await call(env, 'POST', '/api/exams/submit', { attemptId, answers }, t);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.correct, r.body.items, r.body.points, r.body.maxPoints, r.body.level], [4, 4, 10, 10, 4]);
+  r = await call(env, 'POST', '/api/exams/submit', { attemptId, answers: {} }, t);
+  assert.equal(r.body.duplicate, true);
+  assert.equal(r.body.points, 10);
+  r = await call(env, 'GET', '/api/exams/status', undefined, t);
+  assert.deepEqual([r.body.attemptsLeft, r.body.canStart, r.body.last.points], [0, false, 10]);
+  assert.equal((await call(env, 'POST', '/api/exams/start', undefined, t)).body.error, 'no_attempts');
+  assert.equal((await call(env, 'POST', '/api/exams/grants', { sessionId, studentId: '90003' }, teacher)).body.error, 'not_in_room');
+  assert.equal((await call(env, 'POST', '/api/exams/grants', { sessionId, studentId: '90001', extra: 1 }, teacher)).status, 200);
+  r = await call(env, 'POST', '/api/exams/start', undefined, t);
+  assert.equal(r.status, 200);
+  assert.notEqual(r.body.attemptId, attemptId);
+  r = await call(env, 'GET', '/api/exams/sessions', undefined, teacher);
+  assert.deepEqual([r.body.sessions[0].state, r.body.sessions[0].submitted, r.body.sessions[0].inProgress], ['open', 1, 1]);
+  r = await call(env, 'GET', '/api/exams/results?sessionId=' + sessionId, undefined, teacher);
+  const sub = r.body.attempts.find((a) => a.status === 'submitted');
+  assert.deepEqual([sub.studentId, sub.points, sub.attemptNo, sub.no], ['90001', 10, 1, 1]);
+  assert.equal(sub.name, 'เด็กชายทดสอบหนึ่ง นามสมมุติ');
+  assert.equal((await call(env, 'POST', '/api/exams/sessions/' + sessionId + '/close', undefined, teacher)).status, 200);
+  assert.equal((await call(env, 'GET', '/api/exams/status', undefined, t)).body.open, false);
+  assert.equal((await call(env, 'GET', '/api/exams/sessions', undefined, t)).status, 403);
+});
+
+test('exams: late submission is rejected; quiz retake grant via exam grants maps to quiz_grants', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  await call(env, 'PUT', '/api/exams/bank', EXAM_BANK, teacher);
+  await openMidterm(env, teacher);
+  const st = await call(env, 'POST', '/api/exams/start', undefined, s1.body.token);
+  env._raw.prepare('UPDATE exam_attempts SET deadline_ms = ? WHERE attempt_id = ?').run(Date.now() - 60000, st.body.attemptId);
+  const r = await call(env, 'POST', '/api/exams/submit', { attemptId: st.body.attemptId, answers: {} }, s1.body.token);
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'late');
+  const g = await call(env, 'POST', '/api/exams/grants', { sessionId: 'quiz_u3', studentId: '90001' }, teacher);
+  assert.equal(g.status, 200);
+  assert.equal(env._raw.prepare("SELECT extra FROM quiz_grants WHERE student_id = '90001' AND unit_no = 3").get().extra, 1);
 });
