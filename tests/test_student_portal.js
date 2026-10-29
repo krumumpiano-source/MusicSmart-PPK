@@ -1,5 +1,6 @@
 // Student login client (local demo + server mode), role-based lesson sanitizing, teacher-DOM purge, PWA banner logic.
 // Sample (fake) roster only.
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -21,13 +22,13 @@ const PwaInstall = require('../app/js/pwa-install.js');
   assert(r.success && r.mode === 'local' && r.hasPin === false, 'sample student found, no PIN yet');
   assert(!(await StudentAuth.lookup('12345')).success, 'unknown id rejected');
   assert.strictEqual((await StudentAuth.setPin('90001', '12ab')).code, 'bad_pin');
-  r = await StudentAuth.setPin('90001', '246810');
+  r = await StudentAuth.setPin('90001', PIN_A);
   assert(r.success, 'first login forces PIN then logs in');
   assert.strictEqual(Store.getCurrentUser().role, 'student');
   Store.logout();
   assert((await StudentAuth.lookup('90001')).hasPin, 'PIN now set');
   assert(!(await StudentAuth.login('90001', '000000')).success, 'wrong PIN rejected');
-  assert((await StudentAuth.login('90001', '246810')).success, 'ID + PIN login works');
+  assert((await StudentAuth.login('90001', PIN_A)).success, 'ID + PIN login works');
   Store.logout();
 
   // ---------- server mode (mock Apps Script) ----------
@@ -39,7 +40,7 @@ const PwaInstall = require('../app/js/pwa-install.js');
     const body = JSON.parse(opts.body); sent.push({ url, body });
     let reply;
     if (body.action === 'studentLookup') reply = body.studentId === '90009' ? { status: 'success', exists: true, hasPin: false, studentClass: 'ม.1/2', maskedName: 'ต•••' } : { status: 'error', code: 'not_found' };
-    else if (body.action === 'studentSetPin' || (body.action === 'studentLogin' && body.pin === '135790')) reply = { status: 'success', profile: { studentId: '90009', name: 'เด็กชายตัวอย่างเก้า ทดสอบ', nickname: 'เก้า', studentClass: 'ม.1/2', no: 9 } };
+    else if (body.action === 'studentSetPin' || (body.action === 'studentLogin' && body.pin === PIN_B)) reply = { status: 'success', profile: { studentId: '90009', name: 'เด็กชายตัวอย่างเก้า ทดสอบ', nickname: 'เก้า', studentClass: 'ม.1/2', no: 9 } };
     else if (body.action === 'studentLogin') reply = { status: 'error', code: 'wrong_pin', message: 'PIN ไม่ถูกต้อง' };
     else if (body.action === 'upload_roster') reply = { status: 'success', added: body.students.length, updated: 0, total: body.students.length };
     return { ok: true, json: async () => reply };
@@ -47,10 +48,10 @@ const PwaInstall = require('../app/js/pwa-install.js');
   r = await StudentAuth.lookup('90009');
   assert(r.success && r.mode === 'server' && r.displayName === 'ต•••', 'server lookup works for id not in local roster');
   assert(!sent[0].body.token, 'student calls never send the teacher token');
-  r = await StudentAuth.setPin('90009', '135790');
+  r = await StudentAuth.setPin('90009', PIN_B);
   assert(r.success && Store.getCurrentUser().studentClass === 'ม.1/2' && Store.getCurrentUser().source === 'server');
   assert.strictEqual((await StudentAuth.login('90009', '111111')).code, 'wrong_pin');
-  assert((await StudentAuth.login('90009', '135790')).success);
+  assert((await StudentAuth.login('90009', PIN_B)).success);
   global.fetch = async () => { throw new TypeError('Failed to fetch'); };
   assert.strictEqual((await StudentAuth.lookup('90009')).code, 'network', 'offline handled gracefully');
 

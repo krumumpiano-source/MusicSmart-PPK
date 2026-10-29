@@ -1,4 +1,5 @@
 // Phase 6: server-side teacher password + reset, intern self-registration with approval. Sample data only.
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert');
 const http = require('http');
 const fs = require('fs');
@@ -95,14 +96,14 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
 
   // ---------- intern self-registration
   const reg = { action: 'internRegister', fullName: 'นายตัวอย่าง ฝึกสอน', internId: 'S6600001', university: 'มหาวิทยาลัยตัวอย่าง', faculty: 'คณะตัวอย่าง', major: 'ดนตรีศึกษา',
-    phone: '081-000-0000', email: 'intern.sample@example.com', term: '2', academicYear: 2569, preferredClasses: ['ม.1/1'], mentorName: 'ครูตัวอย่าง', pin: '246810' };
+    phone: '081-000-0000', email: 'intern.sample@example.com', term: '2', academicYear: 2569, preferredClasses: ['ม.1/1'], mentorName: 'ครูตัวอย่าง', pin: PIN_A };
   r = gas.call(Object.assign({}, reg, { phone: '12', email: 'x', pin: '111111', fullName: 'ก' }));
   assert.strictEqual(r.code, 'invalid'); assert(r.fields.length >= 4);
   assert.strictEqual(gas.call(reg).status, 'success');
   assert.strictEqual(gas.call(reg).code, 'duplicate');
-  assert.strictEqual(gas.call({ action: 'internLogin', internId: 'S6600001', pin: '246810' }).code, 'pending');
+  assert.strictEqual(gas.call({ action: 'internLogin', internId: 'S6600001', pin: PIN_A }).code, 'pending');
   assert.strictEqual(gas.call({ action: 'internLogin', internId: 'S6600001', pin: '999999' }).code, 'wrong_pin', 'status not revealed without correct PIN');
-  assert.strictEqual(gas.call({ action: 'internSetPin', internId: 'S6600001', pin: '135790' }).code, 'pending');
+  assert.strictEqual(gas.call({ action: 'internSetPin', internId: 'S6600001', pin: PIN_B }).code, 'pending');
   // client registration validation + submit
   const bad2 = await I.InternRegistration.submit({ fullName: 'คนเดียว', internId: 'x', pin: '123456', pin2: '123456' });
   assert.strictEqual(bad2.success, false);
@@ -125,9 +126,9 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   store = {}; Store._cache.clear(); Store._rosterCache = undefined;
   gas.call({ action: 'upload_roster', token: 'T-sample-token', students: Object.values(STUDENTS_DATA).flat(), replace: true });
   store = {}; Store._cache.clear();
-  r = await InternMode.login('S6600001', '246810');
+  r = await InternMode.login('S6600001', PIN_A);
   assert(r.success);
-  const raw = gas.call({ action: 'internLogin', internId: 'S6600001', pin: '246810' });
+  const raw = gas.call({ action: 'internLogin', internId: 'S6600001', pin: PIN_A });
   assert.strictEqual(raw.profile.university, 'มหาวิทยาลัยตัวอย่าง'); assert.strictEqual(raw.profile.phone, '0810000000');
   assert(!JSON.stringify(raw).includes('S6600002') && !JSON.stringify(raw).includes('0890000000'), 'no other interns data');
   assert.deepStrictEqual(Store.getCurrentUser().classes, ['ม.1/1']);
@@ -143,7 +144,7 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   gas.call({ action: 'decide_intern', token: 'T-sample-token', internId: 'S6600001', approve: true, classes: ['ม.1/1'] });
   // teacher reset PIN still works -> intern sets a new PIN
   gas.call({ action: 'reset_intern_pin', token: 'T-sample-token', internId: 'S6600001' });
-  assert.strictEqual(gas.call({ action: 'internLogin', internId: 'S6600001', pin: '246810' }).code, 'needs_pin');
+  assert.strictEqual(gas.call({ action: 'internLogin', internId: 'S6600001', pin: PIN_A }).code, 'needs_pin');
   assert.strictEqual(gas.call({ action: 'internSetPin', internId: 'S6600001', pin: '864209' }).status, 'success');
   // registration rate limit
   let limited = false;

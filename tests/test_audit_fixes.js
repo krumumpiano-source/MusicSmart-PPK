@@ -1,4 +1,5 @@
 // เทสต์ตรวจสอบการแก้ไขบั๊ก 6 ข้อ (Audit Fixes 1–6)
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert');
 const { loadGas } = require('./fake_gas');
 
@@ -130,14 +131,14 @@ global.StudentOutbox = StudentOutbox;
     email: 'pending_intern@up.ac.th',
     term: '1',
     academicYear: 2569,
-    pin: '135790',
-    pin2: '135790',
+    pin: PIN_B,
+    pin2: PIN_B,
     preferredClasses: 'ม.1/1'
   });
   assert.strictEqual(reg.success, true);
   assert.strictEqual(reg.status, 'pending');
 
-  const pendingCheck = await Store.verifyTeacherLogin('INT67999', '135790');
+  const pendingCheck = await Store.verifyTeacherLogin('INT67999', PIN_B);
   assert.strictEqual(pendingCheck.success, false, 'Pending intern cannot log in');
   assert.strictEqual(pendingCheck.code, 'pending');
   assert(pendingCheck.message.includes('รอครูอนุมัติ'));

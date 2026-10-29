@@ -1,6 +1,7 @@
 // รัน: node tools/headless_wk5_views.js http://localhost:8894 [out.json]
 // ตรวจ "สองทิศทาง" ทั้ง 20 คาบ × 3 มุมมอง (นักเรียน / ครู / ครูฝึก) ว่าเครื่องมือ ป้ายคะแนน สื่อ ตรงกับ วก.5:
 //   ✔ คาบที่ วก.5 ใช้คาลิมบ้า → ต้องมีปุ่ม/ช่องหมายเลขเครื่อง ·  ✘ คาบที่ไม่ใช้ → ต้องไม่มีเลยในทุกมุมมอง
+const { PIN_A } = require('../tests/lib/test_pins');
 const pw = require(process.env.PW_PATH || '/workspace/bt/node_modules/playwright-core');
 const BASE = process.argv[2] || 'http://localhost:8894', OUTJ = process.argv[3] || '/tmp/wk5_views.json';
 let fail = 0, pass = 0; const ck = (c, m) => { if (c) pass++; else { fail++; console.log('FAIL', m); } };
@@ -11,7 +12,7 @@ let fail = 0, pass = 0; const ck = (c, m) => { if (c) pass++; else { fail++; con
   await p.goto(BASE + '/index.html'); await p.waitForTimeout(1500);
   const rep = { student: [], teacher: [], intern: [] };
   // ---------- นักเรียน ----------
-  await p.evaluate(() => { var cls = Store.getAllClasses('M1'), st = Store.getStudents(cls[0]); Store.registerStudentPin(st[0].student_id, '246810'); var a = document.getElementById('modal-auth-login'); if (a) a.classList.remove('active'); App.switchRole('student', false); });
+  await p.evaluate((pin) => { var cls = Store.getAllClasses('M1'), st = Store.getStudents(cls[0]); Store.registerStudentPin(st[0].student_id, pin); var a = document.getElementById('modal-auth-login'); if (a) a.classList.remove('active'); App.switchRole('student', false); }, PIN_A);
   for (let per = 1; per <= 20; per++) {
     await p.evaluate(per => { App.state.role = 'student'; App.selectStudentPeriod(per); }, per); await p.waitForTimeout(250);
     const r = await p.evaluate(() => {

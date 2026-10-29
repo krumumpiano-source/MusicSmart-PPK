@@ -1,4 +1,5 @@
 // พรีวิวในเครื่อง: เซิร์ฟเวอร์เสิร์ฟ app/ ถูกต้อง, ไม่ชี้ไป Apps Script จริง, ไม่เปิดรายชื่อจริง, กัน path traversal, login จำลองได้
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const fs = require('fs'), path = require('path'), http = require('http'), { spawn } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 let pass = 0, fail = 0;
@@ -31,8 +32,8 @@ function req(port, p, opt) {
     r = await req(port, '/..%2f..%2fpackage.json'); ok(r.code === 403 || r.code === 404, 'กัน path traversal (encoded)');
     r = await req(port, '/nope.js'); ok(r.code === 404, '404 สำหรับไฟล์ที่ไม่มี');
     const post = b => req(port, '/__local_gas/exec', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(b) }).then(x => JSON.parse(x.body));
-    let j = await post({ action: 'internLogin', internId: 'intern01', pin: '135790' }); ok(j.status === 'success' && j.profile && j.profile.internId === 'intern01', 'intern01 เข้าสู่ระบบจำลองได้');
-    j = await post({ action: 'studentLogin', studentId: '90001', pin: '246810' }); ok(j.status === 'success', 'นักเรียน 90001 เข้าสู่ระบบจำลองได้');
+    let j = await post({ action: 'internLogin', internId: 'intern01', pin: PIN_B }); ok(j.status === 'success' && j.profile && j.profile.internId === 'intern01', 'intern01 เข้าสู่ระบบจำลองได้');
+    j = await post({ action: 'studentLogin', studentId: '90001', pin: PIN_A }); ok(j.status === 'success', 'นักเรียน 90001 เข้าสู่ระบบจำลองได้');
     j = await post({ action: 'internLogin', internId: 'intern01', pin: '000000' }); ok(j.status === 'error', 'PIN ผิดถูกปฏิเสธ');
     j = await post({ action: 'teacherLogin', email: 'x@y.z', password: 'x' }); ok(j.status === 'error', 'ไม่มีครูจำลอง (ครูใช้รหัสเดิมผ่านบัญชีในเครื่อง)');
     j = await post({ action: 'upload_roster', token: 'wrong', students: [] }); ok(j.status === 'error', 'token ผิดถูกปฏิเสธ');
