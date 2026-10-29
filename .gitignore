@@ -38,3 +38,12 @@ node_modules/
 
 # ข้อสอบกลางภาค/ปลายภาคฉบับจริง (ข้อสอบ+เฉลย) — ห้าม commit/ห้าม deploy; อัปโหลดขึ้น Apps Script ผ่านหน้าครูเท่านั้น
 tools/exams_private/
+
+# Script scratch outputs written to repo root (regenerable, not source)
+scratch_*.json
+scratch_*.txt
+mistakes.txt
+files.txt
+extracted_data.txt
+media_audit_raw.txt
+audit_appendix_report.txt

@@ -38,37 +38,13 @@ jobs:
         env:
           USE_SAMPLE_DATA: '1'
         run: |
-          node tests/test_quiz_shuffle.js
-          python tests/test_lessons.py
-          python tests/test_students.py
-          node test_e2e_suite.js
-          node tests/test_sync.js
-          node tests/test_student_auth_gas.js
-          node tests/test_student_portal.js
-          node tests/test_student_submit_gas.js
-          node tests/test_student_submit_client.js
-          for t in tests/test_phase*.js; do node "$t"; done
+          # Runs every tests/test_*.js|py + test_e2e_suite.js (see tests/run_all.js)
+          node tests/run_all.js
+          # Generated-data freshness checks
           node tools/curriculum/build_wk5_data.js --check
-          node tests/test_wk5_form.js
-          node tests/test_student_guide_data.js
-          node tests/test_lesson_editor_wk5.js
-          node tests/test_semester_single_source.js
-          node tests/test_password_security.js
           node tools/curriculum/build_kalimba_media.js --check
           node tools/curriculum/build_period_media.js --check
-          node tests/test_kalimba_notes.js
-          node tests/test_kalimba_media.js
-          node tests/test_period_media.js
           node tools/curriculum/build_ensemble_data.js --check
-          node tests/test_period_e2e.js
-          node tests/test_wk5_notes_m1.js
-          node tests/test_song_note_coverage.js
-          node tests/test_local_server.js
-          node tests/test_period_folders.js
-          node tests/test_ensemble_explorer.js
-          node tests/test_timbre_listening.js
-          node tests/test_feldman_nofake.js
-          node tests/test_gas_version_check.js
 
   deploy:
     needs: test
