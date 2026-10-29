@@ -1,9 +1,10 @@
+const { PIN_A } = require('../../tests/lib/test_pins');
 const {chromium}=(function(){try{return require('playwright-core')}catch(e){return require(process.env.PW_CORE||'/workspace/bt/node_modules/playwright-core')}})();
 (async()=>{const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
 const p=await b.newPage({viewport:{width:360,height:640}});
 p.on('dialog',d=>d.accept());
 await p.goto('http://localhost:8893/index.html');await p.waitForTimeout(1500);
-await p.evaluate(()=>{Store.registerStudentPin('90001','246810');document.getElementById('modal-auth-login').classList.remove('active');App.switchRole('student',false);});
+await p.evaluate((pin) =>{Store.registerStudentPin('90001',pin);document.getElementById('modal-auth-login').classList.remove('active');App.switchRole('student',false);}, PIN_A);
 const out=[];
 for(const per of [12,13,14,15]){
   await p.evaluate(n=>App.selectStudentPeriod(n),per);

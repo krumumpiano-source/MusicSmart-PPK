@@ -2,6 +2,7 @@
  * ใช้: node tools/audit/media_matrix.js [outDir]   (ต้องมีเซิร์ฟเวอร์ static ที่ BASE; ตั้ง BASE=http://localhost:8893 ; ต้องมี playwright-core + Chrome)
  * ผล: <outDir>/media_matrix.json + .md + ภาพหน้าจอ */
 'use strict';
+const { PIN_A } = require('../../tests/lib/test_pins');
 const fs = require('fs'), path = require('path');
 const pw = (function () { try { return require('playwright-core'); } catch (e) { return require(process.env.PW_CORE || '/workspace/bt/node_modules/playwright-core'); } })();
 const BASE = process.env.BASE || 'http://localhost:8893';
@@ -14,7 +15,7 @@ const BANNED = /ร่างโดยระบบ|รอครูยืนยั
   p.on('dialog', d => d.dismiss());
   await p.addInitScript(() => { window.open = function () { window.__opened = Array.prototype.slice.call(arguments); return null; }; });
   await p.goto(BASE + '/index.html'); await p.waitForTimeout(1500);
-  await p.evaluate(() => { Store.registerStudentPin('90001', '246810'); document.getElementById('modal-auth-login').classList.remove('active'); App.switchRole('student', false); });
+  await p.evaluate((pin) => { Store.registerStudentPin('90001', pin); document.getElementById('modal-auth-login').classList.remove('active'); App.switchRole('student', false); }, PIN_A);
   const rows = [];
   for (let per = 1; per <= 20; per++) {
     await p.evaluate(n => App.selectStudentPeriod(n), per);

@@ -1,4 +1,5 @@
 // Phase 3: intern accounts, class-scoped token, grade approval queue, post-teaching log, supervision, portfolio. Sample data only.
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert');
 const { loadGas } = require('./fake_gas');
 const gas = loadGas({ SYNC_TOKEN: 'T' });
@@ -35,10 +36,10 @@ const reset = () => { store = {}; Store._cache.clear(); Store._studentIndex = nu
 
   // intern device: first login sets PIN, then login
   reset(); global.MUSICSMART_PUBLIC_API_URL = API;
-  assert.strictEqual((await InternMode.login('intern01', '135790')).code, 'needs_pin');
-  assert((await InternMode.setPin('intern01', '135790')).success);
+  assert.strictEqual((await InternMode.login('intern01', PIN_B)).code, 'needs_pin');
+  assert((await InternMode.setPin('intern01', PIN_B)).success);
   assert.strictEqual((await InternMode.login('intern01', '000000')).code, 'wrong_pin');
-  assert((await InternMode.login('intern01', '135790')).success);
+  assert((await InternMode.login('intern01', PIN_B)).success);
   const u = Store.getCurrentUser(); assert.strictEqual(u.role, 'intern'); assert.deepStrictEqual(u.classes, [mine]);
   let r = await InternMode.sync();
   assert(r.success);
@@ -79,7 +80,7 @@ const reset = () => { store = {}; Store._cache.clear(); Store._studentIndex = nu
 
   // intern sees approval status + evaluation, portfolio builds
   reset(); global.MUSICSMART_PUBLIC_API_URL = API;
-  await InternMode.login('intern01', '135790'); await InternMode.sync();
+  await InternMode.login('intern01', PIN_B); await InternMode.sync();
   assert.strictEqual(InternMode.approvalStatus(mine, 2, sid), 'approved');
   const d = InternMode.data(); assert.strictEqual(d.evaluations[0].comments, 'เตรียมสื่อดี');
   const html = Portfolio.build({ name: 'นศ.ตัวอย่าง', internId: 'intern01', classes: [mine], logs: d.logs, evaluations: d.evaluations });
