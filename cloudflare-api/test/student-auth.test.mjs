@@ -25,14 +25,13 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
-    ('35994','ม.1/1',1,'เด็กชาย','กานต์พงศ์','พร้อมมูล','สกาย','2026-01-01')`);
+    ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01')`);
   return {
     DB: { prepare: (sql) => new Stmt(raw, sql) },
     SESSION_SECRET: 'sa-test-session-secret-0123456789abcd',
     PASSWORD_PEPPER: 'sa-test-pepper-0123456789abcdefghij',
     SETUP_TOKEN: 'sa-setup-token-xyz',
-    LEGACY_PIN_PEPPER: LEGACY_PEPPER,
-    IMPORT_TOKEN: IMPORT_TOKEN_TEST
+    LEGACY_PIN_PEPPER: LEGACY_PEPPER
   };
 }
 
@@ -44,7 +43,6 @@ function gasHashReference(sid, pin, salt, pepper) {
   return h;
 }
 const LEGACY_PEPPER = 'legacy-pepper-from-apps-script-0123';
-const IMPORT_TOKEN_TEST = 'import-test-token-0123456789abcdef';
 const LEGACY_SALT = '6f1c2b9e-1111-4a2b-9c3d-abcdef012345';
 
 // รายชื่อในเครื่องจำลอง (Store) ให้ lookup และเก็บผู้ใช้ปัจจุบัน
@@ -53,8 +51,8 @@ function makeStore() {
   return {
     st,
     isTestStudentId: () => false,
-    getStudentById: (id) => (id === '35994'
-      ? { student_id: '35994', class: 'ม.1/1', prefix: 'เด็กชาย', first_name: 'กานต์พงศ์', last_name: 'พร้อมมูล' }
+    getStudentById: (id) => (id === '90001'
+      ? { student_id: '90001', class: 'ม.1/1', prefix: 'เด็กชาย', first_name: 'ทดสอบหนึ่ง', last_name: 'นามสมมุติ' }
       : null),
     setCurrentUser: (u) => { st.currentUser = u; },
     getStudentAccount: () => null
@@ -90,16 +88,16 @@ test('isCloudMode เปิดเฉพาะเมื่อ flag เปิด',
 });
 
 test('lookup ในโหมดคลาวด์ ค้นจาก Worker: ชื่อ/ห้อง, สถานะ PIN, และรหัสที่ไม่มี', async () => {
-  const before = await StudentAuth.lookup('35994');
+  const before = await StudentAuth.lookup('90001');
   assert.equal(before.success, true);
   assert.equal(before.mode, 'cloud');
   assert.equal(before.studentClass, 'ม.1/1');
-  assert.equal(before.displayName, 'ก•••', 'ซ่อนชื่อเหมือนระบบเดิม');
-  assert.ok(!before.displayName.includes('พร้อมมูล'), 'ต้องไม่เห็นนามสกุลก่อนล็อกอิน');
+  assert.equal(before.displayName, 'ท•••', 'ซ่อนชื่อเหมือนระบบเดิม');
+  assert.ok(!before.displayName.includes('นามสมมุติ'), 'ต้องไม่เห็นนามสกุลก่อนล็อกอิน');
   assert.equal(before.hasPin, false, 'ยังไม่เคยตั้ง PIN');
 
-  await StudentAuth.login('35994', '123456');
-  const after = await StudentAuth.lookup('35994');
+  await StudentAuth.login('90001', '123456');
+  const after = await StudentAuth.lookup('90001');
   assert.equal(after.hasPin, true, 'หลังล็อกอินครั้งแรกต้องมี PIN แล้ว');
 
   const missing = await StudentAuth.lookup('99999');
@@ -109,28 +107,28 @@ test('lookup ในโหมดคลาวด์ ค้นจาก Worker: ช
 
 test('lookup ค้นบ่อยเกินไปจากเครื่องเดียว คืน rate_limited', async () => {
   let last;
-  for (let i = 0; i < 61; i++) last = await StudentAuth.lookup('35994');
+  for (let i = 0; i < 61; i++) last = await StudentAuth.lookup('90001');
   assert.equal(last.success, false);
   assert.equal(last.code, 'rate_limited');
 });
 
 test('ล็อกอินครั้งแรกด้วย PIN จะตั้ง PIN ให้ และเก็บผู้ใช้ในเครื่อง', async () => {
-  const res = await StudentAuth.login('35994', '123456');
+  const res = await StudentAuth.login('90001', '123456');
   assert.equal(res.success, true, res.message);
   assert.equal(res.mode, 'cloud');
   assert.equal(res.user.role, 'student');
-  assert.equal(res.user.studentId, '35994');
+  assert.equal(res.user.studentId, '90001');
   assert.equal(res.user.studentClass, 'ม.1/1');
   assert.equal(res.user.backend, 'cloud');
   assert.ok(res.user.sessionToken, 'ต้องมี token');
-  assert.equal(store.st.currentUser.studentId, '35994');
+  assert.equal(store.st.currentUser.studentId, '90001');
 });
 
 test('PIN ผิดคืน wrong_pin และไม่เขียนทับผู้ใช้เดิม', async () => {
-  await StudentAuth.login('35994', '123456');
+  await StudentAuth.login('90001', '123456');
   const before = store.st.currentUser;
   store.st.currentUser = null;
-  const res = await StudentAuth.login('35994', '000000');
+  const res = await StudentAuth.login('90001', '000000');
   assert.equal(res.success, false);
   assert.equal(res.code, 'wrong_pin');
   assert.equal(store.st.currentUser, null);
@@ -138,28 +136,28 @@ test('PIN ผิดคืน wrong_pin และไม่เขียนทั�
 });
 
 test('setPin เมื่อมี PIN อยู่แล้วและไม่ตรง คืน pin_exists', async () => {
-  await StudentAuth.login('35994', '123456');
-  const res = await StudentAuth.setPin('35994', '654321');
+  await StudentAuth.login('90001', '123456');
+  const res = await StudentAuth.setPin('90001', '654321');
   assert.equal(res.success, false);
   assert.equal(res.code, 'pin_exists');
 });
 
 test('PIN ผิดหลายครั้งจนถูกล็อก คืน rate_limited', async () => {
-  await StudentAuth.login('35994', '123456');
+  await StudentAuth.login('90001', '123456');
   let last;
-  for (let i = 0; i < 6; i++) last = await StudentAuth.login('35994', '000000');
+  for (let i = 0; i < 6; i++) last = await StudentAuth.login('90001', '000000');
   assert.equal(last.success, false);
   assert.equal(last.code, 'rate_limited');
 });
 
 test('PIN ที่ไม่ใช่ตัวเลข 6 หลัก ไม่ส่งไปเซิร์ฟเวอร์', async () => {
-  const res = await StudentAuth.login('35994', '12ab');
+  const res = await StudentAuth.login('90001', '12ab');
   assert.equal(res.code, 'bad_pin');
 });
 
 test('เครือข่ายล้มเหลวคืน network', async () => {
   globalThis.fetch = () => Promise.reject(new TypeError('Failed to fetch'));
-  const res = await StudentAuth.login('35994', '123456');
+  const res = await StudentAuth.login('90001', '123456');
   assert.equal(res.success, false);
   assert.equal(res.code, 'network');
 });
@@ -177,74 +175,31 @@ async function studentRow(sid) {
 }
 
 test('PIN เดิมจาก GAS: ใส่ PIN เดิมได้ แล้วอัปเกรดเป็นสูตรใหม่ และล็อกอินครั้งต่อไปได้ตามปกติ', async () => {
-  await setLegacyPin('35994', '246810');
-  const res = await StudentAuth.login('35994', '246810');
+  await setLegacyPin('90001', '246810');
+  const res = await StudentAuth.login('90001', '246810');
   assert.equal(res.success, true, res.message);
-  assert.equal(res.user.studentId, '35994');
-  const row = await studentRow('35994');
+  assert.equal(res.user.studentId, '90001');
+  const row = await studentRow('90001');
   assert.equal(row.pin_scheme, null, 'ต้องล้างสูตรเดิมหลังอัปเกรด');
   assert.equal(row.pin_salt, null);
   assert.ok(String(row.pin_hash).startsWith('hmac-sha256-v1$'));
-  const again = await StudentAuth.login('35994', '246810');
+  const again = await StudentAuth.login('90001', '246810');
   assert.equal(again.success, true, 'ล็อกอินครั้งที่สองด้วยสูตรใหม่');
 });
 
 test('PIN เดิมจาก GAS: PIN ผิดคืน wrong_pin และไม่อัปเกรดแถว', async () => {
-  await setLegacyPin('35994', '246810');
-  const res = await StudentAuth.login('35994', '135791');
+  await setLegacyPin('90001', '246810');
+  const res = await StudentAuth.login('90001', '135791');
   assert.equal(res.success, false);
   assert.equal(res.code, 'wrong_pin');
-  const row = await studentRow('35994');
+  const row = await studentRow('90001');
   assert.equal(row.pin_scheme, 'gas-sha256x100');
 });
 
 test('PIN เดิมจาก GAS: ถ้ายังไม่ได้ตั้ง LEGACY_PIN_PEPPER จะปฏิเสธ (fail closed)', async () => {
-  await setLegacyPin('35994', '246810');
+  await setLegacyPin('90001', '246810');
   delete env.LEGACY_PIN_PEPPER;
-  const res = await StudentAuth.login('35994', '246810');
+  const res = await StudentAuth.login('90001', '246810');
   assert.equal(res.success, false);
   assert.equal(res.code, 'wrong_pin');
-});
-
-// ---------- นำเข้า PIN เดิมผ่าน endpoint (ใช้จาก Apps Script) ----------
-async function importRows(rows, token = IMPORT_TOKEN_TEST) {
-  const res = await worker.fetch(new Request('https://api.test/api/admin/import-legacy-pins', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Import-Token': token },
-    body: JSON.stringify({ rows })
-  }), env);
-  return { status: res.status, body: await res.json() };
-}
-
-test('นำเข้า: token ผิดถูกปฏิเสธ 403 และไม่เปลี่ยนข้อมูล', async () => {
-  const h = gasHashReference('35994', '246810', LEGACY_SALT, LEGACY_PEPPER);
-  const r = await importRows([{ student_id: '35994', salt: LEGACY_SALT, pin_hash: h }], 'wrong-token');
-  assert.equal(r.status, 403);
-  const row = await studentRow('35994');
-  assert.equal(row.pin_hash, null);
-});
-
-test('นำเข้า: นักเรียนที่ยังไม่มี PIN ล็อกอินด้วย PIN เดิมได้หลังนำเข้า', async () => {
-  const h = gasHashReference('35994', '246810', LEGACY_SALT, LEGACY_PEPPER);
-  const r = await importRows([{ student_id: '35994', salt: LEGACY_SALT, pin_hash: h }]);
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { updated: 1, skipped: 0, invalid: 0 });
-  const res = await StudentAuth.login('35994', '246810');
-  assert.equal(res.success, true, res.message);
-});
-
-test('นำเข้า: ข้ามนักเรียนที่ตั้ง PIN ในระบบใหม่ไปแล้ว ไม่ทับ PIN เดิม', async () => {
-  await StudentAuth.login('35994', '123456');
-  const h = gasHashReference('35994', '246810', LEGACY_SALT, LEGACY_PEPPER);
-  const r = await importRows([{ student_id: '35994', salt: LEGACY_SALT, pin_hash: h }]);
-  assert.deepEqual(r.body, { updated: 0, skipped: 1, invalid: 0 });
-  const ok = await StudentAuth.login('35994', '123456');
-  assert.equal(ok.success, true, 'PIN ใหม่ยังใช้ได้');
-  const old = await StudentAuth.login('35994', '246810');
-  assert.equal(old.success, false);
-});
-
-test('นำเข้า: แถวที่รูปแบบไม่ถูกต้องถูกนับเป็น invalid', async () => {
-  const r = await importRows([{ student_id: '35994', salt: 'x', pin_hash: 'bad' }]);
-  assert.deepEqual(r.body, { updated: 0, skipped: 0, invalid: 1 });
 });

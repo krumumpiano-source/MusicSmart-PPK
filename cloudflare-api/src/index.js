@@ -345,42 +345,6 @@ async function verifyStudentPin(env, s, sid, pin) {
   return true;
 }
 
-// นำเข้า PIN เดิมจาก Google Sheet ผ่านฟังก์ชันใน Apps Script (ป้องกันด้วย IMPORT_TOKEN ใช้ตอนย้ายข้อมูลเท่านั้น)
-// จะเขียนทับเฉพาะนักเรียนที่ยังไม่มี PIN ในระบบใหม่ เพื่อไม่ให้ทับ PIN ที่นักเรียนตั้งเองไปแล้ว
-const IMPORT_MAX_ROWS = 100;
-
-async function importLegacyPins(request, env) {
-  if (!env.IMPORT_TOKEN || !safeEqualStr(String(request.headers.get('X-Import-Token') ?? ''), env.IMPORT_TOKEN)) {
-    throw new HttpError(403, 'forbidden', 'token นำเข้าไม่ถูกต้อง');
-  }
-  const b = await readJson(request);
-  if (!Array.isArray(b.rows) || b.rows.length === 0 || b.rows.length > IMPORT_MAX_ROWS) {
-    throw bad(`ส่งได้ครั้งละ 1-${IMPORT_MAX_ROWS} แถว`, 'bad_rows');
-  }
-  const now = nowIso();
-  let updated = 0;
-  let skipped = 0;
-  let invalid = 0;
-  for (const row of b.rows) {
-    const sid = String(row?.student_id ?? '').trim();
-    const salt = String(row?.salt ?? '').trim();
-    const hash = String(row?.pin_hash ?? '').trim().toLowerCase();
-    if (!/^[A-Za-z0-9._-]{1,20}$/.test(sid) || !/^[A-Za-z0-9-]{8,80}$/.test(salt) || !/^[0-9a-f]{64}$/.test(hash)) {
-      invalid++;
-      continue;
-    }
-    const r = await env.DB.prepare(
-      'UPDATE students SET pin_hash = ?, pin_scheme = ?, pin_salt = ?, pin_updated_at = ?, updated_at = ? WHERE student_id = ? AND pin_hash IS NULL'
-    )
-      .bind(hash, LEGACY_PIN_SCHEME, salt, now, now, sid)
-      .run();
-    if (r.meta.changes === 1) updated++;
-    else skipped++;
-  }
-  await audit(env, 'import', 'legacy_pins', `updated=${updated};skipped=${skipped};invalid=${invalid}`);
-  return json({ updated, skipped, invalid });
-}
-
 function publicStudent(s) {
   return {
     student_id: s.student_id,
@@ -782,7 +746,6 @@ async function route(request, env) {
   if (path === '/api/auth/login' && m === 'POST') return authLogin(request, env);
   if (path === '/api/auth/student' && m === 'POST') return studentLogin(request, env);
   if (path === '/api/auth/student-lookup' && m === 'POST') return studentLookup(request, env);
-  if (path === '/api/admin/import-legacy-pins' && m === 'POST') return importLegacyPins(request, env);
 
   if (path === '/api/me' && m === 'GET') {
     const a = await requireAuth(request, env, ['teacher', 'student']);

@@ -24,7 +24,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
-    ('35994','ม.1/1',1,'เด็กชาย','กานต์พงศ์','พร้อมมูล','สกาย','2026-01-01')`);
+    ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01')`);
   return {
     DB: { prepare: (sql) => new Stmt(raw, sql) },
     SESSION_SECRET: 'client-test-session-secret-0123456789',
@@ -86,7 +86,7 @@ test('wrong teacher password throws CloudApiError 401 and keeps no session', asy
 });
 
 test('student submits a video link and sees it in mine()', async () => {
-  const st = await CloudApi.Auth.studentLogin('35994', '123456');
+  const st = await CloudApi.Auth.studentLogin('90001', '123456');
   assert.equal(st.role, 'student');
   assert.equal(st.pinCreated, true);
   const item = await CloudApi.Submissions.submitVideo({
@@ -102,7 +102,7 @@ test('student submits a video link and sees it in mine()', async () => {
 });
 
 test('student session cannot call teacher-only listing (403)', async () => {
-  await CloudApi.Auth.studentLogin('35994', '123456');
+  await CloudApi.Auth.studentLogin('90001', '123456');
   await assert.rejects(
     () => CloudApi.Submissions.listForClass('ม.1/1'),
     (e) => e.status === 403
@@ -129,8 +129,8 @@ test('network failure is reported as status 0 (for offline queue)', async () => 
 test('sync sends queued ops and returns per-op results', async () => {
   await CloudApi.Auth.teacherLogin('krumum.piano@gmail.com', PW);
   const results = await CloudApi.sync([
-    { op_id: 'c1-op-1', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '35994', pre: 40, post: 70 } },
-    { op_id: 'c1-op-1', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '35994', pre: 40, post: 70 } }
+    { op_id: 'c1-op-1', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '90001', pre: 40, post: 70 } },
+    { op_id: 'c1-op-1', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '90001', pre: 40, post: 70 } }
   ]);
   assert.deepEqual(results.map((r) => r.status), ['applied', 'duplicate']);
 });

@@ -34,9 +34,9 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
-    ('35994','ม.1/1',1,'เด็กชาย','กานต์พงศ์','พร้อมมูล','สกาย','2026-01-01'),
-    ('35995','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
-    ('35996','ม.1/2',1,'เด็กชาย','ทดสอบ2','นามสมมุติ','ทด2','2026-01-01')`);
+    ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
+    ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
+    ('90003','ม.1/2',1,'เด็กชาย','ทดสอบ2','นามสมมุติ','ทด2','2026-01-01')`);
   return {
     DB: { prepare: (sql) => new Stmt(raw, sql) },
     SESSION_SECRET: 'test-session-secret-0123456789abcdef',
@@ -123,27 +123,27 @@ test('no token or tampered token is rejected', async () => {
 
 test('student PIN: first login sets PIN, later logins verify it, wrong PIN rejected', async () => {
   const env = makeEnv();
-  let r = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  let r = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   assert.equal(r.status, 200);
   assert.equal(r.body.pin_created, true);
-  assert.equal(r.body.student.first_name, 'กานต์พงศ์');
-  r = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  assert.equal(r.body.student.first_name, 'ทดสอบหนึ่ง');
+  r = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   assert.equal(r.status, 200);
   assert.equal(r.body.pin_created, false);
-  r = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '000000' });
+  r = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '000000' });
   assert.equal(r.status, 401);
-  r = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: 'abcdef' });
+  r = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: 'abcdef' });
   assert.equal(r.status, 400);
 });
 
 test('student PIN: 5 failures lock the account', async () => {
   const env = makeEnv();
-  await call(env, 'POST', '/api/auth/student', { student_id: '35995', pin: '111111' });
+  await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '111111' });
   for (let i = 0; i < 5; i++) {
-    const r = await call(env, 'POST', '/api/auth/student', { student_id: '35995', pin: '222222' });
+    const r = await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '222222' });
     assert.equal(r.status, 401);
   }
-  const r = await call(env, 'POST', '/api/auth/student', { student_id: '35995', pin: '111111' });
+  const r = await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '111111' });
   assert.equal(r.status, 429);
 });
 
@@ -156,7 +156,7 @@ test('unknown student id gets generic 401 (no account enumeration)', async () =>
 test('role separation: student cannot use teacher endpoints', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  const s = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   assert.equal((await call(env, 'GET', '/api/students', undefined, s.body.token)).status, 403);
   assert.equal((await call(env, 'GET', '/api/students', undefined, teacher)).status, 200);
 });
@@ -164,15 +164,15 @@ test('role separation: student cannot use teacher endpoints', async () => {
 test('teacher roster excludes PIN hashes and can reset PIN', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   const r = await call(env, 'GET', '/api/students?class=' + encodeURIComponent('ม.1/1'), undefined, teacher);
   assert.equal(r.status, 200);
   assert.equal(r.body.students.length, 2);
   assert.equal(r.body.students[0].has_pin, 1);
   assert.equal('pin_hash' in r.body.students[0], false);
-  const reset = await call(env, 'POST', '/api/teacher/students/35994/reset-pin', undefined, teacher);
+  const reset = await call(env, 'POST', '/api/teacher/students/90001/reset-pin', undefined, teacher);
   assert.equal(reset.status, 200);
-  const again = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '654321' });
+  const again = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '654321' });
   assert.equal(again.body.pin_created, true);
 });
 
@@ -197,7 +197,7 @@ test('session save uses version check (optimistic concurrency)', async () => {
 test('submissions: only https links; upsert per clip; teacher grades', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  const s = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   const st = s.body.token;
   const base = { assignment_key: 'kalimba-w1', group_no: 2, clip_no: 1 };
 
@@ -232,7 +232,7 @@ test('submissions: only https links; upsert per clip; teacher grades', async () 
 
 test('student cannot see another class submissions via teacher endpoint', async () => {
   const env = makeEnv();
-  const s = await call(env, 'POST', '/api/auth/student', { student_id: '35996', pin: '123456' });
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90003', pin: '123456' });
   const r = await call(env, 'GET', '/api/submissions', undefined, s.body.token);
   assert.equal(r.status, 403);
 });
@@ -240,7 +240,7 @@ test('student cannot see another class submissions via teacher endpoint', async 
 test('link check marks link ok / invalid (fetch mocked)', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  const s = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   const r0 = await call(env, 'POST', '/api/submissions', { assignment_key: 'k', clip_no: 1, video_url: 'https://a.example.com/v' }, s.body.token);
   const id = r0.body.submission.id;
   const realFetch = globalThis.fetch;
@@ -260,24 +260,24 @@ test('link check marks link ok / invalid (fetch mocked)', async () => {
 test('research scores upsert and validate range', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  let r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '35994', pre: 40, post: 80 }, teacher);
+  let r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '90001', pre: 40, post: 80 }, teacher);
   assert.equal(r.status, 200);
-  r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '35994', pre: 40, post: 80, formative: 70 }, teacher);
+  r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '90001', pre: 40, post: 80, formative: 70 }, teacher);
   const list = await call(env, 'GET', '/api/research?class=' + encodeURIComponent('ม.1/1'), undefined, teacher);
   assert.equal(list.body.research.length, 1);
   assert.equal(list.body.research[0].formative, 70);
-  r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '35994', pre: 500 }, teacher);
+  r = await call(env, 'PUT', '/api/research', { class_name: 'ม.1/1', student_id: '90001', pre: 500 }, teacher);
   assert.equal(r.status, 400);
 });
 
 test('sync: applies ops, dedupes by op_id, reports conflicts and role errors', async () => {
   const env = makeEnv();
   const teacher = await setupTeacher(env);
-  const s = await call(env, 'POST', '/api/auth/student', { student_id: '35994', pin: '123456' });
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
   const key = 'ม.1/1|1|2569';
   const ops = [
     { op_id: 'op-1', kind: 'session.put', payload: { session_key: key, class_name: 'ม.1/1', period: 1, data: { a: 1 }, base_version: 0 } },
-    { op_id: 'op-2', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '35994', pre: 10 } },
+    { op_id: 'op-2', kind: 'research.put', payload: { class_name: 'ม.1/1', student_id: '90001', pre: 10 } },
     { op_id: 'op-3', kind: 'unknown.kind', payload: {} },
     { kind: 'research.put', payload: {} }
   ];
