@@ -124,6 +124,7 @@ const PasswordReset = {
         <label class="form-label">${pwLabel}</label>
         <input id="pr-pw" type="password" class="form-input" ${stu ? 'inputmode="numeric" maxlength="6"' : ''} autocomplete="new-password">
         <input id="pr-pw2" type="password" class="form-input" placeholder="ยืนยันรหัสใหม่อีกครั้ง" ${stu ? 'inputmode="numeric" maxlength="6"' : ''} autocomplete="new-password">
+        <label style="display:flex;align-items:center;gap:0.45rem;font-size:0.85rem;color:#475569;cursor:pointer;user-select:none;"><input type="checkbox" id="pr-show" style="width:16px;height:16px;margin:0;"> 👁 แสดงรหัสผ่านที่พิมพ์ (เพื่อตรวจสอบก่อนยืนยัน)</label>
         <button class="btn-nav-action primary" id="pr-save" style="justify-content:center;">💾 ตั้งรหัสใหม่</button>
         <a href="#" id="pr-resend" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่ได้รับรหัส? ขออีเมลอีกครั้ง</a>
         ${stu ? '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่มี/ใช้อีเมลไม่ได้ → ขอให้ครูรีเซ็ตให้</a>' : '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">นศ.ฝึกสอน: ขอให้ครูรีเซ็ตให้</a>'}`;
@@ -160,6 +161,8 @@ const PasswordReset = {
     const haveCode = () => { const id = idv(); if (!id) { fail(s.kind === 'student' ? 'กรุณาใส่รหัสนักเรียนก่อน' : 'กรุณาใส่อีเมลหรือรหัสนักศึกษาก่อน'); return; } s.id = id; go('verify', { info: '' }); };
     on('#pr-have', haveCode); on('#pr-have2', () => go('verify', { info: '' }));
     const idEl = q('#pr-id'); if (idEl) idEl.onkeydown = ev => { if (ev.key === 'Enter' && s.step === 'request') request('email', q('#pr-send')); };
+    const showEl = q('#pr-show');
+    if (showEl) showEl.onchange = () => { ['#pr-pw', '#pr-pw2'].forEach(sel => { const el = q(sel); if (el) el.type = showEl.checked ? 'text' : 'password'; }); };
     on('#pr-save', async () => {
       const code = String((q('#pr-code') || {}).value || '').trim(), pw = String((q('#pr-pw') || {}).value || '').trim(), pw2 = String((q('#pr-pw2') || {}).value || '').trim();
       if (!/^\d{6}$/.test(code)) { fail('กรุณากรอกรหัสยืนยัน 6 หลัก'); return; }
