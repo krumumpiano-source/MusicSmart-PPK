@@ -21,7 +21,7 @@ const PW = 'Sample-Pass-2569';
 
 (async () => {
   // 1) รหัสที่ตั้งไว้มีช่องว่างท้ายติดมา (เช่น วางจากโน้ต) — ผู้ใช้พิมพ์โดยไม่มีช่องว่าง/หรือหน้าล็อกอินตัดช่องว่าง
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: PW + ' ' }).status, 'success');
+  assert.strictEqual(gas.ctx.setTeacherPassword({ email: EMAIL, password: PW + ' ' }).status, 'success');
   // หน้าล็อกอินส่ง trimmed + raw: ต้องเข้าได้ด้วยการลองซ้ำแบบ raw
   let r = await TeacherAuth.login(EMAIL, PW, PW + ' ');
   assert(r.success, 'login must succeed via raw-password retry');
@@ -32,7 +32,7 @@ const PW = 'Sample-Pass-2569';
 
   // 2) ฟอร์มตั้งรหัสใหม่ต้องตัดช่องว่างหัวท้าย → ตั้ง "  New-Pass-2570  " แล้วล็อกอินด้วยค่าที่ตัดแล้วได้
   const src = fs.readFileSync(path.join(__dirname, '../app/js/teacher-auth.js'), 'utf8');
-  assert(/#tf-pw'\)\.value\.trim\(\)/.test(src) && /#tf-pw2'\)\.value\.trim\(\)/.test(src), 'forgot form trims passwords');
+  assert(!/id="tf-pw"|resetWithToken|modal-teacher-forgot/.test(src), 'SYNC_TOKEN password reset form removed from client');
 
   // 3) ข้อความ: ฝั่ง นศ. ตอบ not_found + ครูตอบ wrong_password → ต้องแสดงข้อความครู ไม่ใช่ "ไม่พบบัญชี นศ."
   const appSrc = fs.readFileSync(path.join(__dirname, '../app/js/app.js'), 'utf8');

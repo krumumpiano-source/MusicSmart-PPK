@@ -109,7 +109,7 @@ const PasswordReset = {
         <label class="form-label">${idLabel}</label>${idInput}
         <button class="btn-nav-action primary" id="pr-send" style="justify-content:center;">📧 ขอรหัสยืนยัน</button>
         <a href="#" id="pr-have" style="font-size:0.82rem;color:#0284c7;text-align:center;">มีรหัสยืนยันแล้ว (จากอีเมล/จากครู) → ตั้งรหัสใหม่</a>
-        ${stu ? '' : '<a href="#" id="pr-token" style="font-size:0.78rem;color:#64748b;text-align:center;">เข้าอีเมลไม่ได้? ตั้งรหัสด้วยรหัสซิงค์ (SYNC_TOKEN) แทน</a><button class="btn-nav-action" id="pr-askteacher" style="justify-content:center;font-size:0.82rem;">👩‍🏫 นศ.ฝึกสอน: ไม่มีอีเมล/ไม่ได้รับอีเมล → ขอให้ครูรีเซ็ตให้</button>'}`;
+        ${stu ? '' : '<button class="btn-nav-action" id="pr-askteacher" style="justify-content:center;font-size:0.82rem;">👩‍🏫 นศ.ฝึกสอน: ไม่มีอีเมล/ไม่ได้รับอีเมล → ขอให้ครูรีเซ็ตให้</button>'}`;
     } else if (s.step === 'wait') {
       body = `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:0.8rem;color:#78350f;line-height:1.55;">
         <b>📨 ส่งคำขอรีเซ็ตถึงครูประจำวิชาแล้ว</b><br>${e(s.info || 'กรุณาติดต่อครูประจำวิชาเพื่อขอรับรหัสยืนยัน')}<br>
@@ -153,7 +153,6 @@ const PasswordReset = {
       const where = r.maskedEmail ? `ส่งรหัสยืนยันไปที่ ${r.maskedEmail} แล้ว` : 'หากมีบัญชีนี้ ระบบส่งรหัสยืนยันไปที่อีเมลที่ลงทะเบียนไว้แล้ว';
       go('verify', { info: `${where} (ใช้ได้ ${r.expiresMin || 15} นาที — ตรวจกล่องจดหมายขยะด้วย)` });
     };
-    on('#pr-token', () => { this.close(); if (typeof TeacherAuth !== 'undefined') TeacherAuth.openForgot(); });
     on('#pr-send', () => request('email', q('#pr-send')));
     on('#pr-askteacher', () => request('teacher', q('#pr-askteacher')));
     on('#pr-askteacher2', () => request('teacher'));

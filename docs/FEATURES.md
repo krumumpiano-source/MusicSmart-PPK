@@ -50,7 +50,6 @@
 
 ## Phase 6 — เข้าสู่ระบบครูผ่านเซิร์ฟเวอร์ + นศ. ลงทะเบียนเอง
 - **สาเหตุเดิม:** การเข้าสู่ระบบครูตรวจในเบราว์เซอร์เท่านั้น (`Store.verifyTeacherLogin` เทียบกับ `localStorage` คีย์ `ppk_teacher_account`/`ppk_teachers_list`; ถ้าไม่มีใช้ค่าเริ่มต้นในไฟล์ `store.js`) รหัสที่เปลี่ยนไว้จึงอยู่เฉพาะเบราว์เซอร์/โดเมนเดิม
-- Actions: `teacherLogin` (สาธารณะ, ล็อก 15 นาทีเมื่อผิด 5 ครั้ง), `teacherAuthStatus`, `teacher_set_password` (ต้องใช้ SYNC_TOKEN) — hash เก็บใน Script Property `TEACHER_AUTH`
-- `app/js/teacher-auth.js`: เซิร์ฟเวอร์ก่อน → สำเร็จได้ SYNC_TOKEN + ตัวตรวจออฟไลน์ PBKDF2 30 วัน; `not_configured` = ใช้ระบบเดิม; เมื่อเคยเข้าผ่านเซิร์ฟเวอร์ ระบบเดิม (รวมรหัสเริ่มต้น) ปิดบนเครื่องนั้น; ลิงก์ "ลืมรหัสผ่าน?" ตั้งรหัสใหม่ด้วย SYNC_TOKEN
-- `tools/set_teacher_password.js`: ตั้งรหัสจาก PC (`--url --token-file --email [--name] [--password-file]`, ไม่ใส่ไฟล์ = พิมพ์แบบซ่อน)
+- Actions: `teacherLogin` (สาธารณะ, ล็อก 15 นาทีเมื่อผิด 5 ครั้ง), `teacherAuthStatus` — hash เก็บใน Script Property `TEACHER_AUTH` (ไม่มี action ตั้งรหัสผ่านสาธารณะแล้ว; ครูรีเซ็ตรหัสทางอีเมลเท่านั้น)
+- `app/js/teacher-auth.js`: เซิร์ฟเวอร์ก่อน → สำเร็จได้ SYNC_TOKEN + ตัวตรวจออฟไลน์ PBKDF2 30 วัน; `not_configured` = ใช้ระบบเดิม; เมื่อเคยเข้าผ่านเซิร์ฟเวอร์ ระบบเดิม (รวมรหัสเริ่มต้น) ปิดบนเครื่องนั้น; ลิงก์ "ลืมรหัสผ่าน?" ตั้งรหัสใหม่ทางอีเมลเท่านั้น
 - นศ.: `internRegister` (ตรวจข้อมูล, PIN hash, ไม่ซ้ำรหัส, จำกัด 20 ครั้ง/ชม. ทั้งระบบ) → `pending`; ครู `decide_intern` อนุมัติ (กำหนดห้อง) / ไม่อนุมัติ (เหตุผล, ลงทะเบียนใหม่ได้); บอกสถานะเฉพาะเมื่อ PIN ถูก; `list_interns` (token) คืนข้อมูลส่วนตัว; นศ. ได้โปรไฟล์ตัวเองตอนเข้าสู่ระบบ; บัญชีที่ครูสร้างเอง = อนุมัติแล้ว

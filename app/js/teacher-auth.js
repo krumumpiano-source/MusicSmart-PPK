@@ -76,52 +76,10 @@ const TeacherAuth = {
     }
     if (r && r.code === 'not_configured') {
       const lr = await legacy();
-      if (lr.success) lr.notice = 'ℹ️ ยังไม่ได้ตั้งรหัสผ่านครูบนเซิร์ฟเวอร์ — แนะนำให้ตั้ง (ลืมรหัสผ่าน? → ตั้งรหัสใหม่ด้วยรหัสซิงค์)';
+      if (lr.success) lr.notice = 'ℹ️ ยังไม่ได้ตั้งรหัสผ่านครูบนเซิร์ฟเวอร์ — แนะนำให้ตั้ง (ลืมรหัสผ่าน? → ใช้ลืมรหัสผ่านทางอีเมล)';
       return lr;
     }
     return { success: false, code: r && r.code, message: (r && r.message) || 'เข้าสู่ระบบไม่สำเร็จ' };
-  },
-
-  /** ตั้ง/รีเซ็ตรหัสผ่านด้วย SYNC_TOKEN (ลืมรหัสผ่าน หรือเปลี่ยนรหัส) */
-  async resetWithToken(syncToken, emailRaw, newPassword, name) {
-    const url = this.apiUrl();
-    if (!url) return { success: false, message: 'ยังไม่ได้ตั้งค่า URL ของ Apps Script' };
-    const r = await StudentAuth._post({ action: 'teacher_set_password', token: String(syncToken || '').trim(), email: String(emailRaw || '').trim().toLowerCase(), password: newPassword, name: name || '' });
-    if (r.status !== 'success') return { success: false, code: r.code, message: r.message === 'unauthorized' ? 'รหัสซิงค์ (SYNC_TOKEN) ไม่ถูกต้อง' : (r.message || 'ตั้งรหัสไม่สำเร็จ') };
-    localStorage.removeItem(this.OFFLINE_KEY);
-    return { success: true };
-  },
-
-  openForgot() {
-    let m = document.getElementById('modal-teacher-forgot');
-    if (!m) {
-      m = document.createElement('div'); m.id = 'modal-teacher-forgot'; m.className = 'modal-overlay'; m.style.zIndex = '100010';
-      m.innerHTML = `<div class="modal-card" style="max-width:440px;"><div class="modal-header"><h3 class="modal-title" style="margin:0;">🔑 ตั้งรหัสผ่านครูใหม่</h3></div>
-        <div class="modal-body" style="display:grid;gap:0.5rem;font-size:0.88rem;">
-          <div style="color:#475569;">ใช้ <b>รหัสซิงค์ (SYNC_TOKEN)</b> ที่ตั้งไว้ใน Apps Script (Project Settings → Script Properties) เพื่อยืนยันว่าเป็นครู</div>
-          <input type="password" id="tf-token" class="form-input" placeholder="รหัสซิงค์ SYNC_TOKEN" autocomplete="off">
-          <input type="email" id="tf-email" class="form-input" placeholder="อีเมลครู">
-          <input type="password" id="tf-pw" class="form-input" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)" autocomplete="new-password">
-          <input type="password" id="tf-pw2" class="form-input" placeholder="ยืนยันรหัสผ่านใหม่" autocomplete="new-password">
-          <div style="display:flex;gap:0.5rem;justify-content:flex-end;"><button class="btn-nav-action" id="tf-cancel">ยกเลิก</button><button class="btn-nav-action primary" id="tf-save">ตั้งรหัสผ่าน</button></div>
-        </div></div>`;
-      document.body.appendChild(m);
-      m.querySelector('#tf-cancel').onclick = () => m.classList.remove('active');
-      m.querySelector('#tf-save').onclick = async () => {
-        // ตัดช่องว่างหัวท้าย (เช่น ติดมาตอนคัดลอก/วาง) ให้ตรงกับหน้าเข้าสู่ระบบที่ตัดช่องว่างเช่นกัน
-        const pw = m.querySelector('#tf-pw').value.trim(), pw2 = m.querySelector('#tf-pw2').value.trim();
-        if (pw !== pw2) { alert('รหัสผ่านใหม่ไม่ตรงกัน'); return; }
-        const r = await this.resetWithToken(m.querySelector('#tf-token').value, m.querySelector('#tf-email').value, pw).catch(e => ({ success: false, message: e.message }));
-        if (!r.success) { alert('❌ ' + r.message); return; }
-        m.querySelectorAll('input').forEach(i => { i.value = ''; });
-        m.classList.remove('active');
-        alert('✅ ตั้งรหัสผ่านใหม่แล้ว กรุณาเข้าสู่ระบบด้วยรหัสใหม่');
-      };
-    }
-    const cfg = typeof GoogleSheetSync !== 'undefined' ? GoogleSheetSync.getConfig() : {};
-    m.querySelector('#tf-token').value = cfg.syncToken || '';
-    m.querySelector('#tf-email').value = (document.getElementById('auth-teacher-email') || {}).value || '';
-    m.classList.add('active');
   }
 };
 

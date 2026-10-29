@@ -931,7 +931,7 @@ const GoogleSheetSync = {
 // เวอร์ชันโค้ดฝั่ง Apps Script — แอปเทียบค่านี้กับค่าที่แอปคาดหวัง (ผ่าน action 'ping')
 // ถ้าไม่ตรง/ไม่มี แอปจะแจ้งครูว่า "ต้องอัปเดต GAS". ⚠ เปลี่ยนค่านี้ทุกครั้งที่แก้โค้ดไฟล์นี้ (รูปแบบ ปี.เดือน.วัน-ลำดับ)
 // แล้วรัน: python tools/sync_apps_script_template.py  (ให้ปุ่ม 1-Click Copy ในแอปตรงกัน) — ดู docs/GAS_AUTODEPLOY_TH.md
-var GAS_VERSION = '2026.10.29-1';
+var GAS_VERSION = '2026.10.29-2';
 
 function doPost(e) {
   // อัปโหลดชิ้นไฟล์นักเรียน: ไม่ต้องรอ Lock รวม (แต่ละชิ้นเขียนไฟล์ของตัวเอง)
@@ -1010,7 +1010,6 @@ function doPost(e) {
     if (action === 'reset_student_pin') return jsonOut(resetStudentPinServer(ss, payload.studentId));
     if (action === 'student_pin_status') return jsonOut(studentPinStatus(ss));
     if (action === 'fetch_due_dates') return jsonOut({ status: 'success', dueDates: listDueDates_(ss, payload.className || '') });
-    if (action === 'teacher_set_password') return jsonOut(setTeacherPassword(payload));
     if (action === 'decide_intern') return jsonOut(decideIntern(ss, payload));
     if (action === 'upsert_intern') return jsonOut(upsertIntern(ss, payload));
     if (action === 'reset_intern_pin') return jsonOut(resetInternPin(ss, payload.internId));
@@ -2860,7 +2859,7 @@ function resolveUpload_(ss, sid, cid) {
 /* ============================================================================
  * เข้าสู่ระบบครูผ่านเซิร์ฟเวอร์ (Phase 6)
  * - รหัสผ่านครูเก็บเป็น hash (SHA-256 ×100 + salt + PIN_PEPPER) ใน Script Properties: TEACHER_AUTH (ไม่อยู่ในชีต/เว็บ)
- * - ตั้ง/รีเซ็ตรหัสผ่าน: action teacher_set_password (ต้องใช้ SYNC_TOKEN) — จากเครื่องครูหรือสคริปต์บน PC
+ * - ตั้ง/รีเซ็ตรหัสผ่าน: ไม่มี action สาธารณะแล้ว (ตัด SYNC_TOKEN ออกจากการรีเซ็ต) → ครูรีเซ็ตทางอีเมลเท่านั้น (setTeacherPassword ใช้ภายในฟังก์ชันรีเซ็ตอีเมล)
  * - เข้าสู่ระบบสำเร็จ: คืน SYNC_TOKEN ให้เครื่องครู (เครื่องใหม่ตั้งค่าซิงค์อัตโนมัติ)
  * ============================================================================ */
 var TEACHER_PUBLIC_ACTIONS = ['teacherLogin', 'teacherAuthStatus'];

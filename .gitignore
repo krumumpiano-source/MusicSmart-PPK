@@ -38,3 +38,7 @@ node_modules/
 
 # ข้อสอบกลางภาค/ปลายภาคฉบับจริง (ข้อสอบ+เฉลย) — ห้าม commit/ห้าม deploy; อัปโหลดขึ้น Apps Script ผ่านหน้าครูเท่านั้น
 tools/exams_private/
+
+# Apps Script one-command deploy: local IDs + build folder (???? commit)
+tools/gas_deploy.local.json
+gas_build/

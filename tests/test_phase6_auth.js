@@ -26,7 +26,6 @@ const EMAIL = 'teacher.sample@example.com';
 const PW = 'Sample-Pass-2569';
 const LEGACY_PW = 'Throwaway-Local-Pw-1'; // รหัสทดสอบชั่วคราว (ไม่ใช่รหัสจริง)
 
-const runScript = (args) => new Promise(res => execFile(process.execPath, [path.join(__dirname, '../tools/set_teacher_password.js'), ...args], { timeout: 20000 }, (err, stdout, stderr) => res({ code: err ? err.code : 0, out: stdout + stderr })));
 
 (async () => {
   // ---------- teacher: before configured -> legacy local login still works (no lock-out)
@@ -38,30 +37,16 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   let r = await TeacherAuth.login(acc.email, LEGACY_PW);
   assert(r.success && r.notice, 'legacy fallback while server not configured');
 
-  // ---------- set password: token required, weak rejected, no plaintext stored
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', email: EMAIL, password: PW }).status, 'error');
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'wrong', email: EMAIL, password: PW }).message, 'unauthorized');
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: 'short' }).code, 'weak_password');
-  assert.strictEqual(gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: 'password123' }).code, 'weak_password');
+  // ---------- no public set-password action (SYNC_TOKEN reset removed): token cannot set the password
+  const removedAct = gas.call({ action: 'teacher_set_password', token: 'T-sample-token', email: EMAIL, password: PW });
+  assert.notStrictEqual(removedAct.status, 'success', 'removed teacher_set_password action must not succeed');
+  assert.strictEqual(gas.props.TEACHER_AUTH, undefined, 'token cannot set teacher password');
+  // weak-password rule still enforced by the internal setter (used by the email reset)
+  assert.strictEqual(gas.ctx.setTeacherPassword({ email: EMAIL, password: 'short' }).code, 'weak_password');
+  assert.strictEqual(gas.ctx.setTeacherPassword({ email: EMAIL, password: 'password123' }).code, 'weak_password');
 
-  // PC script against a local HTTP wrapper around the fake server (password from file, never echoed)
-  const srv = http.createServer((req, res) => { let b = ''; req.on('data', c => { b += c; }); req.on('end', () => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(gas.callRaw(b))); }); });
-  await new Promise(ok => srv.listen(0, '127.0.0.1', ok));
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mst-'));
-  fs.writeFileSync(path.join(tmp, 'token.txt'), 'T-sample-token\r\n');
-  fs.writeFileSync(path.join(tmp, 'pw.txt'), PW + '\n');
-  const bad = await runScript(['--url', `http://127.0.0.1:${srv.address().port}/x`, '--token-file', path.join(tmp, 'token.txt'), '--email', EMAIL, '--password-file', path.join(tmp, 'pw.txt')]);
-  assert.notStrictEqual(bad.code, 0, 'script refuses non Apps Script URL');
-  // run script logic with a mocked fetch by preloading (URL check satisfied)
-  const pre = path.join(tmp, 'pre.js');
-  fs.writeFileSync(pre, `const real=global.fetch;global.fetch=(u,o)=>real('http://127.0.0.1:${srv.address().port}/exec',o);`);
-  const ok = await new Promise(res => execFile(process.execPath, ['-r', pre, path.join(__dirname, '../tools/set_teacher_password.js'), '--url', API, '--token-file', path.join(tmp, 'token.txt'), '--email', EMAIL.toUpperCase(), '--name', 'ครูตัวอย่าง', '--password-file', path.join(tmp, 'pw.txt')], (err, so, se) => res({ code: err ? err.code : 0, out: so + se })));
-  assert.strictEqual(ok.code, 0, ok.out);
-  assert(/✅/.test(ok.out) && !ok.out.includes(PW) && !ok.out.includes('T-sample-token'), 'script output has no secrets');
-  fs.writeFileSync(path.join(tmp, 'token.txt'), 'nope');
-  const wrongTok = await new Promise(res => execFile(process.execPath, ['-r', pre, path.join(__dirname, '../tools/set_teacher_password.js'), '--url', API, '--token-file', path.join(tmp, 'token.txt'), '--email', EMAIL, '--password-file', path.join(tmp, 'pw.txt')], (err, so, se) => res({ code: err ? err.code : 0, out: so + se })));
-  assert.notStrictEqual(wrongTok.code, 0); assert(/SYNC_TOKEN ไม่ถูกต้อง/.test(wrongTok.out));
-  srv.close(); fs.rmSync(tmp, { recursive: true });
+  // set password through the server-side setter (same path as the email reset)
+  assert.strictEqual(gas.ctx.setTeacherPassword({ email: EMAIL.toUpperCase(), name: 'ครูตัวอย่าง', password: PW }).status, 'success');
   const stored = gas.props.TEACHER_AUTH;
   assert(stored && !stored.includes(PW), 'only hash stored'); assert.strictEqual(JSON.parse(stored).email, EMAIL);
   assert.strictEqual(gas.call({ action: 'teacherAuthStatus' }).configured, true);
@@ -87,9 +72,9 @@ const runScript = (args) => new Promise(res => execFile(process.execPath, [path.
   assert.strictEqual((await TeacherAuth.login(EMAIL, 'wrong-pass')).success, false);
   assert.strictEqual((await TeacherAuth.login(acc.email, LEGACY_PW)).success, false);
   offline = false;
-  // forgot-password flow with SYNC_TOKEN
-  assert.strictEqual((await TeacherAuth.resetWithToken('nope', EMAIL, 'Another-Pass-1')).success, false);
-  assert((await TeacherAuth.resetWithToken('T-sample-token', EMAIL, 'Another-Pass-1')).success);
+  // password change now only via email reset (server-side setter); old password stops working
+  assert.strictEqual(gas.ctx.setTeacherPassword({ email: EMAIL, password: 'Another-Pass-1' }).status, 'success');
+  assert.strictEqual(TeacherAuth.resetWithToken, undefined, 'SYNC_TOKEN reset removed from client');
   assert.strictEqual((await TeacherAuth.login(EMAIL, PW)).success, false);
   assert((await TeacherAuth.login(EMAIL, 'Another-Pass-1')).success);
 
