@@ -684,7 +684,8 @@ const App = {
   async handleTeacherLogin() {
     const identifier = (document.getElementById('auth-teacher-email')?.value || '').trim();
     const secretInput = document.getElementById('auth-teacher-secret');
-    const secret = (secretInput?.value || '').trim();
+    const secretRaw = secretInput?.value || '';
+    const secret = secretRaw.trim();
 
     if (!identifier) {
       alert('กรุณาระบุอีเมลครูผู้สอน หรือ รหัสนักศึกษา / อีเมล นศ.ฝึกสอน');
@@ -748,7 +749,7 @@ const App = {
     let teacherRes = null;
     try {
       if (typeof TeacherAuth !== 'undefined') {
-        teacherRes = await TeacherAuth.login(identifier, secret);
+        teacherRes = await TeacherAuth.login(identifier, secret, secretRaw);
       }
     } catch (e) {
       console.warn('TeacherAuth.login error:', e);
@@ -858,12 +859,23 @@ const App = {
 
     // 5. หากไม่ถูกต้องทุกกรณี ให้แจ้งเตือนอย่างสุภาพและชัดเจน
     let errMsg = 'อีเมล/รหัสนักศึกษา หรือรหัสผ่าน/PIN ไม่ถูกต้อง';
-    if (internRes && internRes.message && internRes.code !== 'wrong_pin') {
+    // เซิร์ฟเวอร์ตอบปฏิเสธรหัสผ่านครูอย่างชัดเจน (รหัสผิด/ถูกล็อก/คำขอมากเกินไป) และฝั่ง นศ. แค่ "ไม่พบบัญชี"
+    // → แสดงเหตุผลของครู ไม่ใช่ข้อความ "ไม่พบบัญชี นศ." ที่ทำให้เข้าใจผิดว่าเป็นปัญหาการลงทะเบียน
+    const teacherServerReject = !!(teacherRes && !teacherRes.success && teacherRes.code &&
+      ['wrong_password', 'locked', 'rate_limited'].indexOf(teacherRes.code) !== -1 &&
+      (!internRes || internRes.code === 'not_found'));
+    if (teacherServerReject) {
+      errMsg = teacherRes.message || errMsg;
+      if (teacherRes.code === 'wrong_password') {
+        errMsg += '\n\n• อีเมลครูต้องตรงกับอีเมลที่ใช้ตั้งรหัสผ่านบนเซิร์ฟเวอร์ (ตัวอักษรเล็ก-ใหญ่ไม่มีผล)\n• รหัสผ่านต้องเป็นรหัสใหม่ล่าสุด และพิมพ์ไม่มีช่องว่างเกิน\n• ผิดติดกัน 5 ครั้งจะถูกล็อก 15 นาที';
+      }
+    } else if (internRes && internRes.message && internRes.code !== 'wrong_pin') {
       errMsg = internRes.message;
     } else if (teacherRes && teacherRes.message && teacherRes.code !== 'wrong_password') {
       errMsg = teacherRes.message;
     }
-    alert(`⚠️ เข้าสู่ระบบไม่สำเร็จ: ${errMsg}\n\n* หากท่านเป็นนักศึกษาฝึกสอนที่ยังไม่ได้ลงทะเบียน สามารถกดปุ่ม "ลงทะเบียนนักศึกษาฝึกสอนใหม่" ได้ครับ`);
+    const internHint = teacherServerReject ? '' : '\n\n* หากท่านเป็นนักศึกษาฝึกสอนที่ยังไม่ได้ลงทะเบียน สามารถกดปุ่ม "ลงทะเบียนนักศึกษาฝึกสอนใหม่" ได้ครับ';
+    alert(`⚠️ เข้าสู่ระบบไม่สำเร็จ: ${errMsg}${internHint}`);
   },
 
   openFirstTimeSetupModal(teacher) {

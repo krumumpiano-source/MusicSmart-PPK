@@ -43,7 +43,8 @@ const TeacherAuth = {
     return user;
   },
 
-  async login(emailRaw, password) {
+  // rawPassword (ถ้ามี) = ค่าที่พิมพ์/วางมาก่อนตัดช่องว่างหัวท้าย — ใช้ลองซ้ำเมื่อรหัสที่ตั้งไว้ก่อนหน้านี้มีช่องว่างติดมา
+  async login(emailRaw, password, rawPassword) {
     const email = String(emailRaw || '').trim().toLowerCase();
     const url = this.apiUrl();
     const legacy = async () => {
@@ -57,6 +58,12 @@ const TeacherAuth = {
     } catch (e) {
       if (await this._checkOffline(email, password)) return { success: true, offline: true, user: this._setUser(email, '', { offline: true }) };
       return legacy();
+    }
+    if (r && r.code === 'wrong_password' && rawPassword && rawPassword !== password) {
+      try {
+        const r2 = await StudentAuth._post({ action: 'teacherLogin', email, password: rawPassword });
+        if (r2 && r2.status === 'success') { r = r2; password = rawPassword; }
+      } catch (e) { /* คงผลลัพธ์เดิม */ }
     }
     if (r && r.status === 'success') {
       localStorage.setItem(this.SERVER_FLAG, '1');
@@ -101,7 +108,8 @@ const TeacherAuth = {
       document.body.appendChild(m);
       m.querySelector('#tf-cancel').onclick = () => m.classList.remove('active');
       m.querySelector('#tf-save').onclick = async () => {
-        const pw = m.querySelector('#tf-pw').value, pw2 = m.querySelector('#tf-pw2').value;
+        // ตัดช่องว่างหัวท้าย (เช่น ติดมาตอนคัดลอก/วาง) ให้ตรงกับหน้าเข้าสู่ระบบที่ตัดช่องว่างเช่นกัน
+        const pw = m.querySelector('#tf-pw').value.trim(), pw2 = m.querySelector('#tf-pw2').value.trim();
         if (pw !== pw2) { alert('รหัสผ่านใหม่ไม่ตรงกัน'); return; }
         const r = await this.resetWithToken(m.querySelector('#tf-token').value, m.querySelector('#tf-email').value, pw).catch(e => ({ success: false, message: e.message }));
         if (!r.success) { alert('❌ ' + r.message); return; }
