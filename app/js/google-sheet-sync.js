@@ -931,7 +931,7 @@ const GoogleSheetSync = {
 // เวอร์ชันโค้ดฝั่ง Apps Script — แอปเทียบค่านี้กับค่าที่แอปคาดหวัง (ผ่าน action 'ping')
 // ถ้าไม่ตรง/ไม่มี แอปจะแจ้งครูว่า "ต้องอัปเดต GAS". ⚠ เปลี่ยนค่านี้ทุกครั้งที่แก้โค้ดไฟล์นี้ (รูปแบบ ปี.เดือน.วัน-ลำดับ)
 // แล้วรัน: python tools/sync_apps_script_template.py  (ให้ปุ่ม 1-Click Copy ในแอปตรงกัน) — ดู docs/GAS_AUTODEPLOY_TH.md
-var GAS_VERSION = '2026.10.28-2';
+var GAS_VERSION = '2026.10.29-1';
 
 function doPost(e) {
   // อัปโหลดชิ้นไฟล์นักเรียน: ไม่ต้องรอ Lock รวม (แต่ละชิ้นเขียนไฟล์ของตัวเอง)
@@ -966,6 +966,12 @@ function doPost(e) {
     if (payload && TEACHER_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
       if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
       return jsonOut(handleTeacherPublicAction(payload));
+    }
+
+    // 0a3. ลืมรหัสผ่าน/PIN: ขอรหัสยืนยันทางอีเมล หรือขอให้ครูรีเซ็ต แล้วตั้งรหัสใหม่ด้วยรหัสยืนยัน
+    if (payload && PASSWORD_RESET_PUBLIC_ACTIONS.indexOf(payload.action) !== -1) {
+      if (rawText.length > STUDENT_MAX_BODY) return jsonOut({ status: 'error', code: 'too_large', message: 'ข้อมูลใหญ่เกินไป' });
+      return jsonOut(handlePasswordResetPublic_(SpreadsheetApp.getActiveSpreadsheet(), payload));
     }
 
     // 0b. นักศึกษาฝึกสอน (ใช้โทเค็น นศ. ที่จำกัดเฉพาะห้องที่ได้รับมอบหมาย)
@@ -1009,6 +1015,8 @@ function doPost(e) {
     if (action === 'upsert_intern') return jsonOut(upsertIntern(ss, payload));
     if (action === 'reset_intern_pin') return jsonOut(resetInternPin(ss, payload.internId));
     if (action === 'list_interns') return jsonOut(listInterns(ss));
+    if (action === 'list_reset_requests') return jsonOut(listResetRequests_(ss));
+    if (action === 'decide_reset_request') return jsonOut(decideResetRequest_(ss, payload));
     if (action === 'fetch_approvals') return jsonOut(fetchApprovals(ss, payload.status || ''));
     if (action === 'decide_approval') return jsonOut(decideApproval(ss, payload.id, !!payload.approve));
     if (action === 'fetch_intern_logs') return jsonOut(fetchInternLogs(ss, payload.internId || ''));
@@ -1330,7 +1338,7 @@ function getOrCreateSheet(ss, sheetName, headers) {
 /* ============================================================================
  * ระบบเข้าสู่ระบบนักเรียน (Student Auth) — รหัสนักเรียน + PIN 6 หลัก
  * ============================================================================ */
-var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices', 'studentProgress', 'uploadProfileAvatar', 'fetchProfileAvatars', 'studentExamStatus', 'studentExamStart', 'studentExamSubmit'];
+var STUDENT_PUBLIC_ACTIONS = ['studentLookup', 'studentSetPin', 'studentLogin', 'studentSubmit', 'studentQuizGet', 'studentTasks', 'studentNotices', 'studentProgress', 'uploadProfileAvatar', 'fetchProfileAvatars', 'studentExamStatus', 'studentExamStart', 'studentExamSubmit', 'studentEmailStatus', 'studentEmailStart', 'studentEmailConfirm'];
 var STUDENT_MAX_BODY = 350000;          // ขนาดคำขอสูงสุดของนักเรียน (ตัวอักษร)
 var STUDENT_SESSION_DAYS = 30;         // อายุโทเค็นเข้าสู่ระบบของนักเรียน
 var STUDENT_SUBMIT_PER_HOUR = 60;      // ส่งงานได้สูงสุดต่อคนต่อชั่วโมง
@@ -1344,7 +1352,7 @@ var QUIZ_BANK_SHEET = 'คลังข้อสอบ_QuizBank';
 var QUIZ_BANK_HEADERS = ['unit_no', 'unit_title', 'qid', 'question', 'choices_json', 'correct', 'explanation', 'bloom'];
 var STUDENT_AUTH_SHEET = 'นักเรียน_Students_Auth';
 var STUDENT_AUTH_HEADERS = ['student_id', 'prefix', 'first_name', 'last_name', 'nickname', 'class', 'no',
-  'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'last_login'];
+  'salt', 'pin_hash', 'failed_count', 'locked_until', 'pin_set_at', 'last_login', 'email'];
 var STUDENT_MAX_FAILS = 5;
 var STUDENT_LOCK_MINUTES = 15;
 var STUDENT_GLOBAL_PER_MINUTE = 300; // กันการสุ่มเดารหัสจำนวนมาก (ทั้งระบบ ต่อ 1 นาที)
@@ -1383,7 +1391,14 @@ function hashPin_(studentId, pin, salt) {
 
 function cleanId_(v) { return String(v === undefined || v === null ? '' : v).replace(/\\s+/g, ''); }
 
-function getStudentSheet_(ss) { return getOrCreateSheet(ss, STUDENT_AUTH_SHEET, STUDENT_AUTH_HEADERS); }
+function getStudentSheet_(ss) {
+  var sheet = getOrCreateSheet(ss, STUDENT_AUTH_SHEET, STUDENT_AUTH_HEADERS);
+  // ชีตเดิมที่สร้างก่อนมีคอลัมน์อีเมล: เติมหัวคอลัมน์ให้ (ข้อมูลเดิมไม่เปลี่ยน)
+  if (sheet.getLastColumn() < STUDENT_AUTH_HEADERS.length) {
+    sheet.getRange(1, 1, 1, STUDENT_AUTH_HEADERS.length).setValues([STUDENT_AUTH_HEADERS]);
+  }
+  return sheet;
+}
 
 function findStudentRow_(sheet, studentId) {
   var values = sheet.getDataRange().getValues();
@@ -1439,6 +1454,7 @@ function handleStudentPublicAction(ss, payload) {
   if (payload.action === 'studentNotices') return studentNotices_(ss, payload);
   if (payload.action === 'uploadProfileAvatar') return uploadProfileAvatar_(ss, payload);
   if (payload.action === 'fetchProfileAvatars') return fetchProfileAvatars_(ss, payload);
+  if (payload.action === 'studentEmailStatus' || payload.action === 'studentEmailStart' || payload.action === 'studentEmailConfirm') return studentEmailAction_(ss, payload);
   var studentId = cleanId_(payload.studentId);
   if (!/^\\d{4,10}$/.test(studentId)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
   var sheet = getStudentSheet_(ss);
@@ -1511,7 +1527,7 @@ function uploadStudentRoster(ss, students, replace) {
       for (var c = 0; c < base.length; c++) row[c] = base[c];
       updated++;
     } else {
-      var newRow = base.concat(['', '', 0, '', '', '']);
+      var newRow = base.concat(['', '', 0, '', '', '', '']);
       index[id] = values.length;
       values.push(newRow);
       added++;
@@ -2858,11 +2874,17 @@ function teacherAuth_() {
 function saveTeacherAuth_(a) { PropertiesService.getScriptProperties().setProperty('TEACHER_AUTH', JSON.stringify(a)); }
 function normEmail_(v) { return String(v || '').trim().toLowerCase(); }
 
+function validateTeacherPassword_(pw) {
+  if (pw.length < TEACHER_MIN_PASSWORD || pw.length > 128) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านต้องยาว ' + TEACHER_MIN_PASSWORD + '–128 ตัวอักษร' };
+  if (/^(.)\\1+$/.test(pw) || /^(12345678|password|ppk\\d+)/i.test(pw)) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านเดาง่ายเกินไป' };
+  return null;
+}
+
 function setTeacherPassword(payload) {
   var email = normEmail_(payload.email), pw = String(payload.password || '');
   if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return { status: 'error', code: 'bad_email', message: 'อีเมลไม่ถูกต้อง' };
-  if (pw.length < TEACHER_MIN_PASSWORD || pw.length > 128) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านต้องยาว ' + TEACHER_MIN_PASSWORD + '–128 ตัวอักษร' };
-  if (/^(.)\\1+$/.test(pw) || /^(12345678|password|ppk\\d+)/i.test(pw)) return { status: 'error', code: 'weak_password', message: 'รหัสผ่านเดาง่ายเกินไป' };
+  var pwErr = validateTeacherPassword_(pw);
+  if (pwErr) return pwErr;
   var old = teacherAuth_() || {};
   var salt = Utilities.getUuid();
   saveTeacherAuth_({ email: email, name: str_(payload.name, 80) || old.name || '', salt: salt, hash: hashPin_('teacher:' + email, pw, salt),
@@ -2965,6 +2987,383 @@ function decideIntern(ss, payload) {
   ensureHeaders_(internSheet_(ss), INTERN_HEADERS);
   writeRow_(internSheet_(ss), INTERN_HEADERS, rec);
   return { status: 'success', internId: String(rec.intern_id), state: rec.status };
+}
+
+/* ============================================================================
+ * ลืมรหัสผ่าน / PIN — รีเซ็ตด้วยรหัสยืนยัน 6 หลัก (ทุกบทบาท: ครู/แอดมิน, นศ.ฝึกสอน, นักเรียน)
+ *  1) ผู้ใช้ที่มีอีเมล: ระบบส่งรหัสยืนยันไปที่อีเมลที่ลงทะเบียนไว้ (หมดอายุ 15 นาที, ลองได้ 5 ครั้ง)
+ *  2) นักเรียน (และ นศ.) ที่ไม่มีอีเมล: กด "ลืมรหัส" → เกิดคำขอรอครู → ครูกดยืนยันในแผงครู
+ *     → ระบบออกรหัสยืนยันให้ครู (แสดงครั้งเดียว) → ครูแจ้งผู้ใช้ → ผู้ใช้ตั้งรหัสใหม่เอง
+ *  - รหัสยืนยันเก็บเป็น hash เท่านั้น (ชีต รีเซ็ตรหัส_PasswordResets) ไม่เก็บรหัสจริง
+ *  - อีเมลที่เป็นแอดมินครู: ADMIN_TEACHER_EMAILS + อีเมลบัญชีครูบนเซิร์ฟเวอร์ + เจ้าของสคริปต์
+ *    + Script Property ADMIN_EMAILS (คั่นด้วย , ได้หลายอีเมล)
+ *  - ต้องอนุญาตสิทธิ์ส่งอีเมล (MailApp) หนึ่งครั้ง: รันฟังก์ชัน authorizeEmailScope ในตัวแก้ไข Apps Script
+ * ============================================================================ */
+var PASSWORD_RESET_PUBLIC_ACTIONS = ['resetRequest', 'resetConfirm'];
+var RESET_SHEET = 'รีเซ็ตรหัส_PasswordResets';
+var RESET_HEADERS = ['request_id', 'role', 'subject', 'kind', 'status', 'code_hash', 'salt', 'email', 'created_ms', 'expires_ms', 'attempts', 'decided_ms', 'used_ms'];
+var RESET_EMAIL_TTL_MIN = 15;            // รหัสที่ส่งทางอีเมลใช้ได้กี่นาที
+var RESET_TEACHER_CODE_TTL_HOURS = 24;   // รหัสที่ครูออกให้ใช้ได้กี่ชั่วโมง
+var RESET_PENDING_TTL_DAYS = 14;         // คำขอที่ครูยังไม่ตอบ ค้างได้กี่วัน
+var RESET_MAX_ATTEMPTS = 5;              // ใส่รหัสผิดได้กี่ครั้งต่อรหัส
+var RESET_REQUESTS_PER_HOUR = 3;         // ขอรหัสได้กี่ครั้งต่อบัญชีต่อชั่วโมง (กันถล่มอีเมล)
+var ADMIN_TEACHER_EMAILS = ['krumum.piano@gmail.com'];
+var MAIL_SENDER_NAME = 'MusicSmart PPK';
+
+function isValidEmail_(e) { return /^[^\\s@]{1,64}@[^\\s@]+\\.[^\\s@]{2,}$/.test(e) && e.length <= 120; }
+
+function maskEmail_(e) {
+  var p = String(e || '').split('@');
+  var l = p[0] || '';
+  return l.charAt(0) + '•••' + (l.length > 2 ? l.charAt(l.length - 1) : '') + '@' + (p[1] || '');
+}
+
+/** เรียกครั้งเดียวจากตัวแก้ไข Apps Script เพื่อให้เจ้าของสคริปต์อนุญาตสิทธิ์ส่งอีเมล */
+function authorizeEmailScope() { return MailApp.getRemainingDailyQuota(); }
+
+/** อีเมลที่ถือว่าเป็นครู/แอดมิน (ใช้รีเซ็ตรหัสผ่านครูทางอีเมลได้) */
+function teacherEmails_() {
+  var out = [], seen = {};
+  function add(v) { var e = normEmail_(v); if (isValidEmail_(e) && !seen[e]) { seen[e] = true; out.push(e); } }
+  ADMIN_TEACHER_EMAILS.forEach(add);
+  var a = teacherAuth_();
+  if (a && a.email) add(a.email);
+  var extra = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAILS');
+  if (extra) String(extra).split(/[,;\\s]+/).forEach(add);
+  try { if (typeof Session !== 'undefined') add(Session.getEffectiveUser().getEmail()); } catch (e) { /* ไม่มีสิทธิ์อ่านอีเมลเจ้าของ */ }
+  return out;
+}
+
+function resetSheet_(ss) { return getOrCreateSheet(ss, RESET_SHEET, RESET_HEADERS); }
+// ชีตแปลงสตริงตัวเลขเป็นตัวเลข (รหัสที่ขึ้นต้นด้วย 0 หาย) จึงใส่ตัวอักษรนำหน้า S/I/T ให้ subject เสมอ
+function subjKey_(role, subject) { return { student: 'S', intern: 'I', teacher: 'T' }[role] + String(subject); }
+function subjOf_(key) { return String(key).slice(1); }
+
+function newResetCode_() {
+  var h = toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + ':' + Date.now() + ':' + Math.random(), Utilities.Charset.UTF_8));
+  var n = parseInt(h.slice(0, 10), 16) % 1000000;
+  return ('000000' + n).slice(-6);
+}
+
+function resetCodeHash_(key, code, salt) { return hashPin_('reset:' + key, code, salt); }
+
+function resetThrottle_(scope, value) {
+  var cache = CacheService.getScriptCache();
+  var h = toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, scope + ':' + value, Utilities.Charset.UTF_8)).slice(0, 40);
+  var key = 'rst_' + h + '_' + Math.floor(Date.now() / 3600000);
+  var n = Number(cache.get(key) || 0);
+  if (n >= RESET_REQUESTS_PER_HOUR) return false;
+  cache.put(key, String(n + 1), 3700);
+  return true;
+}
+
+function resetRowOpen_(r, now) {
+  var st = String(r.status);
+  if (st === 'sent' || st === 'approved') return Number(r.expires_ms) > now;
+  if (st === 'pending') return Number(r.created_ms) + RESET_PENDING_TTL_DAYS * 86400000 > now;
+  return false;
+}
+
+function addResetRow_(ss, rec) {
+  resetSheet_(ss).appendRow(RESET_HEADERS.map(function (h) { return rec[h] === undefined ? '' : rec[h]; }));
+}
+
+/** ยกเลิกคำขอ/รหัสเดิมของบัญชีนี้ (kinds = ชนิดที่จะยกเลิก) */
+function supersedeResets_(ss, key, kinds) {
+  var sheet = resetSheet_(ss);
+  rowsOf_(sheet, RESET_HEADERS).forEach(function (r) {
+    if (String(r.subject) !== key || kinds.indexOf(String(r.kind)) === -1) return;
+    if (['sent', 'approved', 'pending'].indexOf(String(r.status)) === -1) return;
+    r.status = 'superseded';
+    writeRow_(sheet, RESET_HEADERS, r);
+  });
+}
+
+/** ลบแถวเก่าที่ปิดแล้ว (ไม่ลบคำขอที่ยังเปิดอยู่) เพื่อไม่ให้ชีตโตไม่จำกัด */
+function cleanupResetRows_(ss) {
+  var sheet = resetSheet_(ss), now = Date.now();
+  var rows = rowsOf_(sheet, RESET_HEADERS);
+  if (rows.length < 150) return;
+  for (var i = rows.length - 1; i >= 0; i--) {
+    var r = rows[i];
+    if (!resetRowOpen_(r, now) && Number(r.created_ms) + 7 * 86400000 < now) sheet.deleteRow(r.row);
+  }
+}
+
+function sendResetMail_(to, subject, body) {
+  try {
+    MailApp.sendEmail({ to: to, subject: subject, body: body, name: MAIL_SENDER_NAME });
+    return true;
+  } catch (e) {
+    try { if (typeof Logger !== 'undefined') Logger.log('sendResetMail_ failed: ' + e); } catch (e2) { /* ignore */ }
+    return false;
+  }
+}
+
+function resetMailBody_(purposeTh, code, minutes) {
+  return 'รหัสยืนยันสำหรับ' + purposeTh + ' คือ\\n\\n    ' + code + '\\n\\n' +
+    'รหัสนี้ใช้ได้ภายใน ' + minutes + ' นาที และใช้ได้เพียงครั้งเดียว\\n' +
+    'ห้ามบอกรหัสนี้กับผู้อื่น (ครูจะไม่ขอรหัสนี้จากนักเรียน)\\n' +
+    'หากคุณไม่ได้เป็นผู้ขอ ให้เพิกเฉยอีเมลนี้ รหัสผ่านเดิมของคุณจะไม่ถูกเปลี่ยน\\n\\n' +
+    '— MusicSmart โรงเรียนพะเยาพิทยาคม';
+}
+
+/** หา "ครู/นศ." จากอีเมลหรือรหัส นศ. ที่ผู้ใช้พิมพ์ (คืน null ถ้าไม่พบ) */
+function resolveStaff_(ss, identifier) {
+  var raw = String(identifier || '').trim();
+  var email = normEmail_(raw);
+  if (isValidEmail_(email) && teacherEmails_().indexOf(email) !== -1) return { role: 'teacher', subject: email, email: email };
+  var iid = cleanInternId_(raw);
+  var list = rowsOf_(internSheet_(ss), INTERN_HEADERS);
+  for (var i = 0; i < list.length; i++) {
+    var r = list[i];
+    if (r.active === false) continue;
+    if ((iid && String(r.intern_id) === iid) || (isValidEmail_(email) && normEmail_(r.email) === email)) {
+      var re = normEmail_(r.email);
+      return { role: 'intern', subject: String(r.intern_id), email: isValidEmail_(re) ? re : '', rec: r };
+    }
+  }
+  return null;
+}
+
+function isWeakPin_(pin) { return /^(\\d)\\1{5}$/.test(pin) || pin === '123456' || pin === '654321'; }
+
+/** ตรวจรหัสใหม่ตามบทบาท คืนข้อความผิดพลาดหรือ null */
+function validateNewSecret_(role, secret) {
+  if (role === 'teacher') return validateTeacherPassword_(secret);
+  if (!/^\\d{6}$/.test(secret)) return { status: 'error', code: 'bad_pin', message: 'รหัส PIN ต้องเป็นตัวเลข 6 หลัก' };
+  if (isWeakPin_(secret)) return { status: 'error', code: 'weak_pin', message: 'PIN เดาง่ายเกินไป (ห้ามเลขซ้ำทั้งหมด/เรียงลำดับ)' };
+  return null;
+}
+
+function handlePasswordResetPublic_(ss, payload) {
+  if (!globalStudentThrottle_()) return { status: 'error', code: 'rate_limited', message: 'มีการใช้งานจำนวนมาก กรุณารอสักครู่แล้วลองใหม่' };
+  if (payload.action === 'resetRequest') return passwordResetRequest_(ss, payload);
+  return passwordResetConfirm_(ss, payload);
+}
+
+var RESET_GENERIC_STAFF_MSG = 'หากอีเมล/รหัสนี้มีบัญชีในระบบ ระบบได้ส่งรหัสยืนยัน 6 หลักไปยังอีเมลที่ลงทะเบียนไว้แล้ว (ตรวจสอบกล่องจดหมายขยะด้วย) — หากไม่มีอีเมลหรือไม่ได้รับ ให้ นศ. กด "ขอให้ครูรีเซ็ตให้"';
+
+function passwordResetRequest_(ss, payload) {
+  var via = payload.via === 'teacher' ? 'teacher' : 'email';
+  var now = Date.now();
+  if (payload.role === 'student') {
+    var sid = cleanId_(payload.id);
+    if (!/^\\d{4,10}$/.test(sid)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
+    var rec = findStudentRow_(getStudentSheet_(ss), sid);
+    if (!rec) return { status: 'error', code: 'not_found', message: 'ไม่พบรหัสนักเรียนนี้ในระบบ กรุณาแจ้งคุณครู' };
+    if (!resetThrottle_('student', sid)) return { status: 'error', code: 'rate_limited', message: 'ขอรหัสบ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่ หรือแจ้งคุณครู' };
+    var em = normEmail_(rec.email);
+    if (via === 'email' && isValidEmail_(em)) {
+      var sent = issueEmailReset_(ss, 'student', sid, em, 'รีเซ็ตรหัส PIN นักเรียน');
+      if (!sent) return { status: 'error', code: 'mail_failed', message: 'ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่ หรือกด "ขอให้ครูรีเซ็ตให้"' };
+      return { status: 'success', mode: 'email', maskedEmail: maskEmail_(em), expiresMin: RESET_EMAIL_TTL_MIN };
+    }
+    return openTeacherReset_(ss, 'student', sid, !isValidEmail_(em));
+  }
+
+  // ครู/นศ.: ตอบแบบเดียวกันเสมอ ไม่เปิดเผยว่ามีบัญชีหรือไม่
+  var ident = String(payload.id || '').trim();
+  if (!ident || ident.length > 120) return { status: 'error', code: 'bad_id', message: 'กรุณาระบุอีเมล หรือรหัสนักศึกษา' };
+  if (!resetThrottle_('staff', ident.toLowerCase())) return { status: 'error', code: 'rate_limited', message: 'ขอรหัสบ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่' };
+  var who = resolveStaff_(ss, ident);
+  var generic = { status: 'success', mode: 'generic', expiresMin: RESET_EMAIL_TTL_MIN, message: RESET_GENERIC_STAFF_MSG };
+  if (!who) return generic;
+  if (who.role === 'teacher') {
+    if (via === 'email') issueEmailReset_(ss, 'teacher', who.subject, who.email, 'ตั้งรหัสผ่านครูใหม่ (MusicSmart)');
+    return generic;
+  }
+  // นศ.ฝึกสอน: ถ้าไม่มีอีเมล หรือเลือกให้ครูรีเซ็ต → ส่งคำขอถึงครูพี่เลี้ยง
+  if (via === 'teacher' || !who.email) {
+    openTeacherReset_(ss, 'intern', who.subject, !who.email);
+    return { status: 'success', mode: 'teacher', message: 'ส่งคำขอรีเซ็ต PIN ถึงครูประจำวิชาแล้ว กรุณาติดต่อครูเพื่อรับรหัสยืนยัน' };
+  }
+  issueEmailReset_(ss, 'intern', who.subject, who.email, 'รีเซ็ต PIN นักศึกษาฝึกสอน (MusicSmart)');
+  return generic;
+}
+
+/** ออกรหัสและส่งอีเมล (ถ้าส่งไม่สำเร็จ ไม่บันทึกรหัส) */
+function issueEmailReset_(ss, role, subject, email, purposeTh) {
+  var key = subjKey_(role, subject);
+  var code = newResetCode_(), salt = Utilities.getUuid(), now = Date.now();
+  if (!sendResetMail_(email, '[MusicSmart] รหัสยืนยัน ' + code, resetMailBody_(purposeTh, code, RESET_EMAIL_TTL_MIN))) return false;
+  cleanupResetRows_(ss);
+  supersedeResets_(ss, key, ['email']);
+  addResetRow_(ss, { request_id: Utilities.getUuid(), role: role, subject: key, kind: 'email', status: 'sent', code_hash: resetCodeHash_(key, code, salt), salt: salt,
+    email: '', created_ms: now, expires_ms: now + RESET_EMAIL_TTL_MIN * 60000, attempts: 0 });
+  return true;
+}
+
+/** สร้างคำขอให้ครูรีเซ็ต (หนึ่งคำขอที่เปิดอยู่ต่อบัญชี) */
+function openTeacherReset_(ss, role, subject, noEmail) {
+  var key = subjKey_(role, subject), now = Date.now();
+  var msg = 'ส่งคำขอรีเซ็ตรหัส PIN ถึงครูประจำวิชาแล้ว กรุณาติดต่อครูเพื่อรับรหัสยืนยัน แล้วกลับมากรอกรหัสที่หน้านี้เพื่อตั้ง PIN ใหม่ด้วยตนเอง';
+  var existing = rowsOf_(resetSheet_(ss), RESET_HEADERS).filter(function (r) {
+    return String(r.subject) === key && String(r.kind) === 'teacher' && resetRowOpen_(r, now);
+  });
+  if (existing.length) return { status: 'success', mode: 'teacher', existing: true, noEmail: !!noEmail, message: msg };
+  cleanupResetRows_(ss);
+  addResetRow_(ss, { request_id: Utilities.getUuid(), role: role, subject: key, kind: 'teacher', status: 'pending', created_ms: now, attempts: 0 });
+  return { status: 'success', mode: 'teacher', existing: false, noEmail: !!noEmail, message: msg };
+}
+
+function passwordResetConfirm_(ss, payload) {
+  var bad = { status: 'error', code: 'invalid_code', message: 'รหัสยืนยันไม่ถูกต้อง หรือหมดอายุแล้ว กรุณาขอรหัสใหม่' };
+  var role, subject;
+  if (payload.role === 'student') {
+    role = 'student'; subject = cleanId_(payload.id);
+    if (!/^\\d{4,10}$/.test(subject)) return { status: 'error', code: 'bad_id', message: 'รูปแบบรหัสนักเรียนไม่ถูกต้อง' };
+  } else {
+    var who = resolveStaff_(ss, payload.id);
+    if (!who) return bad;
+    role = who.role; subject = who.subject;
+  }
+  var code = String(payload.code === undefined || payload.code === null ? '' : payload.code).replace(/\\s+/g, '');
+  var secret = String(payload.secret === undefined || payload.secret === null ? '' : payload.secret);
+  if (!/^\\d{6}$/.test(code)) return { status: 'error', code: 'bad_code', message: 'รหัสยืนยันต้องเป็นตัวเลข 6 หลัก' };
+  var weak = validateNewSecret_(role, secret);   // ตรวจก่อนนับครั้งที่ลอง เพื่อไม่ให้รหัสใหม่ที่ไม่ผ่านเกณฑ์ใช้รหัสยืนยันหมด
+  if (weak) return weak;
+
+  var key = subjKey_(role, subject), now = Date.now();
+  var sheet = resetSheet_(ss);
+  var open = rowsOf_(sheet, RESET_HEADERS).filter(function (r) {
+    return String(r.subject) === key && String(r.kind) !== 'bind' && (String(r.status) === 'sent' || String(r.status) === 'approved') && Number(r.expires_ms) > now;
+  });
+  if (!open.length) return bad;
+  var match = null;
+  for (var i = 0; i < open.length; i++) {
+    if (safeEqual_(resetCodeHash_(key, code, String(open[i].salt)), String(open[i].code_hash))) { match = open[i]; break; }
+  }
+  if (!match) {
+    var left = RESET_MAX_ATTEMPTS;
+    open.forEach(function (r) {
+      r.attempts = Number(r.attempts || 0) + 1;
+      if (r.attempts >= RESET_MAX_ATTEMPTS) r.status = 'burned';
+      left = Math.min(left, Math.max(0, RESET_MAX_ATTEMPTS - r.attempts));
+      writeRow_(sheet, RESET_HEADERS, r);
+    });
+    return { status: 'error', code: 'invalid_code', attemptsLeft: left,
+      message: left > 0 ? 'รหัสยืนยันไม่ถูกต้อง (เหลืออีก ' + left + ' ครั้ง)' : 'ใส่รหัสผิดหลายครั้ง รหัสนี้ถูกยกเลิกแล้ว กรุณาขอรหัสใหม่' };
+  }
+  var applied = applyNewSecret_(ss, role, subject, secret);
+  if (applied.status !== 'success') return applied;
+  match.status = 'used'; match.used_ms = now;
+  writeRow_(sheet, RESET_HEADERS, match);
+  supersedeResets_(ss, key, ['email', 'teacher']);
+  return { status: 'success', role: role, message: 'ตั้งรหัสใหม่เรียบร้อย กรุณาเข้าสู่ระบบด้วยรหัสใหม่' };
+}
+
+function applyNewSecret_(ss, role, subject, secret) {
+  var now = new Date().toISOString();
+  if (role === 'teacher') {
+    return setTeacherPassword({ email: subject, password: secret });
+  }
+  if (role === 'student') {
+    var sheet = getStudentSheet_(ss), rec = findStudentRow_(sheet, subject);
+    if (!rec) return { status: 'error', code: 'not_found', message: 'ไม่พบรหัสนักเรียนนี้ในระบบ' };
+    rec.salt = Utilities.getUuid(); rec.pin_hash = hashPin_(subject, secret, rec.salt);
+    rec.failed_count = 0; rec.locked_until = ''; rec.pin_set_at = now;   // pin_set_at เปลี่ยน → โทเค็นเก่าของนักเรียนใช้ไม่ได้
+    writeStudentRow_(sheet, rec);
+    return { status: 'success' };
+  }
+  var irec = findIntern_(ss, subject);
+  if (!irec) return { status: 'error', code: 'not_found', message: 'ไม่พบบัญชี นศ.' };
+  irec.salt = Utilities.getUuid(); irec.pin_hash = hashPin_('intern:' + irec.intern_id, secret, irec.salt);
+  irec.failed_count = 0; irec.locked_until = ''; irec.pin_set_at = now;
+  writeRow_(internSheet_(ss), INTERN_HEADERS, irec);
+  return { status: 'success' };
+}
+
+// ---- ฝั่งครู (ต้องใช้ SYNC_TOKEN): ดูคำขอ / ยืนยันออกรหัส / ปฏิเสธ ----
+function listResetRequests_(ss) {
+  var now = Date.now();
+  var out = rowsOf_(resetSheet_(ss), RESET_HEADERS).filter(function (r) {
+    return String(r.kind) === 'teacher' && (String(r.status) === 'pending' || String(r.status) === 'approved') && resetRowOpen_(r, now);
+  }).map(function (r) {
+    var role = String(r.role), id = subjOf_(r.subject), name = '', cls = '';
+    if (role === 'student') {
+      var s = findStudentRow_(getStudentSheet_(ss), id);
+      if (s) { name = String(s.prefix || '') + String(s.first_name || '') + ' ' + String(s.last_name || ''); cls = String(s['class'] || ''); }
+    } else {
+      var i = findIntern_(ss, id);
+      if (i) { name = String(i.name || ''); cls = internClasses_(i).join(', '); }
+    }
+    return { id: String(r.request_id), role: role, subjectId: id, name: name, className: cls, status: String(r.status),
+      createdMs: Number(r.created_ms), expiresMs: String(r.status) === 'approved' ? Number(r.expires_ms) : 0 };
+  });
+  out.sort(function (a, b) { return a.createdMs - b.createdMs; });
+  return { status: 'success', requests: out };
+}
+
+function decideResetRequest_(ss, payload) {
+  var sheet = resetSheet_(ss), now = Date.now();
+  var rows = rowsOf_(sheet, RESET_HEADERS);
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (String(r.request_id) !== String(payload.requestId) || String(r.kind) !== 'teacher') continue;
+    if (!resetRowOpen_(r, now) || (String(r.status) !== 'pending' && String(r.status) !== 'approved')) return { status: 'error', code: 'closed', message: 'คำขอนี้ปิดแล้วหรือหมดอายุ' };
+    var id = subjOf_(r.subject);
+    if (!payload.approve) {
+      r.status = 'rejected'; r.decided_ms = now;
+      writeRow_(sheet, RESET_HEADERS, r);
+      return { status: 'success', requestId: String(r.request_id), state: 'rejected' };
+    }
+    var code = newResetCode_(), salt = Utilities.getUuid();
+    r.status = 'approved'; r.salt = salt; r.code_hash = resetCodeHash_(String(r.subject), code, salt);
+    r.decided_ms = now; r.expires_ms = now + RESET_TEACHER_CODE_TTL_HOURS * 3600000; r.attempts = 0;
+    writeRow_(sheet, RESET_HEADERS, r);
+    return { status: 'success', requestId: String(r.request_id), state: 'approved', role: String(r.role), subjectId: id, code: code, expiresMs: r.expires_ms };
+  }
+  return { status: 'error', code: 'not_found', message: 'ไม่พบคำขอ' };
+}
+
+// ---- นักเรียนผูกอีเมลของตนเอง (ยืนยันเจ้าของอีเมลด้วยรหัสก่อนบันทึก กันพิมพ์ผิดแล้วรหัสไปถึงคนอื่น) ----
+function studentEmailAction_(ss, payload) {
+  var v = verifySessionToken_(ss, payload.sessionToken);
+  if (v.error) return { status: 'error', code: v.error, message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' };
+  var rec = v.rec, sid = cleanId_(rec.student_id), key = subjKey_('student', sid);
+  var cur = normEmail_(rec.email);
+  if (payload.action === 'studentEmailStatus') {
+    return { status: 'success', hasEmail: isValidEmail_(cur), maskedEmail: isValidEmail_(cur) ? maskEmail_(cur) : '' };
+  }
+  var now = Date.now();
+  if (payload.action === 'studentEmailStart') {
+    var email = normEmail_(payload.email);
+    if (!isValidEmail_(email)) return { status: 'error', code: 'bad_email', message: 'อีเมลไม่ถูกต้อง' };
+    if (!resetThrottle_('bind', sid)) return { status: 'error', code: 'rate_limited', message: 'ขอรหัสบ่อยเกินไป กรุณารอ 1 ชั่วโมงแล้วลองใหม่' };
+    var code = newResetCode_(), salt = Utilities.getUuid();
+    if (!sendResetMail_(email, '[MusicSmart] ยืนยันอีเมล ' + code, resetMailBody_('ยืนยันอีเมลสำหรับกู้รหัส PIN นักเรียน', code, RESET_EMAIL_TTL_MIN))) {
+      return { status: 'error', code: 'mail_failed', message: 'ส่งอีเมลไม่สำเร็จ ตรวจสอบอีเมลแล้วลองใหม่' };
+    }
+    cleanupResetRows_(ss);
+    supersedeResets_(ss, key, ['bind']);
+    addResetRow_(ss, { request_id: Utilities.getUuid(), role: 'student', subject: key, kind: 'bind', status: 'sent', code_hash: resetCodeHash_(key + ':bind', code, salt), salt: salt,
+      email: email, created_ms: now, expires_ms: now + RESET_EMAIL_TTL_MIN * 60000, attempts: 0 });
+    return { status: 'success', maskedEmail: maskEmail_(email), expiresMin: RESET_EMAIL_TTL_MIN };
+  }
+  // studentEmailConfirm
+  var code2 = String(payload.code === undefined || payload.code === null ? '' : payload.code).replace(/\\s+/g, '');
+  if (!/^\\d{6}$/.test(code2)) return { status: 'error', code: 'bad_code', message: 'รหัสยืนยันต้องเป็นตัวเลข 6 หลัก' };
+  var sheet = resetSheet_(ss);
+  var rows = rowsOf_(sheet, RESET_HEADERS).filter(function (r) {
+    return String(r.subject) === key && String(r.kind) === 'bind' && String(r.status) === 'sent' && Number(r.expires_ms) > now;
+  });
+  if (!rows.length) return { status: 'error', code: 'invalid_code', message: 'รหัสยืนยันไม่ถูกต้อง หรือหมดอายุแล้ว กรุณาขอรหัสใหม่' };
+  var row = rows[rows.length - 1];
+  if (!safeEqual_(resetCodeHash_(key + ':bind', code2, String(row.salt)), String(row.code_hash))) {
+    row.attempts = Number(row.attempts || 0) + 1;
+    if (row.attempts >= RESET_MAX_ATTEMPTS) row.status = 'burned';
+    writeRow_(sheet, RESET_HEADERS, row);
+    var left = Math.max(0, RESET_MAX_ATTEMPTS - row.attempts);
+    return { status: 'error', code: 'invalid_code', attemptsLeft: left, message: left > 0 ? 'รหัสยืนยันไม่ถูกต้อง (เหลืออีก ' + left + ' ครั้ง)' : 'ใส่รหัสผิดหลายครั้ง กรุณาขอรหัสใหม่' };
+  }
+  var ssheet = getStudentSheet_(ss), cur2 = findStudentRow_(ssheet, sid);
+  if (!cur2) return { status: 'error', code: 'not_found', message: 'ไม่พบบัญชี' };
+  cur2.email = String(row.email);
+  writeStudentRow_(ssheet, cur2);
+  row.status = 'used'; row.used_ms = now;
+  writeRow_(sheet, RESET_HEADERS, row);
+  return { status: 'success', hasEmail: true, maskedEmail: maskEmail_(String(row.email)) };
 }
 
 /* ============================================================================

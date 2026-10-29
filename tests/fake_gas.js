@@ -16,6 +16,8 @@ function makeSheet() {
       setFontWeight() { return this; }, setBackground() { return this; }, setFontColor() { return this; }, setHorizontalAlignment() { return this; }
     }),
     clearContents: () => { data = []; },
+    getLastColumn: () => data.reduce((m, r) => Math.max(m, r.length), 0),
+    deleteRow: n => { data.splice(n - 1, 1); },
     setFrozenRows() {}, setColumnWidth() {}
   };
 }
@@ -91,6 +93,7 @@ function loadGas(initialProps) {
   // นาฬิกาจำลอง (ใช้ทดสอบห้องสอบ): ไม่ตั้งค่า = เวลาจริง (เข้ากันได้กับเทสต์เดิม)
   const clock = { t: null };
   const lockState = { busy: false, acquired: 0, released: 0 };
+  const mail = { sent: [], fail: false, owner: 'owner.sample@example.test' };
   class FakeDate extends Date {
     constructor(...a) { if (a.length === 0 && clock.t !== null) super(clock.t); else super(...a); }
     static now() { return clock.t !== null ? clock.t : Date.now(); }
@@ -112,6 +115,9 @@ function loadGas(initialProps) {
       getUuid: () => crypto.randomUUID(),
       formatDate: () => '2026-01-01 00:00:00'
     },
+    // อีเมลจำลอง: เก็บที่ mail.sent (ไม่ส่งจริง) · mail.fail = true จะทำให้ส่งไม่สำเร็จ
+    MailApp: { sendEmail: o => { if (mail.fail) throw new Error('mail quota'); mail.sent.push(o); }, getRemainingDailyQuota: () => 100 },
+    Session: { getEffectiveUser: () => ({ getEmail: () => mail.owner }) },
     DriveApp: D.DriveApp, UrlFetchApp: D.UrlFetchApp, ScriptApp: D.ScriptApp,
     Date: FakeDate, JSON, Math, String, Number, Array, Object
   };
@@ -121,6 +127,6 @@ function loadGas(initialProps) {
   const callRaw = text => JSON.parse(ctx.doPost({ postData: { contents: text } }).text);
   const setNow = ms => { clock.t = ms === null ? null : Number(ms); };
   const advance = ms => { clock.t = (clock.t === null ? Date.now() : clock.t) + Number(ms); };
-  return { ctx, sheets, props, cache, call, callRaw, drive: D, setNow, advance, lock: lockState };
+  return { ctx, sheets, props, cache, call, callRaw, drive: D, setNow, advance, lock: lockState, mail };
 }
 module.exports = { loadGas };

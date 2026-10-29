@@ -2915,6 +2915,7 @@ const App = {
 
   renderStudentPinsTab() {
     this.renderRosterStatus();
+    if (typeof PasswordReset !== 'undefined') PasswordReset.renderQueue('pin-reset-requests');
     const classSel = document.getElementById('user-pin-reset-class');
     if (!classSel) return;
     const classes = [...Store.getAllClasses('M1'), ...Store.getAllClasses('M2')];

@@ -823,6 +823,9 @@
               <button type="button" class="btn-nav-action" style="padding: 2px 8px; font-size: 0.76rem; background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700;" onclick="App.triggerStudentAvatarUpload(App.state.studentId, App.state.studentClass, event)">
                 📷 เปลี่ยนรูปโปรไฟล์
               </button>
+              <button type="button" class="btn-nav-action" style="padding: 2px 8px; font-size: 0.76rem; background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 700;" onclick="PasswordReset.openStudentEmail()" title="ผูกอีเมลไว้กู้ PIN เองเมื่อลืม">
+                ✉️ อีเมลกู้ PIN
+              </button>
             </div>
             <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
               รหัสนักเรียน: <strong id="student-portal-id">-</strong> • ชั้นมัธยมศึกษาปีที่ <strong id="student-portal-class">-</strong> เลขที่ <strong id="student-portal-no">-</strong> • รายวิชา: <strong id="student-portal-subject">-</strong>
@@ -1144,7 +1147,7 @@
               <input type="password" id="auth-student-pin" class="form-input" placeholder="••••••" maxlength="20" inputmode="numeric" style="font-size: 1.25rem; font-weight: 800; letter-spacing: 6px; text-align: center; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleStudentLogin()">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
                 <span style="font-size: 0.78rem; color: #64748b;">กรอกรหัส PIN 6 หลักของคุณ</span>
-                <a href="javascript:void(0)" onclick="alert('กรณีลืมรหัส PIN: กรุณาแจ้งคุณครูผู้สอนเพื่อขอรีเซ็ตรหัส PIN ได้ทันทีครับ')" style="font-size: 0.78rem; color: #0284c7; text-decoration: underline;">ลืมรหัส PIN?</a>
+                <a href="javascript:void(0)" onclick="PasswordReset.openStudent(); return false;" style="font-size: 0.78rem; color: #0284c7; text-decoration: underline;">ลืมรหัส PIN?</a>
               </div>
             </div>
 
@@ -1205,7 +1208,7 @@
             <input type="password" id="auth-teacher-secret" class="form-input" placeholder="กรอกรหัสผ่าน หรือ PIN 6 หลัก" value="" style="font-size: 1rem; padding: 0.65rem 0.85rem;" onkeydown="if(event.key==='Enter') App.handleTeacherLogin()">
             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
               <span>* เข้ารหัสความปลอดภัยและตรวจสอบสิทธิ์อัตโนมัติ</span>
-              <a href="#" class="auth-forgot-link" onclick="TeacherAuth.openForgot(); return false;" style="color: #1d4ed8; font-weight: 600;">ลืมรหัสผ่านครู? / ตั้งรหัสใหม่</a>
+              <a href="#" class="auth-forgot-link" onclick="PasswordReset.openStaff(); return false;" style="color: #1d4ed8; font-weight: 600;">ลืมรหัสผ่านครู? / ตั้งรหัสใหม่</a>
             </div>
           </div>
 
@@ -2026,6 +2029,7 @@
             <button class="btn-nav-action" onclick="App.copyStudentShareLink()">🔗 คัดลอกลิงก์นักเรียน</button>
             <button class="btn-nav-action" onclick="App.uploadQuizBankToServer()">📝 อัปโหลดคลังข้อสอบ (ตรวจคะแนนบนเซิร์ฟเวอร์)</button>
           </div>
+          <div id="pin-reset-requests"></div>
           <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem;">
             <h4 style="font-size: 0.95rem; font-weight: 700; color: #1e3a8a; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
               <span>🔑</span> จัดการและรีเซ็ตรหัส PIN นักเรียน
@@ -3866,6 +3870,7 @@
   <script src="js/exam-client.js?v=20261028_20"></script>
   <script src="js/teacher-tools.js?v=20261021_05"></script>
   <script src="js/teacher-auth.js?v=20261028_20"></script>
+  <script src="js/password-reset.js?v=20261029_01"></script>
   <script src="js/intern.js?v=20261028_20"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/student-upload.js?v=20261021_08"></script>
