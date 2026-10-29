@@ -152,6 +152,13 @@ function reqStr(v, name, max) {
   return s;
 }
 
+// ข้อความไม่บังคับ: ว่าง/ไม่มี = null, ตัดให้ไม่เกิน max ตัวอักษร
+function optText(v, max) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim().slice(0, max);
+  return s || null;
+}
+
 function optInt(v) {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
@@ -530,17 +537,23 @@ async function putSubmission(env, auth, p) {
   const group = optInt(p.group_no);
   const period = optInt(p.period);
   const url = validateVideoUrl(p.video_url);
+  const title = optText(p.title, 200);
+  const note = optText(p.note, 5000);
+  const subType = optText(p.submission_type, 60);
   const now = nowIso();
   await env.DB.prepare(
-    `INSERT INTO submissions (id, student_id, class_name, period, assignment_key, group_no, clip_no, video_url, link_status, submitted_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unchecked', ?, ?)
+    `INSERT INTO submissions (id, student_id, class_name, period, assignment_key, group_no, clip_no, video_url, title, note, submission_type, link_status, submitted_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unchecked', ?, ?)
      ON CONFLICT (student_id, assignment_key, clip_no) DO UPDATE SET
        video_url = excluded.video_url,
+       title = excluded.title,
+       note = excluded.note,
+       submission_type = excluded.submission_type,
        link_status = 'unchecked',
        submitted_at = excluded.submitted_at,
        updated_at = excluded.updated_at`
   )
-    .bind(crypto.randomUUID(), st.student_id, st.class_name, period, assignment, group, clip, url, now, now)
+    .bind(crypto.randomUUID(), st.student_id, st.class_name, period, assignment, group, clip, url, title, note, subType, now, now)
     .run();
   const row = await env.DB.prepare(
     'SELECT * FROM submissions WHERE student_id = ? AND assignment_key = ? AND clip_no = ?'

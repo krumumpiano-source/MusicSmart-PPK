@@ -33,6 +33,7 @@ function makeEnv() {
   const raw = new DatabaseSync(':memory:');
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_legacy_pin.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0004_submission_meta.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -323,4 +324,22 @@ test('unknown route returns 404 JSON', async () => {
   const r = await call(env, 'GET', '/api/nope');
   assert.equal(r.status, 404);
   assert.equal(r.body.error, 'not_found');
+});
+
+test('submissions keep title / note / submission_type and update them on resubmit', async () => {
+  const env = makeEnv();
+  await setupTeacher(env);
+  const s = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const st = s.body.token;
+  let r = await call(env, 'POST', '/api/submissions', {
+    assignment_key: 'r:ม.1/1_p1_abc', clip_no: 1, period: 1,
+    video_url: 'https://example.com/a', title: 'คลิปซ้อม', note: 'ซ้อมท่อนแรก', submission_type: 'คลิปฝึกซ้อม (ลิงก์)'
+  }, st);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.submission.title, 'คลิปซ้อม');
+  assert.equal(r.body.submission.note, 'ซ้อมท่อนแรก');
+  assert.equal(r.body.submission.submission_type, 'คลิปฝึกซ้อม (ลิงก์)');
+  r = await call(env, 'POST', '/api/submissions', { assignment_key: 'r:ม.1/1_p1_abc', clip_no: 1, video_url: 'https://example.com/b' }, st);
+  assert.equal(r.body.submission.title, null, 'ค่าที่ไม่ส่งมาจะถูกล้างเป็น null');
+  assert.equal(r.body.submission.video_url, 'https://example.com/b');
 });

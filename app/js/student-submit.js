@@ -77,6 +77,7 @@ const StudentOutbox = {
     const items = this.getItems();
     if (!items.length) { this.render(); return { empty: true }; }
     if (!this.sessionValid(u)) { this.needsReauth = true; this.render(); return { needsReauth: true }; }
+    if (this.isCloudMode()) return this._flushCloud(items);
 
     this.flushing = true;
     const batch = items.slice(0, this.MAX_BATCH);
@@ -122,9 +123,70 @@ const StudentOutbox = {
     }
   },
 
+  // โหมด Cloudflare: ส่งเฉพาะงานที่เป็นลิงก์ (งานประจำคาบ/คลิปฝึกซ้อม) ไปยัง Worker
+  // ประเภทอื่นยังไม่รองรับในโหมดนี้ และการอัปโหลดไฟล์ไม่ใช้แล้ว (ตัดสินใจให้นักเรียนส่งลิงก์แทน)
+  isCloudMode() {
+    return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode();
+  },
+
+  _cloudPayload(it) {
+    if (it.kind !== 'assignment' && it.kind !== 'recording') return { reason: 'unsupported_cloud' };
+    const d = it.data || {};
+    const url = String(d.url || '').trim();
+    if (!url) return { reason: 'empty' };
+    const payload = {
+      assignment_key: String(it.taskKey || '').slice(0, 120),
+      clip_no: 1,
+      video_url: url,
+      title: String(d.title || '').slice(0, 200),
+      note: String(d.content || '').slice(0, 5000),
+      submission_type: String(d.submissionType || '').slice(0, 60)
+    };
+    if (d.period) payload.period = Number(d.period);
+    return { payload };
+  },
+
+  async _flushCloud(items) {
+    this.flushing = true;
+    const batch = items.slice(0, this.MAX_BATCH);
+    const done = new Set();
+    const rejected = {};
+    let transientMessage = '';
+    try {
+      for (const it of batch) {
+        const p = this._cloudPayload(it);
+        if (p.reason) { rejected[it.clientId] = p.reason; continue; }
+        try {
+          await CloudApi.Submissions.submitVideo(p.payload);
+          done.add(it.clientId);
+        } catch (e) {
+          if (e.status === 401) { this.needsReauth = true; transientMessage = 'กรุณาใส่ PIN อีกครั้งเพื่อส่งงาน'; break; }
+          if (e.status === 0 || e.status === 429 || e.status >= 500) { transientMessage = 'เชื่อมต่อไม่ได้ จะส่งใหม่อัตโนมัติ'; break; }
+          rejected[it.clientId] = e.code || 'invalid_data';
+        }
+      }
+      const remaining = [];
+      this.getItems().forEach(it => {
+        if (done.has(it.clientId)) { this.setStatus(it.taskKey, 'sent'); return; }
+        const reason = rejected[it.clientId];
+        if (reason) { this.setStatus(it.taskKey, 'failed', { permanent: true, message: this.reasonText(reason) }); return; }
+        if (batch.some(b => b.clientId === it.clientId) && transientMessage) this.setStatus(it.taskKey, 'failed', { message: transientMessage });
+        remaining.push(it);
+      });
+      this.saveItems(remaining);
+      return { success: !transientMessage, sent: done.size };
+    } finally {
+      this.flushing = false;
+      this.render();
+      if (typeof App !== 'undefined' && App.renderStudentPortal && typeof document !== 'undefined' && document.getElementById && document.getElementById('view-student')) {
+        try { App.renderStudentPortal(); } catch (e) { /* ignore */ }
+      }
+    }
+  },
+
   reasonText(code) {
     return ({ too_long: 'คำตอบยาวเกิน 5,000 ตัวอักษร', bad_url: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://', empty: 'ไม่มีคำตอบหรือลิงก์',
-      bad_period: 'คาบเรียนไม่ถูกต้อง', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้' })[code] || 'ข้อมูลไม่ถูกต้อง';
+      bad_period: 'คาบเรียนไม่ถูกต้อง', invalid_url: 'ลิงก์ต้องเป็น https:// และห้ามมีชื่อผู้ใช้/รหัสผ่านในลิงก์', unsupported_cloud: 'ประเภทงานนี้ยังไม่รองรับในระบบใหม่', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้' })[code] || 'ข้อมูลไม่ถูกต้อง';
   },
 
   TASKS_KEY: 'ppk_student_tasks',
