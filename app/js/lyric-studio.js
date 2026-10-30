@@ -49,7 +49,30 @@
   function titleOf(song) { return String(song.title || song.key).replace(/\s*\(.*$/, ''); }
 
   /* ---------- การเรียก Apps Script ---------- */
+  /* โหมด Cloudflare (Worker + D1): แปลง action เดิมเป็น endpoint แล้วคืนรูปแบบเดิม { status, ... } */
+  function cloudOn() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined'; }
+  function cloudCall(body) {
+    var q = encodeURIComponent, rt = {
+      studentLyricGet: ['GET', '/api/lyrics/me?song=' + q(body.songKey || '')],
+      studentLyricSave: ['PUT', '/api/lyrics/me', { songKey: body.songKey, cells: body.cells }],
+      studentLyricVote: ['POST', '/api/lyrics/vote', { songKey: body.songKey, targetId: body.targetId }],
+      lyric_teacher_overview: ['GET', '/api/lyrics/overview?class=' + q(body.className || '') + '&song=' + q(body.songKey || '')],
+      lyric_teacher_set: ['POST', '/api/lyrics/settings', { className: body.className, songKey: body.songKey, patch: body.patch }],
+      lyric_teacher_pick: ['POST', '/api/lyrics/pick', { className: body.className, songKey: body.songKey, group: body.group, studentId: body.studentId }]
+    }[body.action];
+    if (!rt) return Promise.resolve({ status: 'error', code: 'unsupported' });
+    return CloudApi.request(rt[0], rt[1], rt[2]).then(function (d) { d = d || {}; d.status = 'success'; return d; }, function (e) {
+      var c = (e && e.code) || 'error';
+      if (e && e.status === 0) c = 'network'; else if (e && e.status === 401) c = 'no_session';
+      return { status: 'error', code: c, message: e && e.message };
+    });
+  }
   function studentPost(body) {
+    if (cloudOn()) {
+      var cu = (typeof StudentOutbox !== 'undefined' && StudentOutbox.currentStudent) ? StudentOutbox.currentStudent() : null;
+      if (!cu || (StudentOutbox.sessionValid && !StudentOutbox.sessionValid(cu))) return Promise.resolve({ status: 'error', code: 'no_session' });
+      return cloudCall(body);
+    }
     var u = (typeof Store !== 'undefined' && Store.getCurrentUser) ? Store.getCurrentUser() : null;
     if (typeof StudentAuth === 'undefined' || !StudentAuth.isServerMode || !StudentAuth.isServerMode()) return Promise.resolve({ status: 'error', code: 'no_server' });
     if (!u || !u.sessionToken || (u.sessionExp && Number(u.sessionExp) <= Date.now())) return Promise.resolve({ status: 'error', code: 'no_session' });
@@ -57,6 +80,7 @@
     return StudentAuth._post(body).catch(function () { return { status: 'error', code: 'network' }; });
   }
   function teacherPost(body) {
+    if (cloudOn()) return cloudCall(body);
     if (typeof GoogleSheetSync === 'undefined') return Promise.resolve({ status: 'error', code: 'no_server' });
     var cfg = GoogleSheetSync.getConfig();
     if (!cfg.webAppUrl || !cfg.syncToken) return Promise.resolve({ status: 'error', code: 'no_server' });
@@ -66,6 +90,7 @@
     var c = r && r.code;
     if (c === 'no_session') return 'ต้องเข้าสู่ระบบด้วยรหัสนักเรียนและ PIN ก่อน จึงจะแต่งเนื้อร้องของกลุ่มได้';
     if (c === 'no_server') return 'ยังไม่ได้เชื่อมต่อระบบของครู จึงใช้ช่องเนื้อร้องของกลุ่มไม่ได้ในตอนนี้';
+    if (c === 'unauthorized' || c === 'forbidden') return 'หมดเวลาเข้าสู่ระบบ — เข้าสู่ระบบใหม่อีกครั้ง';
     if (c === 'network') return 'เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง';
     if (r && r.message && c && c !== 'unauthorized') return r.message;
     return 'ระบบเนื้อร้องของกลุ่มยังไม่พร้อมใช้งาน (ครูต้องเปิดใช้ระบบก่อน) — ลองใหม่ภายหลัง';
@@ -245,7 +270,7 @@
       st.songs.forEach(function (x) { h += '<button type="button" class="ls-tab" data-act="song" data-key="' + esc(x.key) + '" aria-pressed="' + (x.key === st.key) + '">' + esc(titleOf(x)) + '</button>'; });
       h += '</div>';
     }
-    if (!d) { h += '<p class="ls-msg">' + esc(st.err && st.err.code === 'no_server' ? 'ยังไม่ได้เชื่อมต่อ Apps Script (ตั้งค่าในหน้าซิงค์) จึงดูผลเนื้อร้อง/โหวตของนักเรียนไม่ได้' : errText(st.err)) + '</p><div class="ls-row"><button type="button" class="ls-btn s" data-act="refresh">โหลดใหม่</button></div></div>'; st.host.innerHTML = h; return; }
+    if (!d) { h += '<p class="ls-msg">' + esc(st.err && st.err.code === 'no_server' ? 'ยังไม่ได้เชื่อมต่อระบบ จึงดูผลเนื้อร้อง/โหวตของนักเรียนไม่ได้' : errText(st.err)) + '</p><div class="ls-row"><button type="button" class="ls-btn s" data-act="refresh">โหลดใหม่</button></div></div>'; st.host.innerHTML = h; return; }
     var set = d.settings;
     h += '<p class="ls-lead">โครงเนื้อร้อง: ' + (s.unit === 'syllable' ? 'ช่องละ 1 พยางค์ต่อ 1 โน้ต (' + s.cellCount + ' ช่อง · 4 วรรค)' : '1 โน้ต = 1 วรรค (' + s.cellCount + ' วรรค)') + ' · ตีความจาก วก.5 — โปรดยืนยัน</p>';
     h += '<div class="ls-chips">' + chip(set.locked ? 'n' : set.phase === 'voting' ? 'g' : '', phaseLabel(set)) + chip('n', set.mode === 'one_per_note' ? 'โหมด: 1 คน 1 โน้ต (ตาม วก.5 คาบ 10)' : 'โหมด: ทุกคนแต่งแล้วโหวต') + '</div>';

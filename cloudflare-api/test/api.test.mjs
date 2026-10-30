@@ -64,6 +64,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0006_quiz.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0007_exams.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0008_intern.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0009_lyrics.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -779,4 +780,95 @@ test('intern: reset PIN / reject revoke existing tokens; first-time set-pin; loc
   assert.equal((await call(env, 'PUT', '/api/interns/MANUAL01', { name: 'นศ.มือ2', classes: ['ม.1/1', 'ม.1/2'], active: false }, teacher)).body.created, false);
   const list = (await call(env, 'GET', '/api/interns', undefined, teacher)).body.interns.find((i) => i.internId === 'MANUAL01');
   assert.deepEqual([list.name, list.classes, list.active, list.hasPin], ['นศ.มือ2', ['ม.1/1', 'ม.1/2'], false, false]);
+});
+
+test('lyrics: group writing, voting rules, teacher controls, one-per-note, access control', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  for (const [id, no, nick] of [['90006', 6, 'หก'], ['90011', 11, 'สิบเอ็ด'], ['90007', 7, 'เจ็ด']]) {
+    await env.DB.prepare("INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES (?, 'ม.1/1', ?, 'ด.ช.', ?, 'ทดสอบ', ?, '2026-01-01')").bind(id, no, 'ชื่อ' + id, nick).run();
+  }
+  const tok = {};
+  for (const id of ['90001', '90006', '90011', '90007', '90003']) tok[id] = (await call(env, 'POST', '/api/auth/student', { student_id: id, pin: '123456' })).body.token;
+  const cells = (tag, n = 30) => Array.from({ length: n }, (_, i) => `${tag}${i + 1}`);
+  const get = (id, song = 'ode_to_joy') => call(env, 'GET', `/api/lyrics/me?song=${song}`, undefined, tok[id]);
+  const save = (id, c, song = 'ode_to_joy') => call(env, 'PUT', '/api/lyrics/me', { songKey: song, cells: c }, tok[id]);
+  const vote = (id, target, song = 'ode_to_joy') => call(env, 'POST', '/api/lyrics/vote', { songKey: song, targetId: target }, tok[id]);
+  const set = (patch, song = 'ode_to_joy') => call(env, 'POST', '/api/lyrics/settings', { className: 'ม.1/1', songKey: song, patch }, teacher);
+
+  // สิทธิ์: ไม่มีโทเค็น/ครูเรียกของนักเรียน/นักเรียนเรียกของครู
+  assert.equal((await call(env, 'GET', '/api/lyrics/me?song=ode_to_joy')).status, 401);
+  assert.equal((await call(env, 'GET', '/api/lyrics/me?song=ode_to_joy', undefined, teacher)).status, 403);
+  assert.equal((await call(env, 'GET', '/api/lyrics/overview?class=ม.1/1&song=ode_to_joy', undefined, tok['90001'])).status, 403);
+  assert.equal((await set({ phase: 'voting' }, 'nope')).status, 404);
+  assert.equal((await get('90001', 'nope')).status, 404);
+
+  // ช่วงแต่ง: เห็นเฉพาะกลุ่มตัวเอง (90001/90006/90011 = กลุ่ม 1)
+  let r = await get('90001');
+  assert.deepEqual([r.body.group, r.body.memberCount, r.body.canEdit, r.body.settings.phase], [1, 3, true, 'writing']);
+  assert.equal(r.body.candidates, undefined);
+  assert.equal((await save('90001', cells('ก', 31))).body.error, 'too_many_cells');
+  r = await save('90001', cells('ก'));
+  assert.equal(r.body.filled, 30);
+  await save('90006', cells('ข'));
+  await save('90011', cells('ค'));
+  await save('90007', cells('ง'));
+  assert.equal(JSON.stringify((await get('90001')).body).includes('ข1'), false);
+  // เกินความยาวต่อช่องถูกตัด
+  r = await save('90001', ['x'.repeat(50)]);
+  assert.equal(Array.from(r.body.cells[0]).length, 12);
+  await save('90001', cells('ก'));
+
+  // ยังไม่เปิดโหวต → โหวตไม่ได้
+  assert.equal((await vote('90001', '90006')).body.error, 'not_voting');
+  assert.equal((await set({ phase: 'voting' })).status, 200);
+  assert.equal((await save('90001', cells('ก'))).body.error, 'not_writing');
+  r = await get('90001');
+  assert.equal(r.body.candidates.length, 3);
+  assert.equal(r.body.candidates.every((c) => c.votes === undefined), true, 'ไม่เห็นคะแนนระหว่างโหวต');
+  assert.equal(JSON.stringify(r.body).includes('voter'), false);
+  assert.equal((await vote('90001', '90001')).body.error, 'self_not_allowed');
+  assert.equal((await vote('90001', '90007')).body.error, 'bad_target', 'โหวตข้ามกลุ่มไม่ได้');
+  assert.equal((await vote('90001', '90006')).status, 200);
+  assert.equal((await vote('90001', '90011')).body.myVote, '90011', 'เปลี่ยนใจได้');
+  await vote('90006', '90011');
+  await vote('90011', '90006');
+
+  // ครูเห็นผู้โหวต; ปิดโหวต → นักเรียนเห็นคะแนน
+  r = await call(env, 'GET', '/api/lyrics/overview?class=ม.1/1&song=ode_to_joy', undefined, teacher);
+  const g1 = r.body.groups.find((g) => g.group === 1);
+  assert.equal(g1.voters.length, 3);
+  assert.equal(g1.result.total, 3);
+  await set({ phase: 'closed' });
+  r = await get('90001');
+  assert.equal(r.body.tallyVisible, true);
+  assert.deepEqual(r.body.candidates.map((c) => c.votes).sort(), [0, 1, 2]);
+  assert.equal(r.body.result.winnerId, '90011');
+  assert.equal((await vote('90001', '90006')).body.error, 'not_voting');
+  // ครูเลือกเนื้อเอง (ต้องเป็นผู้สมัครในกลุ่มเท่านั้น) แล้วล็อก
+  assert.equal((await call(env, 'POST', '/api/lyrics/pick', { className: 'ม.1/1', songKey: 'ode_to_joy', group: 1, studentId: '90007' }, teacher)).status, 409);
+  assert.equal((await call(env, 'POST', '/api/lyrics/pick', { className: 'ม.1/1', songKey: 'ode_to_joy', group: 1, studentId: '90006' }, teacher)).status, 200);
+  assert.equal((await get('90001')).body.result.winnerId, '90006');
+  assert.equal((await set({ locked: true })).body.settings.locked, true);
+  assert.equal((await set({ phase: 'writing' })).body.settings.phase, 'closed', 'ล็อกแล้วเฟสต้องปิด');
+  assert.equal((await save('90001', cells('ก'))).body.error, 'locked');
+  // pick ยังคงอยู่หลังเปลี่ยนการตั้งค่า
+  assert.equal((await get('90001')).body.result.winnerId, '90006');
+
+  // โหมด 1 คน 1 โน้ต (Joy to the World: 8 วรรค) เลขที่ 1/6/11 = วรรค 1/2/3
+  r = await get('90006', 'joy_to_the_world');
+  assert.deepEqual([r.body.settings.mode, r.body.seat, r.body.canEdit], ['one_per_note', 2, true]);
+  r = await save('90006', cells('ว', 8), 'joy_to_the_world');
+  assert.deepEqual(r.body.cells.map((c) => c !== ''), [false, true, false, false, false, false, false, false], 'เก็บเฉพาะวรรคของตน');
+  await save('90001', cells('อ', 8), 'joy_to_the_world');
+  r = await get('90011', 'joy_to_the_world');
+  assert.deepEqual(r.body.parts.slice(0, 3).map((p) => [p.text, p.mine]), [['อ1', false], ['ว2', false], ['', true]]);
+  assert.equal((await vote('90001', '90006', 'joy_to_the_world')).body.error, 'bad_mode');
+  // ห้องอื่นไม่ปะปน
+  r = await get('90003');
+  assert.equal(r.body.memberCount, 1);
+  assert.equal(r.body.savedCount, 0);
+  r = await call(env, 'GET', '/api/lyrics/overview?class=ม.1/2&song=ode_to_joy', undefined, teacher);
+  assert.equal(r.body.groups.length, 1);
+  assert.equal(r.body.groups[0].members[0].saved, false);
 });

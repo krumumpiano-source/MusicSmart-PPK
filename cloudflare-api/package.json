@@ -5,7 +5,7 @@
   "type": "module",
   "description": "MusicSmart PPK backend บน Cloudflare Workers + D1 (แผนฟรี)",
   "scripts": {
-    "test": "node --test test/api.test.mjs test/client.test.mjs test/student-auth.test.mjs test/cloud-sync.test.mjs test/intern-client.test.mjs",
+    "test": "node --test test/api.test.mjs test/client.test.mjs test/student-auth.test.mjs test/cloud-sync.test.mjs test/intern-client.test.mjs test/lyric-client.test.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:schema": "wrangler d1 execute musicsmart-db --remote --file=migrations/0001_init.sql",
