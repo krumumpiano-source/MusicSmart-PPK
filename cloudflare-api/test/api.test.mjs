@@ -65,6 +65,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0007_exams.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0008_intern.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0009_lyrics.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0010_pin_reset.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -871,4 +872,98 @@ test('lyrics: group writing, voting rules, teacher controls, one-per-note, acces
   r = await call(env, 'GET', '/api/lyrics/overview?class=ม.1/2&song=ode_to_joy', undefined, teacher);
   assert.equal(r.body.groups.length, 1);
   assert.equal(r.body.groups[0].members[0].saved, false);
+});
+test('pin reset via teacher: request -> approve (code shown once) -> student sets new PIN; wrong codes burn; old PIN dies', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const login = (pin) => call(env, 'POST', '/api/auth/student', { student_id: '90001', pin });
+  assert.equal((await login('482913')).status, 200);
+  const req = () => call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '90001' });
+  const confirm = (code, secret, id = '90001') => call(env, 'POST', '/api/pin-reset/confirm', { role: 'student', id, code, secret });
+  assert.equal((await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '99999' })).status, 404);
+  assert.equal((await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: 'abc' })).status, 400);
+  let r = await req();
+  assert.equal(r.body.mode, 'teacher');
+  assert.equal((await req()).body.existing, true, 'ไม่สร้างคำขอซ้ำ');
+  // ครูเท่านั้นที่ดู/ตัดสินได้
+  assert.equal((await call(env, 'GET', '/api/pin-reset/requests')).status, 401);
+  r = await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher);
+  assert.equal(r.body.requests.length, 1);
+  const q = r.body.requests[0];
+  assert.deepEqual([q.subjectId, q.status, q.role, q.className], ['90001', 'pending', 'student', 'ม.1/1']);
+  assert.ok(q.name.includes('ทดสอบหนึ่ง'));
+  assert.equal(JSON.stringify(r.body).includes('code'), false);
+  // ยังไม่อนุมัติ → ยืนยันไม่ได้ และ PIN เดิมยังใช้ได้
+  assert.equal((await confirm('123456', '795146')).body.error, 'invalid_code');
+  assert.equal((await login('482913')).status, 200);
+  const stu = (await login('482913')).body.token;
+  assert.equal((await call(env, 'POST', `/api/pin-reset/requests/${q.id}/decide`, { approve: true }, stu)).status, 403);
+  r = await call(env, 'POST', `/api/pin-reset/requests/${q.id}/decide`, { approve: true }, teacher);
+  assert.equal(r.status, 200);
+  assert.match(r.body.code, /^\d{6}$/);
+  const code = r.body.code;
+  // รหัสไม่ถูกเก็บเป็นข้อความธรรมดา
+  const row = await env.DB.prepare('SELECT code_hash FROM pin_reset_requests WHERE id = ?').bind(q.id).first();
+  assert.equal(row.code_hash.includes(code), false);
+  // PIN ใหม่ต้องผ่านเกณฑ์ (ไม่เสียจำนวนครั้งที่ลอง)
+  assert.equal((await confirm(code, '111111')).body.error, 'weak_pin');
+  assert.equal((await confirm(code, '12ab56')).body.error, 'bad_pin');
+  // ผิด 4 ครั้งยังเหลือ 1 แล้วใส่ถูกได้
+  const wrong = code === '000000' ? '000001' : '000000';
+  for (let i = 0; i < 4; i++) assert.equal((await confirm(wrong, '795146')).body.error, 'invalid_code');
+  assert.equal((await confirm(wrong, '795146')).body.message.includes('ถูกยกเลิก'), true, 'ผิดครบ 5 ครั้งรหัสถูกยกเลิก');
+  assert.equal((await confirm(code, '795146')).body.error, 'invalid_code', 'รหัสที่ถูกยกเลิกใช้ไม่ได้อีก');
+  // ออกรหัสใหม่ (ขอใหม่ → อนุมัติใหม่) แล้วตั้งสำเร็จ
+  assert.equal((await req()).body.existing, false);
+  const q2 = (await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests[0];
+  const code2 = (await call(env, 'POST', `/api/pin-reset/requests/${q2.id}/decide`, { approve: true }, teacher)).body.code;
+  assert.equal((await confirm(code2, '795146', '90002')).body.error, 'invalid_code', 'รหัสของคนอื่นใช้กับบัญชีอื่นไม่ได้');
+  r = await confirm(code2, '795146');
+  assert.equal(r.status, 200);
+  assert.equal((await confirm(code2, '246801')).body.error, 'invalid_code', 'ใช้ซ้ำไม่ได้');
+  assert.equal((await login('482913')).status, 401, 'PIN เก่าใช้ไม่ได้');
+  assert.equal((await login('795146')).status, 200);
+  assert.equal((await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests.length, 0);
+  // ครูปฏิเสธคำขอ
+  await req();
+  const q3 = (await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests[0];
+  assert.equal((await call(env, 'POST', `/api/pin-reset/requests/${q3.id}/decide`, { approve: false }, teacher)).body.rejected, true);
+  assert.equal((await call(env, 'POST', `/api/pin-reset/requests/${q3.id}/decide`, { approve: true }, teacher)).status, 404);
+});
+
+test('pin reset: locked-out student recovers; intern flow revokes tokens; unknown staff gets generic reply; IP throttle', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' });
+  for (let i = 0; i < 5; i++) await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '000002' });
+  assert.equal((await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' })).status, 429);
+  await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '90001' });
+  let q = (await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests[0];
+  let code = (await call(env, 'POST', `/api/pin-reset/requests/${q.id}/decide`, { approve: true }, teacher)).body.code;
+  assert.equal((await call(env, 'POST', '/api/pin-reset/confirm', { role: 'student', id: '90001', code, secret: '795146' })).status, 200);
+  assert.equal((await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '795146' })).status, 200, 'ปลดล็อกหลังรีเซ็ต');
+
+  // นศ.ฝึกสอน
+  await call(env, 'POST', '/api/intern/register', INTERN_REG);
+  const unknown = await call(env, 'POST', '/api/pin-reset/request', { role: 'staff', id: 'NOBODY99' });
+  assert.equal(unknown.status, 200);
+  assert.equal(unknown.body.mode, 'teacher', 'ไม่เปิดเผยว่ามีบัญชีหรือไม่');
+  assert.equal((await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests.length, 0);
+  await call(env, 'POST', '/api/pin-reset/request', { role: 'staff', id: 'TEST12345' });
+  assert.equal((await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests.length, 0, 'ยังไม่อนุมัติบัญชี = ไม่มีคำขอ');
+  await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: ['ม.1/1'] }, teacher);
+  const old = (await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' })).body.token;
+  await call(env, 'POST', '/api/pin-reset/request', { role: 'staff', id: 'TEST12345' });
+  q = (await call(env, 'GET', '/api/pin-reset/requests', undefined, teacher)).body.requests[0];
+  assert.deepEqual([q.role, q.subjectId, q.name], ['intern', 'TEST12345', 'นายตัวอย่าง ทดสอบ']);
+  code = (await call(env, 'POST', `/api/pin-reset/requests/${q.id}/decide`, { approve: true }, teacher)).body.code;
+  assert.equal((await call(env, 'POST', '/api/pin-reset/confirm', { role: 'staff', id: 'TEST12345', code, secret: '795146' })).status, 200);
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, old)).status, 401, 'โทเค็นเก่าใช้ไม่ได้');
+  assert.equal((await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' })).body.error, 'wrong_pin');
+  assert.equal((await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '795146' })).status, 200);
+
+  // จำกัดการขอต่อ IP
+  let last;
+  for (let i = 0; i < 12; i++) last = await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '90002' }, undefined, { 'CF-Connecting-IP': '9.9.9.9' });
+  assert.equal(last.status, 429);
 });

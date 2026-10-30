@@ -19,12 +19,27 @@ const PasswordReset = {
 
   // ---------------- API (public: ไม่ต้องใช้รหัสซิงค์) ----------------
   // kind: 'student' | 'staff' (ครู/แอดมิน/นศ.ฝึกสอน) · via: 'email' | 'teacher'
+  _cloud() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined'; },
+  // โหมด Cloud: ไม่มีอีเมล — ทุกคำขอไปที่ครู; คืนรูปแบบเดิม { success, ... } (เครือข่ายขัดข้อง = ข้อความเดิม)
+  async _cloudCall(method, path, body, anonymous) {
+    try { return Object.assign({ success: true, status: 'success' }, await CloudApi.request(method, path, body, anonymous ? { anonymous: true } : undefined)); }
+    catch (e) {
+      if (e && e.status === 0) return this._net(e);
+      return { success: false, status: 'error', code: (e && e.code) || 'error', message: (e && e.message) || 'ไม่สำเร็จ' };
+    }
+  },
   async requestReset(kind, id, via) {
+    if (this._cloud()) return this._cloudCall('POST', '/api/pin-reset/request', { role: kind === 'student' ? 'student' : 'staff', id: String(id || '').trim() }, true);
     if (!this._hasServer()) return { success: false, code: 'no_server', message: 'ยังไม่ได้เชื่อมต่อเซิร์ฟเวอร์ (Apps Script) จึงรีเซ็ตด้วยตนเองไม่ได้ — กรุณาติดต่อครูประจำวิชา' };
     try { return this._norm(await StudentAuth._post({ action: 'resetRequest', role: kind, id: String(id || '').trim(), via: via === 'teacher' ? 'teacher' : 'email' })); }
     catch (e) { return this._net(e); }
   },
   async confirmReset(kind, id, code, secret) {
+    if (this._cloud()) {
+      const r = await this._cloudCall('POST', '/api/pin-reset/confirm', { role: kind === 'student' ? 'student' : 'staff', id: String(id || '').trim(), code: String(code || '').replace(/\s+/g, ''), secret: String(secret || '') }, true);
+      if (r.success) this.syncLocalSecret(kind, id, secret);
+      return r;
+    }
     if (!this._hasServer()) return { success: false, code: 'no_server', message: 'ยังไม่ได้เชื่อมต่อเซิร์ฟเวอร์' };
     try {
       const r = this._norm(await StudentAuth._post({ action: 'resetConfirm', role: kind, id: String(id || '').trim(), code: String(code || '').replace(/\s+/g, ''), secret: String(secret || '') }));
@@ -35,6 +50,7 @@ const PasswordReset = {
 
   _session() { const u = (typeof Store !== 'undefined' && Store.getCurrentUser) ? Store.getCurrentUser() : null; return u && u.role === 'student' ? u.sessionToken : ''; },
   async emailStatus() {
+    if (this._cloud()) return { success: false, code: 'no_email', message: 'ระบบใหม่ไม่ใช้อีเมลกู้ PIN — หากลืม PIN ให้กด "ลืมรหัส PIN?" แล้วขอให้ครูรีเซ็ตให้' };
     const t = this._session(); if (!t) return { success: false, code: 'no_session', message: 'กรุณาเข้าสู่ระบบก่อน' };
     try { return this._norm(await StudentAuth._post({ action: 'studentEmailStatus', sessionToken: t })); } catch (e) { return this._net(e); }
   },
@@ -54,8 +70,14 @@ const PasswordReset = {
     if (!cfg.webAppUrl || !cfg.syncToken) return Promise.reject(new Error('กรุณาตั้งค่า URL และรหัสซิงค์ในหน้าต่าง "ซิงค์คู่ Google Sheets" ก่อน'));
     return GoogleSheetSync.postJSON(cfg.webAppUrl, body);
   },
-  async listRequests() { const r = await this._teacherPost({ action: 'list_reset_requests' }); return r.requests || []; },
-  async decide(requestId, approve) { return this._teacherPost({ action: 'decide_reset_request', requestId, approve: !!approve }); },
+  async listRequests() {
+    if (this._cloud()) { const r = await CloudApi.request('GET', '/api/pin-reset/requests'); return r.requests || []; }
+    const r = await this._teacherPost({ action: 'list_reset_requests' }); return r.requests || [];
+  },
+  async decide(requestId, approve) {
+    if (this._cloud()) return Object.assign({ status: 'success' }, await CloudApi.request('POST', '/api/pin-reset/requests/' + encodeURIComponent(requestId) + '/decide', { approve: !!approve }));
+    return this._teacherPost({ action: 'decide_reset_request', requestId, approve: !!approve });
+  },
 
   // รหัสใหม่ที่เพิ่งตั้ง ต้องใช้ได้กับบัญชีที่เก็บไว้ในเครื่องนี้ด้วย (ไม่เช่นนั้นรหัสเก่ายังเข้าได้จากข้อมูลในเครื่อง)
   syncLocalSecret(kind, id, secret) {
@@ -102,7 +124,13 @@ const PasswordReset = {
     const idLabel = stu ? 'รหัสประจำตัวนักเรียน' : 'อีเมล หรือ รหัสนักศึกษา (นศ.ฝึกสอน)';
     const idInput = `<input id="pr-id" class="form-input" value="${e(s.id)}" placeholder="${stu ? 'เลขประจำตัว 5 หลัก' : 'อีเมลครู / อีเมลหรือรหัส นศ.'}" ${stu ? 'inputmode="numeric" maxlength="10"' : 'autocomplete="username"'} ${s.step !== 'request' ? 'readonly style="background:#f1f5f9;"' : ''}>`;
     let body = '';
-    if (s.step === 'request') {
+    const cloud = this._cloud();
+    if (s.step === 'request' && cloud) {
+      body = `<div style="color:#475569;">ใส่${stu ? 'รหัสนักเรียน' : 'รหัสนักศึกษา'} ระบบจะส่งคำขอถึงครูประจำวิชา ครูจะตรวจสอบว่าเป็นตัวคุณจริง แล้วแจ้ง <b>รหัสยืนยัน 6 หลัก</b> ให้ จากนั้นคุณตั้ง ${stu ? 'PIN' : 'PIN'} ใหม่ได้ด้วยตัวเอง</div>
+        <label class="form-label">${stu ? idLabel : 'รหัสนักศึกษา (นศ.ฝึกสอน)'}</label>${idInput}
+        <button class="btn-nav-action primary" id="pr-send" style="justify-content:center;">📨 ส่งคำขอถึงครู</button>
+        <a href="#" id="pr-have" style="font-size:0.82rem;color:#0284c7;text-align:center;">มีรหัสยืนยันจากครูแล้ว → ตั้งรหัสใหม่</a>`;
+    } else if (s.step === 'request') {
       body = `<div style="color:#475569;">${stu
         ? 'ใส่รหัสนักเรียน ระบบจะส่งรหัสยืนยันไปที่อีเมลที่คุณผูกไว้ <b>หากยังไม่ได้ผูกอีเมล</b> ระบบจะส่งคำขอถึงครูประจำวิชา แล้วครูจะแจ้งรหัสยืนยันให้คุณ'
         : 'ระบบจะส่งรหัสยืนยัน 6 หลักไปที่อีเมลที่ลงทะเบียนไว้ (ครู/แอดมิน และ นศ.ฝึกสอนที่ลงทะเบียนด้วยอีเมล)'}</div>
@@ -116,7 +144,7 @@ const PasswordReset = {
         <span style="font-size:0.82rem;">เมื่อครูกดยืนยัน ครูจะแจ้ง <b>รหัสยืนยัน 6 หลัก</b> ให้คุณ (ใช้ได้ 24 ชั่วโมง) แล้วกลับมากดปุ่มด้านล่างเพื่อตั้ง${stu ? ' PIN' : 'รหัส'}ใหม่ด้วยตัวเอง</span></div>
         <button class="btn-nav-action primary" id="pr-have2" style="justify-content:center;">✅ ได้รับรหัสยืนยันจากครูแล้ว → ตั้งรหัสใหม่</button>`;
     } else {
-      const pwLabel = stu ? 'PIN ใหม่ 6 หลัก (ตัวเลข ห้ามซ้ำ/เรียง)' : 'รหัสผ่านใหม่ (ครู ≥ 8 ตัวอักษร / นศ. PIN 6 หลัก)';
+      const pwLabel = (stu || cloud) ? 'PIN ใหม่ 6 หลัก (ตัวเลข ห้ามซ้ำ/เรียง)' : 'รหัสผ่านใหม่ (ครู ≥ 8 ตัวอักษร / นศ. PIN 6 หลัก)';
       body = `${s.info ? `<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:0.6rem 0.8rem;color:#065f46;">${e(s.info)}</div>` : ''}
         <label class="form-label">${idLabel}</label>${idInput}
         <label class="form-label">รหัสยืนยัน 6 หลัก</label>
@@ -125,8 +153,8 @@ const PasswordReset = {
         <input id="pr-pw" type="password" class="form-input" ${stu ? 'inputmode="numeric" maxlength="6"' : ''} autocomplete="new-password">
         <input id="pr-pw2" type="password" class="form-input" placeholder="ยืนยันรหัสใหม่อีกครั้ง" ${stu ? 'inputmode="numeric" maxlength="6"' : ''} autocomplete="new-password">
         <button class="btn-nav-action primary" id="pr-save" style="justify-content:center;">💾 ตั้งรหัสใหม่</button>
-        <a href="#" id="pr-resend" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่ได้รับรหัส? ขออีเมลอีกครั้ง</a>
-        ${stu ? '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่มี/ใช้อีเมลไม่ได้ → ขอให้ครูรีเซ็ตให้</a>' : '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">นศ.ฝึกสอน: ขอให้ครูรีเซ็ตให้</a>'}`;
+        ${cloud ? '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">ยังไม่มีรหัส/รหัสหมดอายุ → ส่งคำขอถึงครูอีกครั้ง</a>' : `<a href="#" id="pr-resend" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่ได้รับรหัส? ขออีเมลอีกครั้ง</a>
+        ${stu ? '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">ไม่มี/ใช้อีเมลไม่ได้ → ขอให้ครูรีเซ็ตให้</a>' : '<a href="#" id="pr-askteacher2" style="font-size:0.82rem;color:#0284c7;text-align:center;">นศ.ฝึกสอน: ขอให้ครูรีเซ็ตให้</a>'}`}`;
     }
     m.innerHTML = `<div class="modal-card" style="max-width:440px;width:94vw;"><div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;">
       <h3 class="modal-title" style="margin:0;">🔑 ลืม${stu ? ' PIN' : 'รหัสผ่าน / PIN'}</h3><button class="btn-nav-action" id="pr-close">✕</button></div>
@@ -190,6 +218,12 @@ const PasswordReset = {
   // ---------------- UI: นักเรียนผูกอีเมล (หลังเข้าสู่ระบบ) ----------------
   async openStudentEmail() {
     const m = this._modal();
+    if (this._cloud()) {
+      m.innerHTML = '<div class="modal-card" style="max-width:420px;width:94vw;"><div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;"><h3 class="modal-title" style="margin:0;">🔑 กู้ PIN เมื่อลืม</h3><button class="btn-nav-action" id="pe-close">✕</button></div>' +
+        '<div class="modal-body" style="display:grid;gap:0.55rem;font-size:0.88rem;color:#475569;">ระบบนี้ไม่ต้องผูกอีเมล หากลืม PIN ให้กด <b>"ลืมรหัส PIN?"</b> ที่หน้าเข้าสู่ระบบ ระบบจะส่งคำขอถึงครู ครูจะแจ้งรหัสยืนยัน 6 หลักให้ แล้วคุณตั้ง PIN ใหม่ได้ด้วยตัวเอง</div></div>';
+      m.querySelector('#pe-close').onclick = () => m.classList.remove('active');
+      return;
+    }
     m.innerHTML = '<div class="modal-card" style="max-width:420px;"><div class="modal-body">⏳ กำลังตรวจสอบ...</div></div>';
     const st = await this.emailStatus();
     this._renderEmail(m, st.success ? st : { hasEmail: false, error: st.message });
@@ -266,7 +300,7 @@ const PasswordReset = {
       const u = (typeof Store !== 'undefined' && Store.getCurrentUser) ? Store.getCurrentUser() : null;
       if (!u || u.role !== 'teacher') return 0;
       const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
-      if (!cfg.webAppUrl || !cfg.syncToken) return 0;
+      if (!this._cloud() && (!cfg.webAppUrl || !cfg.syncToken)) return 0;
       const list = await this.listRequests();
       const pending = list.filter(x => x.status === 'pending').length;
       if (pending && !silent && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
