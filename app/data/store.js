@@ -2106,6 +2106,8 @@ const Store = {
   },
 
   logout() {
+    // ออกจากระบบต้องล้างโทเค็นของเซิร์ฟเวอร์ด้วย (เครื่องโรงเรียนใช้ร่วมกัน)
+    try { if (typeof CloudApi !== 'undefined' && CloudApi.Auth) CloudApi.Auth.logout(); } catch (e) { /* ignore */ }
     this.remove(STORAGE_KEYS.ACTIVE_ROLE);
     return this.remove(STORAGE_KEYS.AUTH_CURRENT_USER);
   },

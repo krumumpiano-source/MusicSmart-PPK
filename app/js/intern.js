@@ -17,8 +17,37 @@ const InternMode = {
   _save(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
   data() { return this._load(this.DATA, { since: 0, approvals: [], logs: [], evaluations: [] }); },
 
+  _cloud() { return typeof StudentAuth !== 'undefined' && !!StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined'; },
+
+  // เรียกเซิร์ฟเวอร์: โหมด Cloud แปลง action เดิมเป็น endpoint ของ Worker แล้วคืนรูปแบบเดิม { status, code, message, ... }
+  // เครือข่ายขัดข้อง (status 0) โยนต่อให้ผู้เรียกเก็บคิวไว้ส่งใหม่
+  async _call(action, body) {
+    if (!this._cloud()) return StudentAuth._post(Object.assign({ action }, body));
+    const b = body || {};
+    const anon = { anonymous: true };
+    try {
+      if (action === 'internLogin' || action === 'internSetPin') {
+        const d = await CloudApi.request('POST', action === 'internLogin' ? '/api/intern/login' : '/api/intern/set-pin', { internId: b.internId, pin: b.pin }, anon);
+        const sess = CloudApi._saveSession({ token: d.token, role: 'intern', name: d.name, expires_in: d.expires_in });
+        return { status: 'success', sessionToken: sess.token, sessionExp: sess.expiresAt, profile: d.profile };
+      }
+      if (action === 'internRegister') return Object.assign({ status: 'success' }, await CloudApi.request('POST', '/api/intern/register', b, anon));
+      if (action === 'internFetch') {
+        const q = typeof b.since === 'string' && b.since ? '?since=' + encodeURIComponent(b.since) : '';
+        return Object.assign({ status: 'success' }, await CloudApi.request('GET', '/api/intern/fetch' + q));
+      }
+      if (action === 'internProposeGrade') return Object.assign({ status: 'success' }, await CloudApi.request('POST', '/api/intern/grades', { items: b.items }));
+      if (action === 'internPostLog') return Object.assign({ status: 'success' }, await CloudApi.request('POST', '/api/intern/logs', b));
+    } catch (e) {
+      if (e && e.status === 0) throw e;
+      const authed = action !== 'internLogin' && action !== 'internSetPin' && action !== 'internRegister';
+      return { status: 'error', code: authed && e && e.status === 401 ? 'session_expired' : ((e && e.code) || 'error'), message: (e && e.message) || 'ไม่สำเร็จ' };
+    }
+    return { status: 'error', code: 'unsupported', message: 'คำสั่งนี้ไม่รองรับ' };
+  },
+
   async _auth(action, internId, pin) {
-    const r = await StudentAuth._post({ action, internId: String(internId || '').trim(), pin: String(pin || '').trim() });
+    const r = await this._call(action, { internId: String(internId || '').trim(), pin: String(pin || '').trim() });
     if (r.status !== 'success') return { success: false, code: r.code, message: r.message };
     const p = r.profile || {};
     const own = {};   // ข้อมูลของตัวเอง (แสดงในพอร์ตโฟลิโอ)
@@ -39,12 +68,15 @@ const InternMode = {
     const u = this.user();
     if (!u) return { success: false };
     const d = this.data();
-    const r = await StudentAuth._post({ action: 'internFetch', sessionToken: u.sessionToken, since: d.since || 0 });
+    const r = await this._call('internFetch', { sessionToken: u.sessionToken, since: d.since || 0 });
     if (r.status !== 'success') return { success: false, code: r.code, message: r.message };
     const roster = {};
     (r.roster || []).forEach(s => { (roster[s.class] = roster[s.class] || []).push(s); });
     if (Object.keys(roster).length) Store.importRoster(roster);
-    if (typeof TeacherPull !== 'undefined') TeacherPull.merge(r.submissions || []);
+    if (typeof TeacherPull !== 'undefined') {
+      // โหมด Cloud: งานส่ง/ผลแบบทดสอบมาจากตาราง D1 ต้องแปลงเป็นแถวรูปแบบเดิมก่อน
+      TeacherPull.merge(this._cloud() ? TeacherPull._cloudToRows(r.submissions, r.quizzes).mapped : (r.submissions || []));
+    }
     if (typeof DueDates !== 'undefined') {
       const all = {}; (r.dueDates || []).forEach(x => { all[`${x.className}_p${x.period}`] = x; });
       localStorage.setItem(DueDates.KEY, JSON.stringify(all));
@@ -97,8 +129,8 @@ const InternMode = {
       for (const it of box) {
         try {
           const r = it.kind === 'grades'
-            ? await StudentAuth._post({ action: 'internProposeGrade', sessionToken: u.sessionToken, items: it.items })
-            : await StudentAuth._post({ action: 'internPostLog', sessionToken: u.sessionToken, className: it.className, period: it.period, result: it.result, problems: it.problems, solutions: it.solutions, clientId: it.clientId });
+            ? await this._call('internProposeGrade', { sessionToken: u.sessionToken, items: it.items })
+            : await this._call('internPostLog', { sessionToken: u.sessionToken, className: it.className, period: it.period, result: it.result, problems: it.problems, solutions: it.solutions, clientId: it.clientId });
           if (r.status !== 'success' && (r.code === 'session_expired' || r.code === 'bad_session')) keep.push(it);
         } catch (e) { keep.push(it); }
       }
@@ -115,8 +147,27 @@ const InternMode = {
 
 const MentorPanel = {
   EVAL_ITEMS: ['การเตรียมการสอนและแผนการจัดการเรียนรู้', 'การจัดกิจกรรมการเรียนรู้', 'การใช้สื่อและเทคโนโลยี', 'การวัดและประเมินผล', 'บุคลิกภาพและการบริหารชั้นเรียน'],
+  // โหมด Cloud: แปลง action เดิมของแผงครูพี่เลี้ยงเป็น endpoint ของ Worker (คืน { status:'success', ... } เหมือนเดิม)
+  async _cloudPost(b) {
+    const enc = encodeURIComponent;
+    const id = enc(b.internId || '');
+    const routes = {
+      list_interns: ['GET', '/api/interns'],
+      fetch_approvals: ['GET', '/api/interns/approvals' + (b.status ? '?status=' + enc(b.status) : '')],
+      fetch_intern_logs: ['GET', '/api/interns/logs' + (b.internId ? '?intern_id=' + id : '')],
+      upsert_intern: ['PUT', '/api/interns/' + id, { name: b.name, classes: b.classes, active: b.active }],
+      decide_intern: ['POST', '/api/interns/' + id + '/decide', { approve: b.approve, classes: b.classes, reason: b.reason }],
+      reset_intern_pin: ['POST', '/api/interns/' + id + '/reset-pin'],
+      decide_approval: ['POST', '/api/interns/approvals/' + enc(b.id || '') + '/decide', { approve: b.approve }],
+      post_supervision: ['POST', '/api/interns/' + id + '/supervision', { className: b.className, period: b.period, ratings: b.ratings, comments: b.comments, mentor: b.mentor }]
+    };
+    const rt = routes[b.action];
+    if (!rt) throw new Error('คำสั่งนี้ไม่รองรับในระบบใหม่');
+    return Object.assign({ status: 'success' }, await CloudApi.request(rt[0], rt[1], rt[2]));
+  },
   _post(body) {
-    if (typeof TeacherPull === 'undefined' || !TeacherPull.isConfigured()) return Promise.reject(new Error('กรุณาตั้งค่า URL และรหัสซิงค์ก่อน'));
+    if (typeof TeacherPull === 'undefined' || !TeacherPull.isConfigured()) return Promise.reject(new Error(InternMode._cloud() ? 'กรุณาเข้าสู่ระบบครูก่อน' : 'กรุณาตั้งค่า URL และรหัสซิงค์ก่อน'));
+    if (InternMode._cloud()) return this._cloudPost(body);
     const cfg = GoogleSheetSync.getConfig();
     return GoogleSheetSync.postJSON(cfg.webAppUrl, body);
   },
@@ -320,7 +371,7 @@ const InternRegistration = {
     }
 
     try {
-      const r = await StudentAuth._post(body);
+      const r = await InternMode._call('internRegister', body);
       return r.status === 'success' ? { success: true, status: 'pending', message: r.message } : { success: false, code: r.code, message: r.message };
     } catch (e) {
       return { success: true, status: 'pending', message: 'ลงทะเบียนแล้ว รอครูประจำวิชาอนุมัติ' };

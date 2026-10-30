@@ -63,6 +63,7 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0005_teacher_sync.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0006_quiz.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0007_exams.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0008_intern.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -634,4 +635,148 @@ test('exams: late submission is rejected; quiz retake grant via exam grants maps
   const g = await call(env, 'POST', '/api/exams/grants', { sessionId: 'quiz_u3', studentId: '90001' }, teacher);
   assert.equal(g.status, 200);
   assert.equal(env._raw.prepare("SELECT extra FROM quiz_grants WHERE student_id = '90001' AND unit_no = 3").get().extra, 1);
+});
+
+const INTERN_REG = {
+  fullName: 'นายตัวอย่าง ทดสอบ', internId: 'TEST12345', university: 'มหาวิทยาลัยทดสอบ', faculty: 'ครุศาสตร์', major: 'ดนตรีศึกษา',
+  phone: '0812345678', email: 'Test@Example.com', term: '1', academicYear: 2569, mentorName: 'ครูพี่เลี้ยง', preferredClasses: ['ม.1/1'], pin: '482913'
+};
+
+test('intern: register -> pending blocks login (only after correct PIN) -> approve -> login', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  let r = await call(env, 'POST', '/api/intern/register', { ...INTERN_REG, pin: '111111' });
+  assert.equal(r.status, 400);
+  r = await call(env, 'POST', '/api/intern/register', { ...INTERN_REG, phone: '123' });
+  assert.equal(r.status, 400);
+  r = await call(env, 'POST', '/api/intern/register', INTERN_REG);
+  assert.equal(r.status, 200);
+  assert.equal((await call(env, 'POST', '/api/intern/register', INTERN_REG)).body.error, 'duplicate');
+  assert.equal(env._raw.prepare("SELECT email FROM interns WHERE intern_id = 'TEST12345'").get().email, 'test@example.com');
+  // PIN ผิด: ไม่บอกสถานะ
+  r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '000001' });
+  assert.equal(r.body.error, 'wrong_pin');
+  r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' });
+  assert.equal(r.status, 403);
+  assert.equal(r.body.error, 'pending');
+  assert.equal((await call(env, 'POST', '/api/intern/login', { internId: 'NOPE999', pin: '482913' })).body.error, 'not_found');
+  // ครู: ต้องเลือกห้อง
+  r = await call(env, 'GET', '/api/interns', undefined, teacher);
+  assert.equal(r.body.interns[0].status, 'pending');
+  assert.equal(r.body.interns[0].hasPin, true);
+  assert.equal(r.body.interns[0].university, 'มหาวิทยาลัยทดสอบ');
+  assert.equal((await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: [] }, teacher)).body.error, 'no_classes');
+  r = await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: ['ม.1/1'] }, teacher);
+  assert.equal(r.body.state, 'approved');
+  r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.profile.classes, ['ม.1/1']);
+  assert.equal(r.body.role, 'intern');
+  // นักเรียน/นศ. เรียกส่วนของครูไม่ได้
+  assert.equal((await call(env, 'GET', '/api/interns', undefined, r.body.token)).status, 403);
+  assert.equal((await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: ['ม.1/1'] }, r.body.token)).status, 403);
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, s1.body.token)).status, 403);
+  assert.equal((await call(env, 'GET', '/api/intern/fetch')).status, 401);
+});
+
+test('intern: fetch scoped to assigned classes, grades queue idempotent + teacher decision, logs, supervision', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  await call(env, 'POST', '/api/intern/register', INTERN_REG);
+  await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: ['ม.1/1'] }, teacher);
+  const t = (await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' })).body.token;
+  const s1 = await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '123456' });
+  const s3 = await call(env, 'POST', '/api/auth/student', { student_id: '90003', pin: '123456' });
+  await call(env, 'POST', '/api/submissions', { assignment_key: 'a:ม.1/1_p3', clip_no: 1, video_url: 'https://example.com/a', period: 3 }, s1.body.token);
+  await call(env, 'POST', '/api/submissions', { assignment_key: 'a:ม.1/2_p3', clip_no: 1, video_url: 'https://example.com/b', period: 3 }, s3.body.token);
+  await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/1', period: 3, due_at: '2026-12-01T00:00:00Z' }, teacher);
+  await call(env, 'POST', '/api/due-dates', { class_name: 'ม.1/2', period: 3, due_at: '2026-12-02T00:00:00Z' }, teacher);
+  let r = await call(env, 'GET', '/api/intern/fetch', undefined, t);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.roster.map((s) => s.student_id), ['90001', '90002']);
+  assert.equal(r.body.roster[0].class, 'ม.1/1');
+  assert.equal(r.body.submissions.length, 1);
+  assert.equal(r.body.submissions[0].student_id, '90001');
+  assert.deepEqual(r.body.dueDates.map((d) => d.className), ['ม.1/1']);
+  const text = JSON.stringify(r.body);
+  assert.equal(text.includes('pin_hash'), false);
+  // ดึงเฉพาะที่เปลี่ยนใหม่
+  r = await call(env, 'GET', '/api/intern/fetch?since=' + encodeURIComponent(r.body.nextSince), undefined, t);
+  assert.equal(r.body.submissions.length, 0);
+
+  // เสนอคะแนน: ห้องที่ไม่ได้รับมอบหมาย/ข้อมูลผิดถูกปฏิเสธ, ส่งซ้ำไม่เกิดรายการซ้ำ
+  const items = [
+    { clientId: 'g_abc_90001', className: 'ม.1/1', period: 3, studentId: '90001', score: 8, comment: 'ดี' },
+    { clientId: 'g_abc_90003', className: 'ม.1/2', period: 3, studentId: '90003', score: 9 },
+    { clientId: 'g_bad_90002', className: 'ม.1/1', period: 3, studentId: '90002', score: 101 }
+  ];
+  r = await call(env, 'POST', '/api/intern/grades', { items }, t);
+  assert.deepEqual(r.body.accepted, ['g_abc_90001']);
+  assert.deepEqual(r.body.rejected.map((x) => x.reason).sort(), ['class_not_assigned', 'invalid']);
+  await call(env, 'POST', '/api/intern/grades', { items: [items[0]] }, t);
+  r = await call(env, 'GET', '/api/interns/approvals?status=pending', undefined, teacher);
+  assert.equal(r.body.approvals.length, 1);
+  assert.deepEqual([r.body.approvals[0].studentId, r.body.approvals[0].score, r.body.approvals[0].internName], ['90001', 8, 'นายตัวอย่าง ทดสอบ']);
+  const apId = r.body.approvals[0].id;
+  r = await call(env, 'POST', '/api/interns/approvals/' + apId + '/decide', { approve: true }, teacher);
+  assert.equal(r.body.approval.status, 'approved');
+  assert.equal(r.body.approval.score, 8);
+  assert.equal((await call(env, 'POST', '/api/interns/approvals/' + apId + '/decide', { approve: false }, teacher)).status, 409);
+  assert.equal((await call(env, 'GET', '/api/interns/approvals?status=pending', undefined, teacher)).body.approvals.length, 0);
+
+  // บันทึกหลังสอน
+  const log = { clientId: 'l_abc12345', className: 'ม.1/1', period: 3, result: 'ผลดี', problems: 'เสียงดัง', solutions: 'ใช้สัญญาณ' };
+  assert.equal((await call(env, 'POST', '/api/intern/logs', log, t)).body.duplicate, false);
+  assert.equal((await call(env, 'POST', '/api/intern/logs', log, t)).body.duplicate, true);
+  assert.equal((await call(env, 'POST', '/api/intern/logs', { ...log, clientId: 'l_other123', className: 'ม.1/2' }, t)).status, 403);
+  r = await call(env, 'GET', '/api/interns/logs?intern_id=TEST12345', undefined, teacher);
+  assert.equal(r.body.logs.length, 1);
+  assert.equal(r.body.logs[0].problems, 'เสียงดัง');
+
+  // ผลนิเทศ
+  r = await call(env, 'POST', '/api/interns/TEST12345/supervision', { className: 'ม.1/1', period: 3, ratings: { a: 5, b: 4, c: 9 }, comments: 'เยี่ยม', mentor: 'ครู' }, teacher);
+  assert.equal(r.body.total, 14);
+  r = await call(env, 'GET', '/api/intern/fetch', undefined, t);
+  assert.equal(r.body.approvals[0].status, 'approved');
+  assert.equal(r.body.logs.length, 1);
+  assert.deepEqual([r.body.evaluations[0].total, r.body.evaluations[0].ratings.c], [14, 5]);
+  assert.equal((await call(env, 'POST', '/api/interns/NOBODY1/supervision', { ratings: {} }, teacher)).status, 404);
+});
+
+test('intern: reset PIN / reject revoke existing tokens; first-time set-pin; lockout', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  await call(env, 'POST', '/api/intern/register', INTERN_REG);
+  await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: true, classes: ['ม.1/1'] }, teacher);
+  const t = (await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' })).body.token;
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, t)).status, 200);
+  assert.equal((await call(env, 'POST', '/api/interns/TEST12345/reset-pin', undefined, teacher)).status, 200);
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, t)).status, 401);
+  let r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' });
+  assert.equal(r.body.error, 'needs_pin');
+  r = await call(env, 'POST', '/api/intern/set-pin', { internId: 'TEST12345', pin: '795146' });
+  assert.equal(r.status, 200);
+  assert.equal((await call(env, 'POST', '/api/intern/set-pin', { internId: 'TEST12345', pin: '111222' })).body.error, 'pin_exists');
+  assert.equal((await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' })).body.error, 'wrong_pin');
+  const t2 = (await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '795146' })).body.token;
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, t2)).status, 200);
+  // ไม่อนุมัติ/ปิดบัญชี = โทเค็นเดิมใช้ไม่ได้
+  await call(env, 'POST', '/api/interns/TEST12345/decide', { approve: false, reason: 'ข้อมูลไม่ครบ' }, teacher);
+  assert.equal((await call(env, 'GET', '/api/intern/fetch', undefined, t2)).status, 401);
+  r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '795146' });
+  assert.equal(r.body.error, 'rejected');
+  assert.ok(r.body.message.includes('ข้อมูลไม่ครบ'));
+  // ลงทะเบียนใหม่ได้หลังถูกปฏิเสธ
+  assert.equal((await call(env, 'POST', '/api/intern/register', INTERN_REG)).status, 200);
+  // ล็อก 15 นาทีหลังผิด 5 ครั้ง
+  for (let i = 0; i < 5; i++) await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '000002' });
+  r = await call(env, 'POST', '/api/intern/login', { internId: 'TEST12345', pin: '482913' });
+  assert.equal(r.status, 429);
+  assert.equal(r.body.error, 'locked');
+  // ครูอัปเสิร์ตบัญชีเอง (ยังไม่มี PIN) และปิดบัญชี
+  assert.equal((await call(env, 'PUT', '/api/interns/MANUAL01', { name: 'นศ.มือ', classes: ['ม.1/2'] }, teacher)).body.created, true);
+  assert.equal((await call(env, 'PUT', '/api/interns/MANUAL01', { name: 'นศ.มือ2', classes: ['ม.1/1', 'ม.1/2'], active: false }, teacher)).body.created, false);
+  const list = (await call(env, 'GET', '/api/interns', undefined, teacher)).body.interns.find((i) => i.internId === 'MANUAL01');
+  assert.deepEqual([list.name, list.classes, list.active, list.hasPin], ['นศ.มือ2', ['ม.1/1', 'ม.1/2'], false, false]);
 });

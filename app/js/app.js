@@ -776,11 +776,7 @@ const App = {
     let internRes = null;
     try {
       if (typeof StudentAuth !== 'undefined' && StudentAuth.isServerMode()) {
-        internRes = await StudentAuth._post({
-          action: 'internLogin',
-          internId: identifier,
-          pin: secret
-        });
+        internRes = await InternMode._call('internLogin', { internId: identifier, pin: secret });
       }
     } catch (e) {
       console.warn('StudentAuth internLogin error:', e);
@@ -833,7 +829,7 @@ const App = {
       if (internRes.code === 'needs_pin') {
         const again = prompt('เข้าใช้ครั้งแรก: กรอก PIN 6 หลักเดิมอีกครั้งเพื่อตั้งเป็น PIN ของคุณ');
         if (again && again.trim() === secret) {
-          const setRes = await StudentAuth._post({ action: 'internSetPin', internId: identifier, pin: secret });
+          const setRes = await InternMode._call('internSetPin', { internId: identifier, pin: secret });
           if (setRes.status === 'success') {
             return this.handleTeacherLogin();
           }

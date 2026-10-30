@@ -417,6 +417,31 @@ const TeacherPull = {
     return null;
   },
 
+  // งานส่ง + ผลแบบทดสอบจาก D1 -> แถวรูปแบบเดียวกับชีต สำหรับ merge()
+  _cloudToRows(subs, quizzes) {
+    const mapped = [];
+    const infos = [];
+    (subs || []).forEach(r => {
+      const info = this._cloudInfo(r);
+      if (!info || !info.no) return;
+      infos.push({ r, info });
+      if (info.kind === 'assignment') {
+        mapped.push({ kind: 'assignment', student_id: r.student_id, class: info.cls, period_or_unit: info.no,
+          content: r.note || '', url: r.video_url || '', submission_type: r.submission_type || '', title: r.title || '',
+          received_at: r.submitted_at || r.updated_at, upload_id: null, due_at: null });
+      } else {
+        mapped.push({ kind: 'recording', student_id: r.student_id, class: info.cls, period_or_unit: info.no, client_id: 'cloud:' + r.id,
+          content: r.note || '', url: r.video_url || '', submission_type: 'คลิปฝึกซ้อม (ลิงก์)', title: r.title || 'คลิปฝึกซ้อม',
+          received_at: r.submitted_at || r.updated_at, upload_id: null });
+      }
+    });
+    (quizzes || []).forEach(a => {
+      mapped.push({ kind: 'quiz', student_id: a.student_id, class: a.class_name || '', period_or_unit: a.unit_no,
+        score: a.score, total: a.total, percentage: a.percentage, time_spent_sec: a.time_spent || 0, received_at: a.created_at });
+    });
+    return { mapped, infos };
+  },
+
   async _pullCloud(opts = {}) {
     if (this.pulling) return { skipped: true };
     if (!this.isConfigured()) {
@@ -426,28 +451,9 @@ const TeacherPull = {
     this.pulling = true;
     try {
       const rows = await CloudApi.Submissions.listForClass('');
-      const mapped = [];
-      const infos = [];
-      rows.forEach(r => {
-        const info = this._cloudInfo(r);
-        if (!info || !info.no) return;
-        infos.push({ r, info });
-        if (info.kind === 'assignment') {
-          mapped.push({ kind: 'assignment', student_id: r.student_id, class: info.cls, period_or_unit: info.no,
-            content: r.note || '', url: r.video_url || '', submission_type: r.submission_type || '', title: r.title || '',
-            received_at: r.submitted_at || r.updated_at, upload_id: null, due_at: null });
-        } else {
-          mapped.push({ kind: 'recording', student_id: r.student_id, class: info.cls, period_or_unit: info.no, client_id: 'cloud:' + r.id,
-            content: r.note || '', url: r.video_url || '', submission_type: 'คลิปฝึกซ้อม (ลิงก์)', title: r.title || 'คลิปฝึกซ้อม',
-            received_at: r.submitted_at || r.updated_at, upload_id: null });
-        }
-      });
       // คะแนนแบบทดสอบที่ตรวจบนเซิร์ฟเวอร์ (ไม่รวมแบบฝึก)
       const qr = await CloudApi.request('GET', '/api/quiz/attempts');
-      (qr.attempts || []).forEach(a => {
-        mapped.push({ kind: 'quiz', student_id: a.student_id, class: a.class_name || '', period_or_unit: a.unit_no,
-          score: a.score, total: a.total, percentage: a.percentage, time_spent_sec: a.time_spent || 0, received_at: a.created_at });
-      });
+      const { mapped, infos } = this._cloudToRows(rows, qr.attempts);
       const m = this.merge(mapped);
       // เก็บ cloudId ไว้ใช้ตอนให้คะแนน และรับคะแนน/คำแนะนำที่ครูบันทึกบนเซิร์ฟเวอร์ ถ้าเครื่องนี้ยังไม่มี
       const all = Store.getAllSubmissions();
