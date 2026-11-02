@@ -265,10 +265,27 @@ const PasswordReset = {
     let list;
     const expiredBox = () => {
       box.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:1rem;margin-bottom:1rem;">
-        <b style="color:#b91c1c;">🔒 เซสชันครูหมดอายุ จึงโหลดคำขอรีเซ็ตรหัสไม่ได้</b>
-        <p style="font-size:0.82rem;color:#7f1d1d;margin:0.4rem 0 0.6rem 0;">ระบบเก็บการเข้าสู่ระบบครูไว้ 8 ชั่วโมง กรุณาเข้าสู่ระบบครูใหม่ แล้วคำขอของนักเรียนจะแสดงที่นี่</p>
-        <button class="btn-nav-action primary" id="pr-relogin">🔑 เข้าสู่ระบบครูใหม่</button></div>`;
-      box.querySelector('#pr-relogin').onclick = () => { try { Store.logout(); } catch (x) { /* ignore */ } location.reload(); };
+        <b style="color:#b91c1c;">🔒 ยังไม่ได้เชื่อมต่อบัญชีครูกับเซิร์ฟเวอร์ (หรือหมดอายุ) จึงโหลดคำขอรีเซ็ตรหัสไม่ได้</b>
+        <p style="font-size:0.82rem;color:#7f1d1d;margin:0.4rem 0 0.6rem 0;">กรอกอีเมลและรหัสผ่านครูของเซิร์ฟเวอร์ (Cloudflare) เพื่อดูและอนุมัติคำขอของนักเรียน ไม่ต้องออกจากระบบ</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <input id="pr-email" type="email" class="form-input" placeholder="อีเมลครู" autocomplete="username" style="flex:1;min-width:180px;" value="${e((typeof Store !== 'undefined' && Store.getCurrentUser && (Store.getCurrentUser() || {}).email) || '')}">
+          <input id="pr-pass" type="password" class="form-input" placeholder="รหัสผ่านครู" autocomplete="current-password" style="flex:1;min-width:150px;">
+          <button class="btn-nav-action primary" id="pr-relogin">🔑 เชื่อมต่อ</button></div>
+        <div id="pr-login-msg" role="alert" style="display:none;margin-top:0.5rem;color:#b91c1c;font-weight:600;font-size:0.84rem;"></div></div>`;
+      const go = async () => {
+        const msg = box.querySelector('#pr-login-msg'); msg.style.display = 'none';
+        const btn = box.querySelector('#pr-relogin'); btn.disabled = true;
+        try {
+          await CloudApi.Auth.teacherLogin(box.querySelector('#pr-email').value.trim().toLowerCase(), box.querySelector('#pr-pass').value);
+          if (typeof CloudSync !== 'undefined' && CloudSync.init) { try { CloudSync.init(); } catch (x) { /* ignore */ } }
+          this.renderQueue(containerId);
+        } catch (err) {
+          msg.textContent = (err && err.status === 401) ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง (ใช้รหัสผ่านที่ตั้งไว้บน Cloudflare ตอนตั้งค่าบัญชีครู)' : ((err && err.message) || 'เชื่อมต่อไม่สำเร็จ');
+          msg.style.display = ''; btn.disabled = false;
+        }
+      };
+      box.querySelector('#pr-relogin').onclick = go;
+      box.querySelector('#pr-pass').onkeydown = (ev) => { if (ev.key === 'Enter') go(); };
     };
     if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) { expiredBox(); return; }
     try { list = await this.listRequests(); }
@@ -320,7 +337,7 @@ const PasswordReset = {
       if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) {
         if (!silent && !this._warnedExpired && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
           this._warnedExpired = true;
-          GoogleSheetSync.showToast('🔒 เซสชันครูหมดอายุ — ออกจากระบบแล้วเข้าสู่ระบบใหม่ เพื่อดูคำขอรีเซ็ตรหัสของนักเรียน', 'error');
+          GoogleSheetSync.showToast('🔒 บัญชีครูยังไม่เชื่อมต่อเซิร์ฟเวอร์ — เปิด จัดการผู้ใช้ → นักเรียน แล้วกรอกรหัสผ่านครูเพื่อดูคำขอรีเซ็ตรหัสของนักเรียน', 'error');
         }
         return 0;
       }
