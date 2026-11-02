@@ -263,8 +263,21 @@ const PasswordReset = {
     const e = this.esc.bind(this);
     box.innerHTML = '<div style="color:#64748b;font-size:0.82rem;">⏳ กำลังโหลดคำขอรีเซ็ตรหัส...</div>';
     let list;
+    const expiredBox = () => {
+      box.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+        <b style="color:#b91c1c;">🔒 เซสชันครูหมดอายุ จึงโหลดคำขอรีเซ็ตรหัสไม่ได้</b>
+        <p style="font-size:0.82rem;color:#7f1d1d;margin:0.4rem 0 0.6rem 0;">ระบบเก็บการเข้าสู่ระบบครูไว้ 8 ชั่วโมง กรุณาเข้าสู่ระบบครูใหม่ แล้วคำขอของนักเรียนจะแสดงที่นี่</p>
+        <button class="btn-nav-action primary" id="pr-relogin">🔑 เข้าสู่ระบบครูใหม่</button></div>`;
+      box.querySelector('#pr-relogin').onclick = () => { try { Store.logout(); } catch (x) { /* ignore */ } location.reload(); };
+    };
+    if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) { expiredBox(); return; }
     try { list = await this.listRequests(); }
-    catch (err) { box.innerHTML = `<div style="color:#64748b;font-size:0.82rem;">ℹ️ ดูคำขอรีเซ็ตรหัสไม่ได้: ${e(err.message)}</div>`; return; }
+    catch (err) {
+      if (err && (err.status === 401 || err.status === 403)) { expiredBox(); return; }
+      box.innerHTML = `<div style="color:#b91c1c;font-size:0.82rem;">ℹ️ ดูคำขอรีเซ็ตรหัสไม่ได้: ${e(err.message)} <button class="btn-nav-action" id="pr-retry" style="font-size:0.76rem;">🔄 ลองใหม่</button></div>`;
+      box.querySelector('#pr-retry').onclick = () => this.renderQueue(containerId);
+      return;
+    }
     const rows = list.map(x => `<div class="pr-row" data-id="${e(x.id)}" style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding:0.45rem 0;">
       <span>${x.role === 'intern' ? '👩‍🎓 นศ.' : '🎓'} <b>${e(x.name || x.subjectId)}</b> • รหัส ${e(x.subjectId)}${x.className ? ' • ' + e(x.className) : ''}<br>
         <span style="font-size:0.76rem;color:#64748b;">ขอเมื่อ ${e(this._fmt(x.createdMs))}${x.status === 'approved' ? ` • ออกรหัสแล้ว (หมดอายุ ${e(this._fmt(x.expiresMs))})` : ' • รอครูยืนยัน'}</span></span>
@@ -304,6 +317,13 @@ const PasswordReset = {
       if (!u || u.role !== 'teacher') return 0;
       const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
       if (!this._cloud() && (!cfg.webAppUrl || !cfg.syncToken)) return 0;
+      if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) {
+        if (!silent && !this._warnedExpired && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
+          this._warnedExpired = true;
+          GoogleSheetSync.showToast('🔒 เซสชันครูหมดอายุ — ออกจากระบบแล้วเข้าสู่ระบบใหม่ เพื่อดูคำขอรีเซ็ตรหัสของนักเรียน', 'error');
+        }
+        return 0;
+      }
       const list = await this.listRequests();
       const pending = list.filter(x => x.status === 'pending').length;
       if (pending && !silent && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
