@@ -178,3 +178,4 @@ Width: `250px` (Expanded) / `68px` (Collapsed Icon Rail) / `0px` (Hidden on mobi
   - Zero regression on existing features, audio players, or cloud syncing.
 
 ---
+

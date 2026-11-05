@@ -165,7 +165,7 @@
         <!-- Group 1: การสอนประจำวัน -->
         <div class="sidebar-nav-group">
           <div class="sidebar-group-title">⚡ การสอนประจำวัน</div>
-          <button id="btn-sidebar-dashboard" class="sidebar-nav-item active" data-nav="dashboard" onclick="App.showDashboard(); App.onSidebarItemClick();">
+          <button id="btn-teacher-dashboard" class="sidebar-nav-item active" data-nav="dashboard" onclick="App.showDashboard(); App.onSidebarItemClick();">
             <span class="sidebar-nav-icon">🏠</span>
             <span class="sidebar-nav-label">หน้าแรก & ห้องเรียน</span>
           </button>
@@ -194,7 +194,7 @@
             <span class="sidebar-nav-icon">🎹</span>
             <span class="sidebar-nav-label">ซ้อมคาลิมบ้า (Virtual)</span>
           </button>
-          <button class="sidebar-nav-item" onclick="App.openEnsemble('thai'); App.onSidebarItemClick();">
+          <button class="sidebar-nav-item" onclick="App.openEnsemble(); App.closeToolsMenu(); App.onSidebarItemClick();">
             <span class="sidebar-nav-icon">🎺</span>
             <span class="sidebar-nav-label">สำรวจวงดนตรีเสมือนจริง</span>
           </button>
