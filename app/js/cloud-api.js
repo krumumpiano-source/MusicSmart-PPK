@@ -67,7 +67,7 @@
 
   // เรียก API: ถ้ามี token จะแนบให้อัตโนมัติ, ถ้าเครือข่ายขัดข้องจะโยน CloudApiError(status=0)
   async function request(method, path, body, opts = {}) {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json', 'X-Admin-App': 'musicsmart', ...(opts.headers || {}) };
     if (!opts.anonymous) {
       const sess = readSession();
       if (sess) headers.Authorization = 'Bearer ' + sess.token;

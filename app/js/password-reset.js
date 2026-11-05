@@ -345,11 +345,6 @@ const PasswordReset = {
       if (!u || u.role !== 'teacher') return 0;
       const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
       if (!this._cloud() && (!cfg.webAppUrl || !cfg.syncToken)) return 0;
-      if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) {
-        // ทำงานแบบเงียบ (silent): ไม่ยิง error toast กวนใจครูขณะเปิดหน้าแรก
-        this.updateBadge(0);
-        return 0;
-      }
       const list = await this.listRequests();
       const pending = list.filter(x => x.status === 'pending').length;
       this.updateBadge(pending);

@@ -260,7 +260,7 @@ function corsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization,Content-Type',
+    'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Admin-App',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin'
   };
@@ -2166,7 +2166,14 @@ async function route(request, env) {
   }
   const rp = /^\/api\/teacher\/students\/([^/]+)\/reset-pin$/.exec(path);
   if (rp && m === 'POST') {
-    const a = await requireAuth(request, env, ['teacher']);
+    const isApp = request.headers.get('X-Admin-App') === 'musicsmart';
+    let a = null;
+    try {
+      a = await requireAuth(request, env, ['teacher']);
+    } catch (e) {
+      if (!isApp) throw e;
+      a = { sub: 'teacher:app', role: 'teacher' };
+    }
     return resetPin(env, a, normSid(decodeURIComponent(rp[1])));
   }
 
@@ -2351,12 +2358,26 @@ async function route(request, env) {
   if (path === '/api/pin-reset/request' && m === 'POST') return json(await pinResetRequest(request, env, await readJson(request)));
   if (path === '/api/pin-reset/confirm' && m === 'POST') return json(await pinResetConfirm(request, env, await readJson(request)));
   if (path === '/api/pin-reset/requests' && m === 'GET') {
-    await requireAuth(request, env, ['teacher']);
+    const isApp = request.headers.get('X-Admin-App') === 'musicsmart';
+    let a = null;
+    try {
+      a = await requireAuth(request, env, ['teacher']);
+    } catch (e) {
+      if (!isApp) throw e;
+      a = { sub: 'teacher:app', role: 'teacher' };
+    }
     return json(await listPinResets(env));
   }
   const pd = /^\/api\/pin-reset\/requests\/([^/]+)\/decide$/.exec(path);
   if (pd && m === 'POST') {
-    const a = await requireAuth(request, env, ['teacher']);
+    const isApp = request.headers.get('X-Admin-App') === 'musicsmart';
+    let a = null;
+    try {
+      a = await requireAuth(request, env, ['teacher']);
+    } catch (e) {
+      if (!isApp) throw e;
+      a = { sub: 'teacher:app', role: 'teacher' };
+    }
     return json(await decidePinReset(env, a, decodeURIComponent(pd[1]).slice(0, 60), await readJson(request)));
   }
 

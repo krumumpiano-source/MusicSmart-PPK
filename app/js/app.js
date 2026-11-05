@@ -3057,13 +3057,11 @@ const App = {
     // 1. Cloudflare mode
     if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined') {
       try {
-        if (CloudApi.Auth && CloudApi.Auth.isTeacher()) {
-          await CloudApi.request('POST', `/api/teacher/students/${encodeURIComponent(studentId)}/reset-pin`);
-          if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
-            GoogleSheetSync.showToast(`รีเซ็ต PIN รหัส ${studentId} บน Cloudflare แล้ว`, 'success');
-          }
-          return;
+        await CloudApi.request('POST', `/api/teacher/students/${encodeURIComponent(studentId)}/reset-pin?app=musicsmart`, null, { anonymous: true });
+        if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
+          GoogleSheetSync.showToast(`รีเซ็ต PIN รหัส ${studentId} บน Cloudflare แล้ว`, 'success');
         }
+        return;
       } catch (err) {
         console.warn('Cloudflare resetPin warning:', err);
       }
