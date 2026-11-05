@@ -458,6 +458,17 @@ const App = {
     });
 
     window.addEventListener('keydown', (e) => {
+      // Spacebar tap trainer for Rhythm Lab
+      if (e.code === 'Space' || e.key === ' ') {
+        const modal = document.getElementById('modal-music-visual-aids');
+        const pane = document.getElementById('pane-aids-rhythm');
+        const targetTag = (e.target && e.target.tagName) || '';
+        if (modal && modal.classList.contains('active') && pane && pane.style.display !== 'none' && targetTag !== 'INPUT' && targetTag !== 'TEXTAREA') {
+          e.preventDefault();
+          if (App.onRhythmUserTap) App.onRhythmUserTap();
+          return;
+        }
+      }
       if (e.key === 'Escape') {
         const activeModals = Array.from(document.querySelectorAll('.modal-overlay.active'));
         if (activeModals.length > 0) {
@@ -5748,6 +5759,9 @@ const App = {
     if (this._aidsHost && this._aidsHost.widget && tab !== 'songs') {
       try { this._aidsHost.widget.stop(); } catch (e) {}
     }
+    if (tab !== 'rhythm' && this.stopRhythmAudio) {
+      try { this.stopRhythmAudio(); } catch (e) {}
+    }
     if (tab === 'songs') this.renderAidsSongs();
     const tabs = ['staff', 'kalimba', 'songs', 'rhythm'];
     tabs.forEach(t => {
@@ -5804,6 +5818,650 @@ const App = {
     }
   },
 
+
+  
+  /* =====================================================================
+     RHYTHM LAB & INTERACTIVE NOTE VALUE VISUALIZER (แท็บ 4: ตารางค่าตัวโน้ต & จังหวะ)
+     ===================================================================== */
+  _rhythmTimer: null,
+  _rhythmTimeouts: [],
+  _rhythmAudioNodes: [],
+  _activePatternKey: 'walk',
+  _trainerState: {
+    running: false,
+    timer: null,
+    beatIntervalMs: 1000,
+    startTime: 0,
+    measureCount: 0,
+    expectedHits: [], // timestamps of target beats in current measure
+    userHits: [],
+    perfectCount: 0,
+    goodCount: 0,
+    missCount: 0,
+    streak: 0,
+    maxStreak: 0
+  },
+
+  RHYTHM_PATTERNS: {
+    walk: {
+      name: 'คาบ 3-4: จังหวะเดินสม่ำเสมอ',
+      meter: '4/4 (โน้ตตัวดำ 4 ตัว: 1-1-1-1)',
+      mnemonic: 'คำท่อง: "เคาะ - เคาะ - เคาะ - เคาะ" (1 - 2 - 3 - 4)',
+      beats: [
+        { beat: 0, dur: 1, note: 'C4' },
+        { beat: 1, dur: 1, note: 'D4' },
+        { beat: 2, dur: 1, note: 'E4' },
+        { beat: 3, dur: 1, note: 'F4' }
+      ]
+    },
+    half: {
+      name: 'คาบ 5-6: จังหวะก้าวยาว',
+      meter: '4/4 (โน้ตตัวขาว 2 ตัว: 2-2)',
+      mnemonic: 'คำท่อง: "เคาะ...สอง | เคาะ...สอง" (1 - 2 | 3 - 4)',
+      beats: [
+        { beat: 0, dur: 2, note: 'C4' },
+        { beat: 2, dur: 2, note: 'E4' }
+      ]
+    },
+    tri_up: {
+      name: 'คาบ 7: อนุกรมขาขึ้น',
+      meter: '4/4 (ดำ - ดำ - ขาว: 1-1-2)',
+      mnemonic: 'คำท่อง: "สั้น - สั้น - ยาาว..." (1 - 2 - 3 - -)',
+      beats: [
+        { beat: 0, dur: 1, note: 'C4' },
+        { beat: 1, dur: 1, note: 'D4' },
+        { beat: 2, dur: 2, note: 'E4' }
+      ]
+    },
+    tri_down: {
+      name: 'คาบ 7: อนุกรมขาลง',
+      meter: '4/4 (ขาว - ดำ - ดำ: 2-1-1)',
+      mnemonic: 'คำท่อง: "ยาาว... - สั้น - สั้น" (1 - - | 3 - 4)',
+      beats: [
+        { beat: 0, dur: 2, note: 'G4' },
+        { beat: 2, dur: 1, note: 'F4' },
+        { beat: 3, dur: 1, note: 'E4' }
+      ]
+    },
+    syncopated: {
+      name: 'เพลงวน: จังหวะผสม',
+      meter: '4/4 (ดำ - ขาว - ดำ: 1-2-1)',
+      mnemonic: 'คำท่อง: "เคาะ - ยาว...สอง - เคาะ" (1 - 2 - - 4)',
+      beats: [
+        { beat: 0, dur: 1, note: 'C4' },
+        { beat: 1, dur: 2, note: 'G4' },
+        { beat: 3, dur: 1, note: 'C5' }
+      ]
+    }
+  },
+
+  RHYTHM_FREQS: {
+    C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23,
+    G4: 392.00, A4: 440.00, B4: 493.88, C5: 523.25
+  },
+
+  getRhythmBpm() {
+    const slider = document.getElementById('rhythm-tempo-slider');
+    return slider ? parseInt(slider.value, 10) || 60 : 60;
+  },
+
+  onRhythmBpmChange(val) {
+    const bpm = parseInt(val, 10) || 60;
+    const label = document.getElementById('rhythm-tempo-val');
+    if (label) label.textContent = bpm + ' BPM';
+    if (this._trainerState && this._trainerState.running) {
+      this._trainerState.beatIntervalMs = (60 / bpm) * 1000;
+    }
+  },
+
+  adjustRhythmBpm(delta) {
+    const slider = document.getElementById('rhythm-tempo-slider');
+    if (!slider) return;
+    let next = (parseInt(slider.value, 10) || 60) + delta;
+    if (next < 50) next = 50;
+    if (next > 120) next = 120;
+    slider.value = next;
+    this.onRhythmBpmChange(next);
+  },
+
+  stopRhythmAudio() {
+    if (this._rhythmTimer) {
+      clearTimeout(this._rhythmTimer);
+      clearInterval(this._rhythmTimer);
+      this._rhythmTimer = null;
+    }
+    if (this._rhythmTimeouts && Array.isArray(this._rhythmTimeouts)) {
+      this._rhythmTimeouts.forEach(t => clearTimeout(t));
+      this._rhythmTimeouts = [];
+    }
+
+    if (this._rhythmAudioNodes && this._rhythmAudioNodes.length) {
+      this._rhythmAudioNodes.forEach(node => {
+        try { node.stop(); } catch (e) {}
+        try { node.disconnect(); } catch (e) {}
+      });
+      this._rhythmAudioNodes = [];
+    }
+
+    // Reset visual dots
+    const dots = document.querySelectorAll('.pulse-dot');
+    dots.forEach(d => d.classList.remove('active', 'active-rest'));
+
+    // Reset statuses
+    ['whole', 'half', 'quarter', 'eighth'].forEach(s => {
+      const el = document.getElementById('pulse-status-' + s);
+      if (el) el.textContent = 'กดปุ่มเพื่อฟังเสียง';
+    });
+
+    // Reset subdivision glow
+    const blocks = document.querySelectorAll('.subdiv-block');
+    blocks.forEach(b => b.classList.remove('active-glow'));
+
+    // Reset arena lights
+    for (let i = 1; i <= 4; i++) {
+      const lit = document.getElementById('arena-light-' + i);
+      if (lit) lit.classList.remove('active');
+    }
+
+    if (this._trainerState) {
+      this._trainerState.running = false;
+      if (this._trainerState.timer) {
+        clearInterval(this._trainerState.timer);
+        this._trainerState.timer = null;
+      }
+    }
+  },
+
+  _getRhythmAudioCtx() {
+    if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.getAudioContext) {
+      return VirtualKalimba.getAudioContext();
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    return new AudioCtx();
+  },
+
+  _playRhythmClick(ctx, time, isAccent) {
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(isAccent ? 1400 : 900, time);
+
+      gain.gain.setValueAtTime(0.0001, time);
+      gain.gain.linearRampToValueAtTime(isAccent ? 0.35 : 0.2, time + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0005, time + 0.04);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(time);
+      osc.stop(time + 0.05);
+      this._rhythmAudioNodes.push(osc);
+    } catch (e) {}
+  },
+
+  _playRhythmTone(ctx, freq, startTime, durationSec) {
+    try {
+      const osc = ctx.createOscillator();
+      const oscHarm = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      oscHarm.type = 'triangle';
+      oscHarm.frequency.setValueAtTime(freq * 2.75, startTime);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(freq * 3.5, startTime);
+
+      const attack = 0.008;
+      const decay = Math.max(0.1, durationSec * 0.95);
+
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.6, startTime + attack);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + attack + decay);
+
+      osc.connect(filter);
+      oscHarm.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      oscHarm.start(startTime);
+      osc.stop(startTime + attack + decay);
+      oscHarm.stop(startTime + attack + decay);
+
+      this._rhythmAudioNodes.push(osc, oscHarm);
+    } catch (e) {}
+  },
+
+  // 1. Play Individual Note Value / Rest Duration
+  playRhythmDuration(type, mode) {
+    this.stopRhythmAudio();
+    const ctx = this._getRhythmAudioCtx();
+    const bpm = this.getRhythmBpm();
+    const spb = 60 / bpm; // seconds per beat
+    const now = ctx.currentTime + 0.05;
+
+    const barEl = document.getElementById('pulse-' + type);
+    const statusEl = document.getElementById('pulse-status-' + type);
+
+    const isSound = (mode === 'sound');
+
+    if (type === 'whole') {
+      // 4 beats
+      if (statusEl) statusEl.textContent = isSound ? 'กำลังเล่นโน้ตตัวกลม (ลากยาว 4 จังหวะ)...' : 'ตัวหยุดตัวกลม (นับเงียบสนิท 4 จังหวะ)...';
+      if (isSound) {
+        this._playRhythmTone(ctx, this.RHYTHM_FREQS.C4, now, 4 * spb);
+      }
+      for (let b = 0; b < 4; b++) {
+        const beatTime = now + b * spb;
+        this._playRhythmClick(ctx, beatTime, b === 0);
+        const tId = setTimeout(() => {
+          if (!barEl) return;
+          const dots = barEl.querySelectorAll('.pulse-dot');
+          dots.forEach((dot, idx) => {
+            if (idx <= b) {
+              dot.classList.add(isSound ? 'active' : 'active-rest');
+            }
+          });
+        }, b * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+      const finishId = setTimeout(() => {
+        if (statusEl) statusEl.textContent = isSound ? 'จบเสียงตัวกลม (ครบ 4 จังหวะ)' : 'ครบ 4 จังหวะตัวหยุด';
+        setTimeout(() => this.stopRhythmAudio(), 600);
+      }, 4 * spb * 1000);
+      this._rhythmTimeouts.push(finishId);
+    } else if (type === 'half') {
+      // 2 beats
+      if (statusEl) statusEl.textContent = isSound ? 'กำลังเล่นโน้ตตัวขาว (ลากยาว 2 จังหวะ)...' : 'ตัวหยุดตัวขาว (นับเงียบ 2 จังหวะ)...';
+      if (isSound) {
+        this._playRhythmTone(ctx, this.RHYTHM_FREQS.E4, now, 2 * spb);
+      }
+      for (let b = 0; b < 2; b++) {
+        const beatTime = now + b * spb;
+        this._playRhythmClick(ctx, beatTime, b === 0);
+        const tId = setTimeout(() => {
+          if (!barEl) return;
+          const dots = barEl.querySelectorAll('.pulse-dot');
+          if (dots[b]) dots[b].classList.add(isSound ? 'active' : 'active-rest');
+        }, b * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+      const finishId = setTimeout(() => {
+        if (statusEl) statusEl.textContent = isSound ? 'จบเสียงตัวขาว (ครบ 2 จังหวะ)' : 'ครบ 2 จังหวะตัวหยุด';
+        setTimeout(() => this.stopRhythmAudio(), 600);
+      }, 2 * spb * 1000);
+      this._rhythmTimeouts.push(finishId);
+    } else if (type === 'quarter') {
+      // 1 beat
+      if (statusEl) statusEl.textContent = isSound ? 'กำลังเล่นโน้ตตัวดำ (1 จังหวะเคาะ)...' : 'ตัวหยุดตัวดำ (นับเงียบ 1 จังหวะ)...';
+      if (isSound) {
+        this._playRhythmTone(ctx, this.RHYTHM_FREQS.G4, now, 1 * spb);
+      }
+      this._playRhythmClick(ctx, now, true);
+      const tId = setTimeout(() => {
+        if (!barEl) return;
+        const dots = barEl.querySelectorAll('.pulse-dot');
+        if (dots[0]) dots[0].classList.add(isSound ? 'active' : 'active-rest');
+      }, 0);
+      this._rhythmTimeouts.push(tId);
+      const finishId = setTimeout(() => {
+        if (statusEl) statusEl.textContent = isSound ? 'จบเสียงตัวดำ (ครบ 1 จังหวะ)' : 'ครบ 1 จังหวะตัวหยุด';
+        setTimeout(() => this.stopRhythmAudio(), 600);
+      }, 1 * spb * 1000);
+      this._rhythmTimeouts.push(finishId);
+    } else if (type === 'eighth') {
+      // 1/2 beat (plays 2 notes per beat)
+      if (statusEl) statusEl.textContent = isSound ? 'กำลังเล่นเขบ็ต 1 ชั้น (2 โน้ตใน 1 จังหวะเคาะ)...' : 'ตัวหยุดเขบ็ต (นับเงียบครึ่งจังหวะ)...';
+      this._playRhythmClick(ctx, now, true);
+      if (isSound) {
+        this._playRhythmTone(ctx, this.RHYTHM_FREQS.C5, now, 0.45 * spb);
+        this._playRhythmTone(ctx, this.RHYTHM_FREQS.C5, now + 0.5 * spb, 0.45 * spb);
+      }
+      const tId1 = setTimeout(() => {
+        if (!barEl) return;
+        const dots = barEl.querySelectorAll('.pulse-dot');
+        if (dots[0]) dots[0].classList.add(isSound ? 'active' : 'active-rest');
+      }, 0);
+      const tId2 = setTimeout(() => {
+        if (!barEl) return;
+        const dots = barEl.querySelectorAll('.pulse-dot');
+        if (dots[1]) dots[1].classList.add(isSound ? 'active' : 'active-rest');
+      }, 0.5 * spb * 1000);
+      this._rhythmTimeouts.push(tId1, tId2);
+      const finishId = setTimeout(() => {
+        if (statusEl) statusEl.textContent = isSound ? 'จบเสียงเขบ็ต (ครบ 1 จังหวะ)' : 'ครบตัวหยุดเขบ็ต';
+        setTimeout(() => this.stopRhythmAudio(), 600);
+      }, 1 * spb * 1000);
+      this._rhythmTimeouts.push(finishId);
+    }
+  },
+
+  // 2. Play 4/4 Measure Subdivision Row
+  playMeasureSubdivision(subdiv) {
+    this.stopRhythmAudio();
+    const ctx = this._getRhythmAudioCtx();
+    const bpm = this.getRhythmBpm();
+    const spb = 60 / bpm;
+    const now = ctx.currentTime + 0.05;
+
+    // Metronome clicks on 4 beats
+    for (let b = 0; b < 4; b++) {
+      this._playRhythmClick(ctx, now + b * spb, b === 0);
+    }
+
+    if (subdiv === 1) {
+      // 1 whole note
+      this._playRhythmTone(ctx, this.RHYTHM_FREQS.C4, now, 4 * spb);
+      const blk = document.getElementById('subdiv-blk-1-0');
+      if (blk) blk.classList.add('active-glow');
+    } else if (subdiv === 2) {
+      // 2 half notes
+      const notes = [this.RHYTHM_FREQS.C4, this.RHYTHM_FREQS.G4];
+      for (let i = 0; i < 2; i++) {
+        this._playRhythmTone(ctx, notes[i], now + i * 2 * spb, 2 * spb);
+        const tId = setTimeout(() => {
+          const blk0 = document.getElementById('subdiv-blk-2-0');
+          const blk1 = document.getElementById('subdiv-blk-2-1');
+          if (i === 0) {
+            if (blk0) blk0.classList.add('active-glow');
+            if (blk1) blk1.classList.remove('active-glow');
+          } else {
+            if (blk0) blk0.classList.remove('active-glow');
+            if (blk1) blk1.classList.add('active-glow');
+          }
+        }, i * 2 * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+    } else if (subdiv === 4) {
+      // 4 quarter notes
+      const notes = [this.RHYTHM_FREQS.C4, this.RHYTHM_FREQS.E4, this.RHYTHM_FREQS.G4, this.RHYTHM_FREQS.C5];
+      for (let i = 0; i < 4; i++) {
+        this._playRhythmTone(ctx, notes[i], now + i * spb, 1 * spb);
+        const tId = setTimeout(() => {
+          for (let k = 0; k < 4; k++) {
+            const blk = document.getElementById('subdiv-blk-4-' + k);
+            if (blk) {
+              if (k === i) blk.classList.add('active-glow');
+              else blk.classList.remove('active-glow');
+            }
+          }
+        }, i * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+    } else if (subdiv === 8) {
+      // 8 eighth notes
+      const scale = [this.RHYTHM_FREQS.C4, this.RHYTHM_FREQS.D4, this.RHYTHM_FREQS.E4, this.RHYTHM_FREQS.F4,
+                     this.RHYTHM_FREQS.G4, this.RHYTHM_FREQS.A4, this.RHYTHM_FREQS.B4, this.RHYTHM_FREQS.C5];
+      for (let i = 0; i < 8; i++) {
+        this._playRhythmTone(ctx, scale[i], now + i * 0.5 * spb, 0.45 * spb);
+        const tId = setTimeout(() => {
+          for (let k = 0; k < 8; k++) {
+            const blk = document.getElementById('subdiv-blk-8-' + k);
+            if (blk) {
+              if (k === i) blk.classList.add('active-glow');
+              else blk.classList.remove('active-glow');
+            }
+          }
+        }, i * 0.5 * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+    }
+
+    const finishId = setTimeout(() => {
+      this.stopRhythmAudio();
+    }, 4 * spb * 1000 + 400);
+    this._rhythmTimeouts.push(finishId);
+  },
+
+  // 3. Curriculum Rhythm Pattern Selector
+  selectRhythmPattern(key, btnEl) {
+    this.stopRhythmAudio();
+    this._activePatternKey = key;
+    const pat = this.RHYTHM_PATTERNS[key];
+    if (!pat) return;
+
+    // Update pill buttons
+    const pills = document.querySelectorAll('#rhythm-pattern-pills .btn-pat-pill');
+    pills.forEach(p => p.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+
+    // Update arena info
+    const titleEl = document.getElementById('arena-pat-title');
+    const meterEl = document.getElementById('arena-pat-meter');
+    const mnemEl = document.getElementById('arena-pat-mnemonic');
+    if (titleEl) titleEl.textContent = pat.name;
+    if (meterEl) meterEl.textContent = pat.meter;
+    if (mnemEl) mnemEl.textContent = pat.mnemonic;
+
+    const fb = document.getElementById('tap-feedback-text');
+    if (fb) {
+      fb.textContent = 'พร้อมฝึก: กด [เริ่มซ้อมแตะตามจังหวะ]';
+      fb.style.color = '#64748b';
+    }
+  },
+
+  // 4. Play Pattern Demo
+  playRhythmPatternDemo() {
+    this.stopRhythmAudio();
+    const ctx = this._getRhythmAudioCtx();
+    const bpm = this.getRhythmBpm();
+    const spb = 60 / bpm;
+    const pat = this.RHYTHM_PATTERNS[this._activePatternKey] || this.RHYTHM_PATTERNS.walk;
+
+    const fb = document.getElementById('tap-feedback-text');
+    if (fb) {
+      fb.textContent = 'กำลังสาธิตจังหวะ (2 ห้องเพลง)...';
+      fb.style.color = '#0284c7';
+    }
+
+    const startAudioTime = ctx.currentTime + 0.05;
+
+    // Play 2 measures
+    for (let bar = 0; bar < 2; bar++) {
+      const barStartTime = startAudioTime + bar * 4 * spb;
+      // Metronome clicks on 4 beats
+      for (let b = 0; b < 4; b++) {
+        const beatTime = barStartTime + b * spb;
+        this._playRhythmClick(ctx, beatTime, b === 0);
+
+        const tId = setTimeout(() => {
+          for (let k = 1; k <= 4; k++) {
+            const lit = document.getElementById('arena-light-' + k);
+            if (lit) {
+              if (k === (b + 1)) lit.classList.add('active');
+              else lit.classList.remove('active');
+            }
+          }
+        }, (bar * 4 + b) * spb * 1000);
+        this._rhythmTimeouts.push(tId);
+      }
+
+      // Notes in pattern
+      pat.beats.forEach(item => {
+        const noteTime = barStartTime + item.beat * spb;
+        const freq = this.RHYTHM_FREQS[item.note] || 261.63;
+        this._playRhythmTone(ctx, freq, noteTime, item.dur * spb);
+      });
+    }
+
+    const finishId = setTimeout(() => {
+      this.stopRhythmAudio();
+      if (fb) {
+        fb.textContent = 'สาธิตจบแล้ว ลองกด [เริ่มซ้อมแตะตามจังหวะ] ได้เลย!';
+        fb.style.color = '#10b981';
+      }
+    }, 8 * spb * 1000 + 300);
+    this._rhythmTimeouts.push(finishId);
+  },
+
+  // 5. Interactive Tap Trainer
+  startRhythmTapTrainer() {
+    this.stopRhythmAudio();
+    const ctx = this._getRhythmAudioCtx();
+    const bpm = this.getRhythmBpm();
+    const spb = 60 / bpm;
+    const pat = this.RHYTHM_PATTERNS[this._activePatternKey] || this.RHYTHM_PATTERNS.walk;
+
+    const fb = document.getElementById('tap-feedback-text');
+    const scoreEl = document.getElementById('tap-score-text');
+
+    this._trainerState = {
+      running: true,
+      timer: null,
+      beatIntervalMs: spb * 1000,
+      startTime: Date.now() + 4 * spb * 1000,
+      currentBeat: -4, // 4 count-in beats: -4, -3, -2, -1
+      patBeats: pat.beats.map(b => b.beat),
+      perfectCount: 0,
+      goodCount: 0,
+      totalTaps: 0,
+      streak: 0,
+      maxStreak: 0
+    };
+
+    if (scoreEl) {
+      scoreEl.textContent = 'ความแม่นยำ: 0% • สถิติต่อเนื่อง: 0 ครั้ง';
+    }
+
+    // Count in + loop timer
+    let countBeat = -4;
+    const runTick = () => {
+      if (!this._trainerState.running) return;
+
+      const clickTime = ctx.currentTime;
+      const isBarStart = (countBeat >= 0 && (countBeat % 4 === 0)) || (countBeat === -4);
+      this._playRhythmClick(ctx, clickTime, isBarStart);
+
+      if (countBeat < 0) {
+        // Count in display
+        const countNum = 4 + countBeat + 1; // 1, 2, 3, 4
+        if (fb) {
+          fb.textContent = 'นับนำเตรียมตัว: ' + countNum + '...';
+          fb.style.color = '#d97706';
+        }
+        for (let k = 1; k <= 4; k++) {
+          const lit = document.getElementById('arena-light-' + k);
+          if (lit) {
+            if (k === countNum) lit.classList.add('active');
+            else lit.classList.remove('active');
+          }
+        }
+      } else {
+        // Active bar
+        const inBarBeat = countBeat % 4;
+        if (fb && !fb.textContent.includes('แตะ') && !fb.textContent.includes('คะแนน')) {
+          fb.textContent = 'กำลังจับจังหวะ: แตะปุ่มด้านล่างตามโน้ต!';
+          fb.style.color = '#10b981';
+        }
+        for (let k = 1; k <= 4; k++) {
+          const lit = document.getElementById('arena-light-' + k);
+          if (lit) {
+            if (k === inBarBeat + 1) lit.classList.add('active');
+            else lit.classList.remove('active');
+          }
+        }
+      }
+
+      countBeat++;
+      this._trainerState.currentBeat = countBeat;
+    };
+
+    runTick();
+    this._trainerState.timer = setInterval(runTick, spb * 1000);
+  },
+
+  onRhythmUserTap() {
+    const btn = document.getElementById('btn-rhythm-tap');
+    const fb = document.getElementById('tap-feedback-text');
+    const scoreEl = document.getElementById('tap-score-text');
+
+    if (!this._trainerState || !this._trainerState.running) {
+      if (fb) {
+        fb.textContent = '💡 แตะเริ่มซ้อมด้วยปุ่ม [เริ่มซ้อมแตะตามจังหวะ] ก่อนนะครับ';
+        fb.style.color = '#0284c7';
+      }
+      return;
+    }
+
+    if (this._trainerState.currentBeat < 0) {
+      if (fb) {
+        fb.textContent = '⏳ กำลังนับนำเตรียมตัว รอเริ่มห้องที่ 1 ก่อนครับ!';
+        fb.style.color = '#f59e0b';
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const elapsedMs = now - this._trainerState.startTime;
+    const interval = this._trainerState.beatIntervalMs;
+    const totalElapsedBeats = elapsedMs / interval;
+    const currentBarBeats = totalElapsedBeats % 4;
+
+    // Compare with closest target beat in current pattern
+    const targets = this._trainerState.patBeats || [0, 1, 2, 3];
+    let minDiffMs = 999999;
+    targets.forEach(tgt => {
+      // Direct diff
+      let diffBeats = Math.abs(currentBarBeats - tgt);
+      if (diffBeats > 2) diffBeats = Math.abs(diffBeats - 4);
+      const diffMs = diffBeats * interval;
+      if (diffMs < minDiffMs) minDiffMs = diffMs;
+    });
+
+    this._trainerState.totalTaps++;
+
+    if (minDiffMs <= 140) {
+      // Perfect
+      this._trainerState.perfectCount++;
+      this._trainerState.streak++;
+      if (this._trainerState.streak > this._trainerState.maxStreak) {
+        this._trainerState.maxStreak = this._trainerState.streak;
+      }
+      if (btn) {
+        btn.classList.add('hit-perfect');
+        setTimeout(() => btn.classList.remove('hit-perfect'), 150);
+      }
+      if (fb) {
+        fb.textContent = '🌟 ตรงจังหวะยอดเยี่ยม! (Perfect ±' + Math.round(minDiffMs) + 'ms)';
+        fb.style.color = '#1d4ed8';
+      }
+    } else if (minDiffMs <= 260) {
+      // Good
+      this._trainerState.goodCount++;
+      this._trainerState.streak++;
+      if (this._trainerState.streak > this._trainerState.maxStreak) {
+        this._trainerState.maxStreak = this._trainerState.streak;
+      }
+      if (btn) {
+        btn.classList.add('hit-good');
+        setTimeout(() => btn.classList.remove('hit-good'), 150);
+      }
+      if (fb) {
+        fb.textContent = '👍 ดีมาก! ตรงจังหวะ (Good ±' + Math.round(minDiffMs) + 'ms)';
+        fb.style.color = '#d97706';
+      }
+    } else {
+      // Off beat
+      this._trainerState.missCount++;
+      this._trainerState.streak = 0;
+      if (fb) {
+        fb.textContent = '🐢 จังหวะคลาดเคลื่อนนิดหน่อย ลองจับจังหวะใหม่';
+        fb.style.color = '#dc2626';
+      }
+    }
+
+    // Update Accuracy %
+    const total = this._trainerState.totalTaps;
+    const weightedScore = (this._trainerState.perfectCount * 100 + this._trainerState.goodCount * 70) / total;
+    const pct = Math.min(100, Math.round(weightedScore));
+    if (scoreEl) {
+      scoreEl.textContent = 'ความแม่นยำ: ' + pct + '% • สถิติต่อเนื่อง: ' + this._trainerState.streak + ' ครั้ง (สูงสุด ' + this._trainerState.maxStreak + ')';
+    }
+  },
 
   saveSessionAndFinish() {
     const className = this.state.selectedClass;

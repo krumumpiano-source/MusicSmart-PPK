@@ -5883,3 +5883,510 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
   fill: #b45309 !important;
   font-weight: 900 !important;
 }
+
+
+/* --- Interactive Rhythm Lab & Note Value Visualizer Styles --- */
+.aids-rhythm-banner {
+  background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+  border: 1.5px solid #bae6fd;
+  border-radius: 12px;
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.06);
+}
+
+.rhythm-tempo-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  padding: 0.4rem 0.75rem;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.btn-tempo-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-tempo-step:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.btn-rhythm-stop {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-rhythm-stop:hover {
+  background: #fecaca;
+  border-color: #ef4444;
+}
+
+/* Grid of 4 Note & Rest Cards */
+.rhythm-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.rhythm-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 0.85rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+.rhythm-card:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 6px 16px rgba(2, 132, 199, 0.12);
+  transform: translateY(-2px);
+}
+
+.rhythm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+}
+
+.rhythm-sym-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 54px;
+}
+
+.rhythm-sym {
+  font-size: 2.2rem;
+  line-height: 1;
+  color: #1e293b;
+  font-family: serif;
+}
+
+.rhythm-rest-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 35px;
+}
+
+.rhythm-sub-label {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.rhythm-sym-divider {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+
+.rhythm-card-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #0284c7;
+  margin-top: 0.4rem;
+}
+
+.rhythm-val-badge {
+  display: inline-block;
+  align-self: center;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  font-weight: 800;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-top: 3px;
+}
+
+.rhythm-card-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 5px;
+  min-height: 28px;
+}
+
+/* 4-Beat Pulse Bar inside Card */
+.rhythm-pulse-bar {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0.75rem 0 0.25rem 0;
+}
+
+.pulse-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.pulse-dot.dimmed {
+  opacity: 0.45;
+  background: #f8fafc;
+}
+
+.pulse-dot.sub-dot {
+  width: 22px;
+  height: 22px;
+  font-size: 0.68rem;
+}
+
+.pulse-dot.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  transform: scale(1.18);
+  box-shadow: 0 0 10px rgba(2, 132, 199, 0.7);
+}
+
+.pulse-dot.active-rest {
+  background: #94a3b8;
+  color: #ffffff;
+  border-color: #64748b;
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(100, 116, 139, 0.5);
+}
+
+.rhythm-pulse-status {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-bottom: 0.65rem;
+  min-height: 18px;
+  font-weight: 600;
+}
+
+.rhythm-btn-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: auto;
+}
+
+.btn-rhythm-action {
+  flex: 1;
+  padding: 0.38rem 0.25rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-rhythm-action.sound {
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #0369a1;
+}
+.btn-rhythm-action.sound:hover {
+  background: #0369a1;
+}
+
+.btn-rhythm-action.rest {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.btn-rhythm-action.rest:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Section 2: 4/4 Subdivision Tree */
+.rhythm-subdiv-section {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.rhythm-subdiv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.subdiv-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.subdiv-label {
+  width: 140px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.subdiv-name {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #1e3a8a;
+}
+
+.subdiv-count {
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.subdiv-track {
+  flex: 1;
+  display: flex;
+  gap: 3px;
+  height: 34px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.subdiv-block {
+  height: 100%;
+  background: #38bdf8;
+  color: #0f172a;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition: all 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.subdiv-block.active-glow {
+  background: #f59e0b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.85);
+  transform: scaleY(1.08);
+  z-index: 2;
+}
+
+.btn-subdiv-play {
+  flex-shrink: 0;
+  background: #ffffff;
+  color: #0284c7;
+  border: 1.5px solid #0284c7;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-subdiv-play:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* Section 3: Pattern Trainer */
+.rhythm-trainer-section {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.rhythm-pattern-pills {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.btn-pat-pill {
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-pat-pill:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.btn-pat-pill.active {
+  background: #1e3a8a;
+  color: #ffffff;
+  border-color: #1e3a8a;
+  box-shadow: 0 2px 6px rgba(30, 58, 138, 0.25);
+}
+
+.rhythm-arena-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.arena-left {
+  flex: 1.2;
+  min-width: 260px;
+}
+
+.arena-right {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.arena-beat-lights {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.arena-light {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  color: #64748b;
+  font-weight: 800;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.08s ease;
+}
+
+.arena-light.active {
+  background: #ea580c;
+  color: #ffffff;
+  border-color: #c2410c;
+  transform: scale(1.12);
+  box-shadow: 0 0 12px rgba(234, 88, 12, 0.8);
+}
+
+.btn-tap-target {
+  width: 100%;
+  max-width: 260px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+  user-select: none;
+  touch-action: manipulation;
+}
+.btn-tap-target:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+}
+
+.btn-tap-target.hit-perfect {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.8);
+}
+
+.btn-tap-target.hit-good {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
+}
+
+.tap-feedback-box {
+  margin-top: 0.6rem;
+  text-align: center;
+}
+
+/* Section 4: Practical Tips Grid */
+.rhythm-tips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+
+.rhythm-tip-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #0284c7;
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+}
+
+.tip-card-title {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #1e3a8a;
+  margin-bottom: 3px;
+}
+
+.tip-card-body {
+  font-size: 0.76rem;
+  color: #475569;
+  line-height: 1.45;
+}

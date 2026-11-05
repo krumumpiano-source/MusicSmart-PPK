@@ -38,7 +38,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=43">
+  <link rel="stylesheet" href="css/styles.css?v=44">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- PWA Progressive Web App & Mobile App Tags -->
@@ -1805,36 +1805,398 @@
           </div>
         </div>
 
-        <!-- TAB 4: Rhythm Table -->
+                <!-- TAB 4: Rhythm Table & Interactive Rhythm Lab -->
         <div id="pane-aids-rhythm" style="display: none;">
-          <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1.25rem; font-size: 0.85rem; color: #92400e;">
-            ⏱️ <strong>ระบบจังหวะและค่าตัวโน้ตสากล (Rhythm & Note Values):</strong> อัตราจังหวะพื้นฐาน 4/4 หมายถึง ใน 1 ห้องเพลงมี 4 จังหวะ โดยโน้ตตัวดำมีค่าเท่ากับ 1 จังหวะ
+          <!-- Master Header & Tempo Toolbar -->
+          <div class="aids-rhythm-banner">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem;">
+              <div>
+                <div style="font-weight: 800; font-size: 1.05rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+                  <span>⏱️</span> <span>ห้องปฏิบัติการจังหวะ & สัดส่วนตัวโน้ตสากล (Interactive Rhythm Lab)</span>
+                </div>
+                <div style="font-size: 0.8rem; color: #475569; margin-top: 2px;">
+                  อัตราจังหวะ 4/4: ใน 1 ห้องมี 4 จังหวะเคาะ • โน้ตตัวดำ = 1 จังหวะ • แตะฟังเสียงจริงเพื่อเปรียบเทียบเสียง (Sound) และความเงียบ (Rest)
+                </div>
+              </div>
+              
+              <!-- Global Tempo Controls -->
+              <div class="rhythm-tempo-box">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #334155;">ความเร็ว:</span>
+                <button type="button" class="btn-tempo-step" onclick="App.adjustRhythmBpm(-5)" title="ลดความเร็ว">-</button>
+                <input type="range" id="rhythm-tempo-slider" min="50" max="120" value="60" step="5" oninput="App.onRhythmBpmChange(this.value)" style="width: 85px; accent-color: #0284c7; cursor: pointer;">
+                <button type="button" class="btn-tempo-step" onclick="App.adjustRhythmBpm(5)" title="เพิ่มความเร็ว">+</button>
+                <span id="rhythm-tempo-val" style="font-weight: 800; font-size: 0.85rem; color: #0284c7; min-width: 58px; text-align: center;">60 BPM</span>
+                <button type="button" class="btn-rhythm-stop" onclick="App.stopRhythmAudio()" title="หยุดเสียงทั้งหมด">⏹️ หยุดเสียง</button>
+              </div>
+            </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
-            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
-              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅝</div>
-              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวกลม (Whole Note)</div>
-              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 4 จังหวะ</div>
-              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">เคาะ 1 แล้วลากยาว 2 3 4</div>
+          <!-- Section 1: Note & Rest Laboratory (4 Cards) -->
+          <div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-weight: 800; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🔬</span> <span>1. ค่าตัวโน้ตและตัวหยุดสากล 4 ชนิดหลัก (Notes & Rests)</span>
             </div>
-            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
-              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅗𝅥</div>
-              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวขาว (Half Note)</div>
-              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 2 จังหวะ</div>
-              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">เคาะ 1 แล้วลากยาวถึง 2</div>
+            <div style="font-size: 0.76rem; color: #64748b;">กดปุ่ม [▶ ฟังเสียง] หรือ [🔇 ฟังตัวหยุด] เพื่อฟังความยาวจริง</div>
+          </div>
+
+          <div class="rhythm-cards-grid">
+            <!-- Card 1: Whole Note & Rest -->
+            <div class="rhythm-card" id="card-rhythm-whole">
+              <div class="rhythm-card-header">
+                <div class="rhythm-sym-box" title="โน้ตตัวกลม">
+                  <span class="rhythm-sym">𝅝</span>
+                  <span class="rhythm-sub-label">ตัวกลม</span>
+                </div>
+                <div class="rhythm-sym-divider">+</div>
+                <div class="rhythm-sym-box" title="ตัวหยุดตัวกลม">
+                  <span class="rhythm-rest-svg"><svg width="40" height="28" viewBox="0 0 40 28" style="display:inline-block; vertical-align:middle;">
+  <line x1="2" y1="5" x2="38" y2="5" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="11" x2="38" y2="11" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="17" x2="38" y2="17" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="23" x2="38" y2="23" stroke="#94a3b8" stroke-width="1.5"/>
+  <rect x="13" y="11" width="14" height="5" fill="#1e293b" rx="0.5"/>
+</svg></span>
+                  <span class="rhythm-sub-label">ตัวหยุด</span>
+                </div>
+              </div>
+              <div class="rhythm-card-title">ตัวกลม (Whole Note)</div>
+              <div class="rhythm-val-badge">มีค่า = 4 จังหวะเต็ม</div>
+              <div class="rhythm-card-desc">เคาะ 1 แล้วลากยาวต่อจนครบ 2 3 4</div>
+
+              <!-- Pulse Indicator (4 Beats) -->
+              <div class="rhythm-pulse-bar" id="pulse-whole">
+                <div class="pulse-dot" data-beat="1">1</div>
+                <div class="pulse-dot" data-beat="2">2</div>
+                <div class="pulse-dot" data-beat="3">3</div>
+                <div class="pulse-dot" data-beat="4">4</div>
+              </div>
+              <div class="rhythm-pulse-status" id="pulse-status-whole">กดปุ่มเพื่อฟังเสียง</div>
+
+              <!-- Action Buttons -->
+              <div class="rhythm-btn-row">
+                <button type="button" class="btn-rhythm-action sound" onclick="App.playRhythmDuration('whole', 'sound')">
+                  ▶ ฟังเสียงโน้ต
+                </button>
+                <button type="button" class="btn-rhythm-action rest" onclick="App.playRhythmDuration('whole', 'rest')">
+                  🔇 ฟังตัวหยุด
+                </button>
+              </div>
             </div>
-            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
-              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅘𝅥</div>
-              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวดำ (Quarter Note)</div>
-              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 1 จังหวะ</div>
-              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">1 โน้ต ต่อ 1 จังหวะเคาะ</div>
+
+            <!-- Card 2: Half Note & Rest -->
+            <div class="rhythm-card" id="card-rhythm-half">
+              <div class="rhythm-card-header">
+                <div class="rhythm-sym-box" title="โน้ตตัวขาว">
+                  <span class="rhythm-sym">𝅗𝅥</span>
+                  <span class="rhythm-sub-label">ตัวขาว</span>
+                </div>
+                <div class="rhythm-sym-divider">+</div>
+                <div class="rhythm-sym-box" title="ตัวหยุดตัวขาว">
+                  <span class="rhythm-rest-svg"><svg width="40" height="28" viewBox="0 0 40 28" style="display:inline-block; vertical-align:middle;">
+  <line x1="2" y1="5" x2="38" y2="5" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="11" x2="38" y2="11" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="17" x2="38" y2="17" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="2" y1="23" x2="38" y2="23" stroke="#94a3b8" stroke-width="1.5"/>
+  <rect x="13" y="12" width="14" height="5" fill="#1e293b" rx="0.5"/>
+</svg></span>
+                  <span class="rhythm-sub-label">ตัวหยุด</span>
+                </div>
+              </div>
+              <div class="rhythm-card-title">ตัวขาว (Half Note)</div>
+              <div class="rhythm-val-badge">มีค่า = 2 จังหวะ</div>
+              <div class="rhythm-card-desc">เคาะ 1 แล้วลากยาวต่อเนื่องถึง 2</div>
+
+              <!-- Pulse Indicator (4 Beats) -->
+              <div class="rhythm-pulse-bar" id="pulse-half">
+                <div class="pulse-dot" data-beat="1">1</div>
+                <div class="pulse-dot" data-beat="2">2</div>
+                <div class="pulse-dot dimmed" data-beat="3">3</div>
+                <div class="pulse-dot dimmed" data-beat="4">4</div>
+              </div>
+              <div class="rhythm-pulse-status" id="pulse-status-half">กดปุ่มเพื่อฟังเสียง</div>
+
+              <!-- Action Buttons -->
+              <div class="rhythm-btn-row">
+                <button type="button" class="btn-rhythm-action sound" onclick="App.playRhythmDuration('half', 'sound')">
+                  ▶ ฟังเสียงโน้ต
+                </button>
+                <button type="button" class="btn-rhythm-action rest" onclick="App.playRhythmDuration('half', 'rest')">
+                  🔇 ฟังตัวหยุด
+                </button>
+              </div>
             </div>
-            <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 1rem; text-align: center;">
-              <div style="font-size: 2.2rem; line-height: 1; color: #1e293b;">𝅘𝅥𝅮</div>
-              <div style="font-weight: 800; font-size: 1.05rem; color: #0284c7; margin-top: 0.5rem;">ตัวเขบ็จ 1 ชั้น (Eighth)</div>
-              <div style="font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-top: 2px;">มีค่า = 1/2 จังหวะ</div>
-              <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">2 โน้ต ต่อ 1 จังหวะเคาะ</div>
+
+            <!-- Card 3: Quarter Note & Rest -->
+            <div class="rhythm-card" id="card-rhythm-quarter">
+              <div class="rhythm-card-header">
+                <div class="rhythm-sym-box" title="โน้ตตัวดำ">
+                  <span class="rhythm-sym">𝅘𝅥</span>
+                  <span class="rhythm-sub-label">ตัวดำ</span>
+                </div>
+                <div class="rhythm-sym-divider">+</div>
+                <div class="rhythm-sym-box" title="ตัวหยุดตัวดำ">
+                  <span class="rhythm-rest-svg"><svg width="26" height="30" viewBox="0 0 26 30" style="display:inline-block; vertical-align:middle;">
+  <path d="M 10 3 C 13 3, 16 6, 12 11 L 18 16 C 20 18, 16 20, 11 22 C 9 23, 12 26, 14 27 C 12 28, 9 27, 8 25 C 8 22, 13 20, 13 19 L 8 15 C 6 13, 12 9, 9 5 Z" fill="#1e293b"/>
+</svg></span>
+                  <span class="rhythm-sub-label">ตัวหยุด</span>
+                </div>
+              </div>
+              <div class="rhythm-card-title">ตัวดำ (Quarter Note)</div>
+              <div class="rhythm-val-badge">มีค่า = 1 จังหวะ</div>
+              <div class="rhythm-card-desc">1 โน้ต ต่อ 1 จังหวะเคาะพอดี</div>
+
+              <!-- Pulse Indicator (4 Beats) -->
+              <div class="rhythm-pulse-bar" id="pulse-quarter">
+                <div class="pulse-dot" data-beat="1">1</div>
+                <div class="pulse-dot dimmed" data-beat="2">2</div>
+                <div class="pulse-dot dimmed" data-beat="3">3</div>
+                <div class="pulse-dot dimmed" data-beat="4">4</div>
+              </div>
+              <div class="rhythm-pulse-status" id="pulse-status-quarter">กดปุ่มเพื่อฟังเสียง</div>
+
+              <!-- Action Buttons -->
+              <div class="rhythm-btn-row">
+                <button type="button" class="btn-rhythm-action sound" onclick="App.playRhythmDuration('quarter', 'sound')">
+                  ▶ ฟังเสียงโน้ต
+                </button>
+                <button type="button" class="btn-rhythm-action rest" onclick="App.playRhythmDuration('quarter', 'rest')">
+                  🔇 ฟังตัวหยุด
+                </button>
+              </div>
+            </div>
+
+            <!-- Card 4: Eighth Note & Rest -->
+            <div class="rhythm-card" id="card-rhythm-eighth">
+              <div class="rhythm-card-header">
+                <div class="rhythm-sym-box" title="โน้ตตัวเขบ็ต 1 ชั้น">
+                  <span class="rhythm-sym">𝅘𝅥𝅮</span>
+                  <span class="rhythm-sub-label">เขบ็ต 1 ชั้น</span>
+                </div>
+                <div class="rhythm-sym-divider">+</div>
+                <div class="rhythm-sym-box" title="ตัวหยุดตัวเขบ็ต">
+                  <span class="rhythm-rest-svg"><svg width="26" height="30" viewBox="0 0 26 30" style="display:inline-block; vertical-align:middle;">
+  <circle cx="8" cy="8" r="3" fill="#1e293b"/>
+  <path d="M 10.5 8 C 15 8, 17 12, 11 18 L 9 27" stroke="#1e293b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+</svg></span>
+                  <span class="rhythm-sub-label">ตัวหยุด</span>
+                </div>
+              </div>
+              <div class="rhythm-card-title">ตัวเขบ็ต 1 ชั้น (Eighth)</div>
+              <div class="rhythm-val-badge">มีค่า = 1/2 จังหวะ</div>
+              <div class="rhythm-card-desc">2 โน้ต ต่อ 1 จังหวะเคาะ (ตา-ตา หรือ 1 และ)</div>
+
+              <!-- Pulse Indicator (4 Beats) -->
+              <div class="rhythm-pulse-bar" id="pulse-eighth">
+                <div class="pulse-dot sub-dot" data-beat="1">1</div>
+                <div class="pulse-dot sub-dot" data-beat="1.5">&amp;</div>
+                <div class="pulse-dot dimmed sub-dot" data-beat="2">2</div>
+                <div class="pulse-dot dimmed sub-dot" data-beat="2.5">&amp;</div>
+              </div>
+              <div class="rhythm-pulse-status" id="pulse-status-eighth">กดปุ่มเพื่อฟังเสียง</div>
+
+              <!-- Action Buttons -->
+              <div class="rhythm-btn-row">
+                <button type="button" class="btn-rhythm-action sound" onclick="App.playRhythmDuration('eighth', 'sound')">
+                  ▶ ฟังเสียงโน้ต
+                </button>
+                <button type="button" class="btn-rhythm-action rest" onclick="App.playRhythmDuration('eighth', 'rest')">
+                  🔇 ฟังตัวหยุด
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: 4/4 Measure Subdivision Tree -->
+          <div class="rhythm-subdiv-section">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; margin-bottom: 0.6rem; gap: 0.5rem;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+                  <span>📐</span> <span>2. แผนผังเปรียบเทียบสัดส่วน 1 ห้องเพลง (4/4 Measure Division)</span>
+                </div>
+                <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                  ทุกแถวด้านล่างมีความยาวรวมเท่ากับ 1 ห้องเพลง (4 จังหวะเคาะ) เต็มพอดี กดปุ่ม [▶ เล่นแถวนี้] เพื่อดูไฟวิ่งและฟังเสียงแบ่งส่วน
+                </div>
+              </div>
+            </div>
+
+            <!-- Subdivision Rows -->
+            <div class="rhythm-subdiv-list">
+              <!-- Row 1: Whole Note (1 note = 4 beats) -->
+              <div class="subdiv-row" id="subdiv-row-1">
+                <div class="subdiv-label">
+                  <span class="subdiv-name">𝅝 ตัวกลม</span>
+                  <span class="subdiv-count">1 โน้ต (4 จังหวะ)</span>
+                </div>
+                <div class="subdiv-track">
+                  <div class="subdiv-block" id="subdiv-blk-1-0" style="width: 100%;">
+                    <span>𝅝 ลากยาว 4 จังหวะเต็ม (นับ 1 - 2 - 3 - 4)</span>
+                  </div>
+                </div>
+                <button type="button" class="btn-subdiv-play" onclick="App.playMeasureSubdivision(1)">
+                  ▶ เล่นแถวนี้
+                </button>
+              </div>
+
+              <!-- Row 2: Half Notes (2 notes = 2+2 beats) -->
+              <div class="subdiv-row" id="subdiv-row-2">
+                <div class="subdiv-label">
+                  <span class="subdiv-name">𝅗𝅥 ตัวขาว</span>
+                  <span class="subdiv-count">2 โน้ต (2+2 จังหวะ)</span>
+                </div>
+                <div class="subdiv-track">
+                  <div class="subdiv-block" id="subdiv-blk-2-0" style="width: 50%;">
+                    <span>𝅗𝅥 โน้ตที่ 1 (นับ 1 - 2)</span>
+                  </div>
+                  <div class="subdiv-block" id="subdiv-blk-2-1" style="width: 50%;">
+                    <span>𝅗𝅥 โน้ตที่ 2 (นับ 3 - 4)</span>
+                  </div>
+                </div>
+                <button type="button" class="btn-subdiv-play" onclick="App.playMeasureSubdivision(2)">
+                  ▶ เล่นแถวนี้
+                </button>
+              </div>
+
+              <!-- Row 3: Quarter Notes (4 notes = 1+1+1+1 beats) -->
+              <div class="subdiv-row" id="subdiv-row-4">
+                <div class="subdiv-label">
+                  <span class="subdiv-name">𝅘𝅥 ตัวดำ</span>
+                  <span class="subdiv-count">4 โน้ต (1+1+1+1)</span>
+                </div>
+                <div class="subdiv-track">
+                  <div class="subdiv-block" id="subdiv-blk-4-0" style="width: 25%;"><span>𝅘𝅥 1</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-4-1" style="width: 25%;"><span>𝅘𝅥 2</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-4-2" style="width: 25%;"><span>𝅘𝅥 3</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-4-3" style="width: 25%;"><span>𝅘𝅥 4</span></div>
+                </div>
+                <button type="button" class="btn-subdiv-play" onclick="App.playMeasureSubdivision(4)">
+                  ▶ เล่นแถวนี้
+                </button>
+              </div>
+
+              <!-- Row 4: Eighth Notes (8 notes = 1/2 x 8 beats) -->
+              <div class="subdiv-row" id="subdiv-row-8">
+                <div class="subdiv-label">
+                  <span class="subdiv-name">𝅘𝅥𝅮 เขบ็ต 1 ชั้น</span>
+                  <span class="subdiv-count">8 โน้ต (1/2 x 8)</span>
+                </div>
+                <div class="subdiv-track">
+                  <div class="subdiv-block" id="subdiv-blk-8-0" style="width: 12.5%;"><span>1</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-1" style="width: 12.5%;"><span>&amp;</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-2" style="width: 12.5%;"><span>2</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-3" style="width: 12.5%;"><span>&amp;</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-4" style="width: 12.5%;"><span>3</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-5" style="width: 12.5%;"><span>&amp;</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-6" style="width: 12.5%;"><span>4</span></div>
+                  <div class="subdiv-block" id="subdiv-blk-8-7" style="width: 12.5%;"><span>&amp;</span></div>
+                </div>
+                <button type="button" class="btn-subdiv-play" onclick="App.playMeasureSubdivision(8)">
+                  ▶ เล่นแถวนี้
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: วก.5 Rhythm Pattern Trainer & Interactive Tap Along -->
+          <div class="rhythm-trainer-section">
+            <div style="margin-bottom: 0.6rem;">
+              <div style="font-weight: 800; font-size: 0.95rem; color: #1e3a8a; display: flex; align-items: center; gap: 0.4rem;">
+                <span>🥁</span> <span>3. ห้องซ้อมจังหวะตามบทเรียน วก.5 & ซ้อมตบจังหวะ (Rhythm Trainer)</span>
+              </div>
+              <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                เลือกลวดลายจังหวะที่ใช้เรียนในหลักสูตร ฟังเสียงตัวอย่าง แล้วแตะปุ่มตบจังหวะตามเพื่อฝึกความแม่นยำ
+              </div>
+            </div>
+
+            <!-- Pattern Selector Pills -->
+            <div class="rhythm-pattern-pills" id="rhythm-pattern-pills">
+              <button type="button" class="btn-pat-pill active" onclick="App.selectRhythmPattern('walk', this)">
+                🚶 คาบ 3-4: เดินสม่ำเสมอ (1-1-1-1)
+              </button>
+              <button type="button" class="btn-pat-pill" onclick="App.selectRhythmPattern('half', this)">
+                ⏳ คาบ 5-6: ก้าวยาว (2-2)
+              </button>
+              <button type="button" class="btn-pat-pill" onclick="App.selectRhythmPattern('tri_up', this)">
+                📈 คาบ 7: อนุกรมขาขึ้น (1-1-2)
+              </button>
+              <button type="button" class="btn-pat-pill" onclick="App.selectRhythmPattern('tri_down', this)">
+                📉 คาบ 7: อนุกรมขาลง (2-1-1)
+              </button>
+              <button type="button" class="btn-pat-pill" onclick="App.selectRhythmPattern('syncopated', this)">
+                🔄 เพลงวน: จังหวะผสม (1-2-1)
+              </button>
+            </div>
+
+            <!-- Pattern Detail & Tap Practice Arena -->
+            <div class="rhythm-arena-card">
+              <div class="arena-left">
+                <div style="display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;">
+                  <span id="arena-pat-title" style="font-weight: 800; font-size: 1rem; color: #1e293b;">คาบ 3-4: จังหวะเดินสม่ำเสมอ</span>
+                  <span id="arena-pat-meter" style="font-size: 0.8rem; font-weight: 700; color: #0284c7;">4/4 (ดำ 4 ตัว)</span>
+                </div>
+                <div id="arena-pat-mnemonic" style="font-size: 0.85rem; font-weight: 700; color: #d97706; margin-top: 4px;">
+                  คำท่อง: "เคาะ - เคาะ - เคาะ - เคาะ" (1 - 2 - 3 - 4)
+                </div>
+
+                <!-- Beat Lights in Arena -->
+                <div class="arena-beat-lights">
+                  <div class="arena-light" id="arena-light-1">1</div>
+                  <div class="arena-light" id="arena-light-2">2</div>
+                  <div class="arena-light" id="arena-light-3">3</div>
+                  <div class="arena-light" id="arena-light-4">4</div>
+                </div>
+
+                <!-- Arena Control Buttons -->
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                  <button type="button" class="btn-nav-action primary" style="background: #0284c7; border-color: #0284c7; padding: 0.45rem 1rem; font-size: 0.85rem;" onclick="App.playRhythmPatternDemo()">
+                    ▶ ฟังจังหวะตัวอย่าง
+                  </button>
+                  <button type="button" class="btn-nav-action" style="background: #10b981; color: #ffffff; border-color: #059669; padding: 0.45rem 1rem; font-size: 0.85rem;" onclick="App.startRhythmTapTrainer()">
+                    👏 เริ่มซ้อมแตะตามจังหวะ
+                  </button>
+                  <button type="button" class="btn-nav-action" style="background: #64748b; color: #ffffff; border-color: #475569; padding: 0.45rem 0.85rem; font-size: 0.85rem;" onclick="App.stopRhythmAudio()">
+                    ⏹️ หยุด
+                  </button>
+                </div>
+              </div>
+
+              <!-- Arena Right: Interactive Tap Area -->
+              <div class="arena-right">
+                <button type="button" id="btn-rhythm-tap" class="btn-tap-target" onclick="App.onRhythmUserTap()">
+                  <div style="font-size: 2rem; line-height: 1;">👏</div>
+                  <div style="font-size: 1rem; font-weight: 800; margin-top: 4px;">แตะที่นี่ตามจังหวะ!</div>
+                  <div style="font-size: 0.72rem; opacity: 0.85;">(TAP หรือเคาะ Spacebar)</div>
+                </button>
+                <div class="tap-feedback-box">
+                  <div id="tap-feedback-text" style="font-weight: 800; font-size: 0.88rem; color: #64748b;">
+                    พร้อมฝึก: กด [เริ่มซ้อมแตะตามจังหวะ]
+                  </div>
+                  <div id="tap-score-text" style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
+                    ความแม่นยำ: - • สถิติต่อเนื่อง: 0 ครั้ง
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Practical Kalimba Rhythm Guide (Tips) -->
+          <div class="rhythm-tips-grid">
+            <div class="rhythm-tip-card">
+              <div class="tip-card-title">🎵 1. การลากเสียงตัวขาว/ตัวกลม</div>
+              <div class="tip-card-body">
+                ลิ่มคาลิมบ้าจะสั่นกังวานด้วยเนื้อเหล็ก เมื่อเจอตัวขาว (2 จังหวะ) หรือตัวกลม (4 จังหวะ) ให้ดีดด้วยน้ำหนักที่มั่นคง แล้วปล่อยนิ้วพ้นทันทีเพื่อให้ลิ่มสั่นยาวครบห้อง อย่าเอานิ้วไปแตะโดนลิ่มก่อนเวลา
+              </div>
+            </div>
+            <div class="rhythm-tip-card">
+              <div class="tip-card-title">🔇 2. เทคนิคเล่นตัวหยุด (Rest / Dampen)</div>
+              <div class="tip-card-body">
+                หากพบบทเพลงที่มีเครื่องหมายหยุด (Rest) และต้องการหยุดเสียงกังวานของลิ่มเดิม ให้ใช้ "เนื้อข้างนิ้วโป้งแตะเบาๆ ที่ปลายลิ่ม" เพื่อซับเสียง (Dampen) เสียงจะสงบเงียบลงทันที
+              </div>
+            </div>
+            <div class="rhythm-tip-card">
+              <div class="tip-card-title">👣 3. คุมสปีดด้วยการเคาะเท้า</div>
+              <div class="tip-card-body">
+                การเล่นคาลิมบ้าต้องสลับสองนิ้วโป้ง นิ้วที่ไม่ถนัดอาจทำให้จังหวะแกว่ง ให้ฝึกเคาะเท้าเป็นจังหวะตัวดำ 1-2-3-4 สม่ำเสมอ เพื่อเป็นเมโทรนอมส่วนตัวคุมให้จังหวะแม่นยำตลอดเพลง
+              </div>
             </div>
           </div>
         </div>
@@ -3953,7 +4315,7 @@
   <script src="js/period-media.js?v=20261028_20"></script>
   <script src="js/lyric-core.js?v=20261028_20"></script>
   <script src="js/lyric-studio.js?v=20261030_01"></script>
-  <script src="js/app.js?v=20261105_05"></script>
+  <script src="js/app.js?v=20261105_06"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>
