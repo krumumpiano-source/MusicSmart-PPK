@@ -92,6 +92,7 @@ const App = {
     }
 
     this.initModalManager();
+    this.initSidebar();
     this.updateBreadcrumbs();
   },
 
@@ -105,6 +106,140 @@ const App = {
     if (panel) {
       const isHidden = panel.style.display === 'none' || !panel.style.display;
       panel.style.display = isHidden ? 'block' : 'none';
+    }
+  },
+
+
+  // --- Modern Collapsible Sidebar Navigation Controller (2026-11-05) ---
+  initSidebar() {
+    try {
+      const isCollapsed = localStorage.getItem('ms_sidebar_collapsed') === 'true';
+      if (isCollapsed) {
+        this.collapseSidebar(true, false);
+      }
+    } catch (e) {
+      console.warn('Could not read ms_sidebar_collapsed from localStorage:', e);
+    }
+
+    this.refreshSidebarTooltips();
+
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        const tag = (e.target && e.target.tagName) || '';
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          e.preventDefault();
+          this.toggleSidebarCollapse();
+        }
+      }
+      if (e.key === 'Escape') {
+        const sidebar = document.getElementById('app-sidebar');
+        if (sidebar && sidebar.classList.contains('sidebar-open')) {
+          this.toggleSidebar(false);
+        }
+      }
+    });
+
+    this.updateSidebarRoleMenu();
+  },
+
+  toggleSidebar(forceState) {
+    const sidebar = document.getElementById('app-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+
+    const isMobile = window.innerWidth < 1024;
+    if (isMobile) {
+      const shouldOpen = typeof forceState === 'boolean' ? forceState : !sidebar.classList.contains('sidebar-open');
+      sidebar.classList.toggle('sidebar-open', shouldOpen);
+      if (overlay) overlay.classList.toggle('active', shouldOpen);
+    } else {
+      this.toggleSidebarCollapse(forceState);
+    }
+  },
+
+  toggleSidebarCollapse(forceState) {
+    const sidebar = document.getElementById('app-sidebar');
+    if (!sidebar) return;
+    const isCurrentlyCollapsed = sidebar.classList.contains('collapsed');
+    const targetState = typeof forceState === 'boolean' ? forceState : !isCurrentlyCollapsed;
+    this.collapseSidebar(targetState, true);
+  },
+
+  collapseSidebar(shouldCollapse, save = true) {
+    const sidebar = document.getElementById('app-sidebar');
+    if (!sidebar) return;
+
+    sidebar.classList.toggle('collapsed', shouldCollapse);
+    document.body.classList.toggle('sidebar-is-collapsed', shouldCollapse);
+
+    const btnCollapseText = sidebar.querySelector('.sidebar-collapse-text');
+    if (btnCollapseText) {
+      btnCollapseText.textContent = shouldCollapse ? 'ขยายแถบเมนู' : 'พับแถบเมนู';
+    }
+
+    if (save) {
+      try {
+        localStorage.setItem('ms_sidebar_collapsed', shouldCollapse ? 'true' : 'false');
+      } catch (e) {}
+    }
+  },
+
+  onSidebarItemClick() {
+    if (window.innerWidth < 1024) {
+      this.toggleSidebar(false);
+    }
+  },
+
+  updateSidebarRoleMenu() {
+    const teacherMenu = document.getElementById('sidebar-teacher-menu');
+    const studentMenu = document.getElementById('sidebar-student-menu');
+    const isTeacher = this.state.role === 'teacher';
+
+    if (teacherMenu) teacherMenu.style.display = isTeacher ? 'block' : 'none';
+    if (studentMenu) studentMenu.style.display = !isTeacher ? 'block' : 'none';
+  },
+
+  updateSidebarActiveItem(activeNavKey) {
+    const isTeacher = this.state.role === 'teacher';
+    if (isTeacher) {
+      document.querySelectorAll('#sidebar-teacher-menu .sidebar-nav-item').forEach(el => {
+        const key = el.getAttribute('data-nav');
+        el.classList.toggle('active', key === activeNavKey);
+      });
+    } else {
+      document.querySelectorAll('#sidebar-student-menu .sidebar-nav-item').forEach(el => {
+        const key = el.getAttribute('data-snav');
+        el.classList.toggle('active', key === activeNavKey);
+      });
+    }
+  },
+
+  refreshSidebarTooltips() {
+    document.querySelectorAll('.app-sidebar .sidebar-nav-item').forEach(btn => {
+      const label = btn.querySelector('.sidebar-nav-label');
+      if (label && label.textContent.trim()) {
+        btn.setAttribute('data-tooltip', label.textContent.trim());
+      }
+    });
+  },
+
+  showCockpit() {
+    const classes = Store.getAllClasses(this.state.grade);
+    const targetClass = this.state.selectedClass || (classes.length > 0 ? classes[0] : (this.state.grade === 'm2' ? 'ม.2/1' : 'ม.1/1'));
+    const prog = Store.getClassProgress(targetClass);
+    this.enterCockpit(targetClass, this.state.selectedPeriod || prog.nextPeriod || 1);
+  },
+
+  navToAssignments() {
+    this.updateMobileNav('mnav-assignments');
+    this.updateSidebarActiveItem('assignment');
+    if (this.state.role === 'student') {
+      const subBox = document.getElementById('student-submission-box');
+      if (subBox) {
+        subBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const txt = document.getElementById('student-submission-text');
+        if (txt) setTimeout(() => txt.focus(), 400);
+      }
     }
   },
 
@@ -147,6 +282,8 @@ const App = {
     // 4. Update breadcrumbs and mobile bottom navigation state
     this.updateBreadcrumbs();
     this.updateMobileNav('mnav-home');
+    this.updateSidebarActiveItem('lesson');
+    this.updateSidebarActiveItem('dashboard');
   },
 
   navToLessons() {
@@ -447,11 +584,7 @@ const App = {
   // ☰ เมนู (มือถือ <768px): เปิด/ปิดแถบปุ่มของครู
   toggleHeaderMenu(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
-    const header = document.querySelector('.app-header');
-    if (!header) return;
-    const open = header.classList.toggle('header-menu-open');
-    const btn = document.getElementById('btn-header-menu');
-    if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.textContent = open ? '✕ ปิดเมนู' : '☰ เมนู'; }
+    this.toggleSidebar();
   },
 
   _authEls() {
@@ -3059,6 +3192,7 @@ const App = {
 
     document.getElementById('view-dashboard').style.display = 'none';
     document.getElementById('view-cockpit').style.display = 'block';
+    this.updateSidebarActiveItem('cockpit');
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
