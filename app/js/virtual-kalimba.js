@@ -308,7 +308,14 @@ const VirtualKalimba = {
   stopPlay() { return this.stopSong(); },
   togglePlaySong() { if (this.widget) { if (this.widget.transport.state === 'playing') this.widget.stop(); else this.widget.play(); } },
   startSong() { if (this.widget) this.widget.play(); },
-  stopSong() { if (this.widget) { try { this.widget.stop(); } catch (e) {} } this._clearPhysical(); },
+  stopSong() {
+    if (this.widget) { try { this.widget.stop(); } catch (e) {} }
+    this._clearPhysical();
+    const container = typeof document !== 'undefined' && document.querySelector('#modal-virtual-kalimba .vk-widget-container');
+    if (container && typeof container.scrollTo === 'function') {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  },
 
   bindKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {

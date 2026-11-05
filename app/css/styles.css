@@ -4743,7 +4743,8 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  scroll-behavior: smooth;
   background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
 }
 #modal-virtual-kalimba #kalimba-vk-widget {
@@ -4777,13 +4778,18 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
   margin: 2px 0 4px 0;
 }
 #modal-virtual-kalimba .vk-widget-light .km-ctl {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid #f1f5f9;
+  margin: 0 0 6px 0;
+  padding: 4px 0 6px 0;
+  border-bottom: 1px solid #f1f5f9;
 }
 #modal-virtual-kalimba .vk-widget-light .km-btn {
   padding: 4px 10px;

@@ -191,14 +191,14 @@
     }
     cnt.push('</g>');
     out.push(cnt.join(''));
-    return finishStaff(out, notes, W, H, ids);
+    return finishStaff(out, notes, W, H, ids, lay);
   }
-  function finishStaff(out, notes, W, H, ids) {
+  function finishStaff(out, notes, W, H, ids, lay) {
     if (!notes || !notes.length) {
       out.push('<text x="' + (W / 2) + '" y="' + (STAFF.top + 2 * STAFF.S + 4) + '" font-size="13" text-anchor="middle" fill="#b71c1c">ยังไม่มีโน้ต – รอครูใส่</text>');
     }
     out.push('</svg>');
-    return { svg: out.join(''), ids: ids, height: H, width: W };
+    return { svg: out.join(''), ids: ids, height: H, width: W, lay: lay };
   }
 
   /** กุญแจซอล (G clef) วาดด้วยเส้นโค้ง SVG — ไม่พึ่งฟอนต์ Unicode (มือถือเก่าไม่มี 𝄞)
@@ -597,6 +597,12 @@
     badges = kindBadge;
     var staff = renderStaffSVG(this.notes, it.meter || '4/4', this.uid);
     this.staffIds = staff.ids; this.staffInfo = staff;
+    this.noteSystems = {};
+    if (staff.lay && staff.lay.pos) {
+      for (i = 0; i < staff.lay.pos.length; i++) {
+        this.noteSystems[staff.lay.pos[i].idx] = staff.lay.pos[i].sys;
+      }
+    }
     var dots = '', d; for (d = 0; d < this.meter.beatsPerBar; d++) dots += '<span class="km-dot" data-dot="' + d + '"></span>';
     var tines = getTines();
     var tineBlock = this.opts.tines === false ? '' :
@@ -604,7 +610,6 @@
     this.el.innerHTML =
       '<div class="km-box' + (this.reduced ? '' : ' km-anim') + '" data-reduced="' + (this.reduced ? 1 : 0) + '">' +
       '<div class="km-head">🎼 ' + esc(it.title) + badges + '</div>' + notices + teacherBox +
-      '<div class="km-frame" data-role="staff" style="padding-bottom:' + (staff.height / staff.width * 100).toFixed(3) + '%;">' + staff.svg + '</div>' +
       '<div class="km-ctl" data-role="ctl">' +
       '<button type="button" class="km-mute" data-act="mute" aria-pressed="false"></button>' +
       '<div class="km-mutehint" data-role="mutehint"></div>' +
@@ -620,8 +625,11 @@
       '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="click" checked/> เสียงคลิกระหว่างเล่น</label>' +
       '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="countin" checked/> นับนำ 1 ห้อง</label>' +
       '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="counts" checked/> แสดงเลขนับจังหวะ</label>' +
+      '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;" title="เลื่อนบรรทัดโน้ตอัตโนมัติขณะเล่น เพื่อให้นักเรียนไม่ต้องใช้มือเลื่อนหน้าจอขณะกำลังดีดคาลิมบ้า"><input type="checkbox" data-act="autoscroll" checked/> 📜 เลื่อนบรรทัดอัตโนมัติ</label>' +
       '<div style="margin:2px 0 4px;">' + dots + '<span data-role="status" style="font-size:12px;color:#546e7a;margin-left:6px;" aria-live="polite"></span></div>' +
-      '</div>' + tineBlock + '</div>';
+      '</div>' +
+      '<div class="km-frame" data-role="staff" style="padding-bottom:' + (staff.height / staff.width * 100).toFixed(3) + '%;">' + staff.svg + '</div>' +
+      tineBlock + '</div>';
     var self = this;
     this.el.onclick = function (e) { self._click(e || root.event); };
     this.el.onchange = function (e) { self._change(e || root.event); };
@@ -699,7 +707,7 @@
     this.transport.start();
   };
   Widget.prototype.pause = function () { this.transport.pause(); this._setStatus('พักไว้'); };
-  Widget.prototype.stop = function () { this.transport.stop(); this.mode = 'idle'; this._setStatus(''); };
+  Widget.prototype.stop = function () { this.transport.stop(); this.mode = 'idle'; this._setStatus(''); this._scrollToNote(-1); };
   Widget.prototype.restart = function () {
     if (!this.notes.length || !this._ensureCtx()) return;
     this.transport.stop(); this.mode = 'idle'; this.play();
@@ -757,17 +765,71 @@
       }
     }
   };
+  Widget.prototype._scrollToNote = function (idx) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    var autoScrollChk = this.$ ? this.$('[data-act="autoscroll"]') : null;
+    if (autoScrollChk && !autoScrollChk.checked) return;
+
+    var container = this.el.closest ? this.el.closest('.vk-widget-container') : null;
+    if (!container) {
+      container = this.el.parentElement;
+      while (container && container !== document.body && container !== document.documentElement) {
+        var ov = window.getComputedStyle ? window.getComputedStyle(container).overflowY : '';
+        if ((ov === 'auto' || ov === 'scroll') && container.scrollHeight > container.clientHeight + 10) break;
+        container = container.parentElement;
+      }
+    }
+    if (!container) return;
+
+    if (idx < 0) {
+      this._lastScrollSys = -1;
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        container.scrollTop = 0;
+      }
+      return;
+    }
+
+    var sys = (this.noteSystems && this.noteSystems[idx] !== undefined) ? this.noteSystems[idx] : -1;
+    var noteEl = this.staffIds ? document.getElementById(this.staffIds[idx]) : null;
+    if (!noteEl) return;
+
+    var sysChanged = (sys !== -1 && sys !== this._lastScrollSys);
+    var cRect = container.getBoundingClientRect();
+    var nRect = noteEl.getBoundingClientRect();
+    var outOfView = (nRect.bottom > cRect.bottom - 35) || (nRect.top < cRect.top + 30);
+
+    if (sysChanged || outOfView) {
+      this._lastScrollSys = sys;
+      var currentScroll = container.scrollTop;
+      var offsetFromContainerTop = nRect.top - cRect.top;
+      var targetScroll = currentScroll + offsetFromContainerTop - (cRect.height * 0.32);
+      if (targetScroll < 0) targetScroll = 0;
+      var maxScroll = container.scrollHeight - container.clientHeight;
+      if (targetScroll > maxScroll) targetScroll = maxScroll;
+
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top: targetScroll, behavior: 'smooth' });
+      } else {
+        container.scrollTop = targetScroll;
+      }
+    }
+  };
   Widget.prototype._noteState = function (idx, what) {
     var i, n, j, p;
     if (what === 'reset') {
       for (i = 0; i < this.notes.length; i++) { this._noteColor(i, COL.idle, false); n = this.notes[i]; for (j = 0; j < n.p.length; j++) this._tineColor(n.p[j], COL.tineIdle); }
-      this._clearDots(); return;
+      this._clearDots();
+      this._scrollToNote(-1);
+      return;
     }
     if (idx < 0 || !this.notes[idx]) return;
     n = this.notes[idx];
     if (what === 'on') {
       this._noteColor(idx, COL.cur, !this.reduced);
       for (j = 0; j < n.p.length; j++) this._tineColor(n.p[j], COL.tineCur);
+      this._scrollToNote(idx);
     } else if (what === 'off') {
       this._noteColor(idx, COL.done, false);
       for (j = 0; j < n.p.length; j++) this._tineColor(n.p[j], COL.tineDone);

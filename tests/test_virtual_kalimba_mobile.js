@@ -49,5 +49,12 @@ const kmSrc = fs.readFileSync(path.join(ROOT, 'app/js/kalimba-media.js'), 'utf8'
 assert(kmSrc.includes("isOpen ? '#ffffff' : color"), 'Open notes (half note, whole note) must retain #ffffff fill');
 console.log('✅ 5. Musical note shape integrity verified: half and whole notes stay open/hollow white');
 
+// Test 6: Multi-line Auto-Scroll & Hands-free Navigation
+assert(kmSrc.includes('_scrollToNote'), '_scrollToNote method must exist in kalimba-media.js');
+assert(kmSrc.includes('data-act="autoscroll"'), 'Auto-scroll toggle checkbox must exist');
+assert(kmSrc.includes('noteSystems'), 'System tracking mapping must exist in kalimba-media.js');
+assert(css.includes('position: sticky') || css.includes('position: -webkit-sticky'), 'Sticky controls must be present');
+console.log('✅ 6. Hands-free multi-line auto-scroll and sticky controls verified');
+
 console.log('🎉 ALL Virtual Kalimba Mobile UI tests passed successfully!');
 
