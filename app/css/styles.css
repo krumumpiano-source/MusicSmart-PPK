@@ -4733,6 +4733,87 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
   border-bottom: 1px solid #2563eb;
 }
 
+
+/* Fixed Playback Controls Toolbar (Outside the note score card) */
+#modal-virtual-kalimba .vk-playback-bar {
+  flex: 0 0 auto;
+  width: 100%;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 0.35rem 1rem;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+#modal-virtual-kalimba .vk-playback-bar:empty {
+  display: none;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  max-width: 860px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: #f8fafc;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-btn {
+  background: #334155;
+  color: #ffffff;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  min-height: 32px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-btn:hover:not(:disabled) {
+  background: #475569;
+  border-color: #64748b;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-btn[data-act="play"] {
+  background: #15803d;
+  border-color: #16a34a;
+  font-weight: 700;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-btn[data-act="play"]:hover:not(:disabled) {
+  background: #16a34a;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-bpm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+#modal-virtual-kalimba .vk-playback-bar .km-bpm input[type="range"] {
+  width: 80px;
+  accent-color: #3b82f6;
+}
+#modal-virtual-kalimba .vk-playback-bar label {
+  color: #cbd5e1;
+  font-size: 0.78rem !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 6px 2px 0 !important;
+  cursor: pointer;
+}
+#modal-virtual-kalimba .vk-playback-bar [data-role="status"] {
+  color: #38bdf8 !important;
+  font-weight: 600;
+}
+
 /* Stave / Widget Area */
 #modal-virtual-kalimba .vk-widget-container {
   flex: 1 1 auto;

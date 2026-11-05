@@ -56,5 +56,13 @@ assert(kmSrc.includes('noteSystems'), 'System tracking mapping must exist in kal
 assert(css.includes('position: sticky') || css.includes('position: -webkit-sticky'), 'Sticky controls must be present');
 console.log('✅ 6. Hands-free multi-line auto-scroll and sticky controls verified');
 
+// Test 7: External Playback Controls Toolbar outside note container
+assert(html.includes('id="kalimba-vk-playback-bar"'), '#kalimba-vk-playback-bar must exist outside the note container in index.html');
+assert(css.includes('.vk-playback-bar'), '.vk-playback-bar styles must be defined in styles.css');
+assert(kmSrc.includes('this.opts.ctlEl'), 'Widget must support opts.ctlEl for external controls rendering');
+const vkSrc = fs.readFileSync(path.join(ROOT, 'app/js/virtual-kalimba.js'), 'utf8');
+assert(vkSrc.includes('ctlEl: playbackBar'), 'VirtualKalimba must pass external playbackBar to Widget');
+console.log('✅ 7. Dedicated external playback controls toolbar outside note container verified');
+
 console.log('🎉 ALL Virtual Kalimba Mobile UI tests passed successfully!');
 

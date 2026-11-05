@@ -578,7 +578,7 @@
     this.render();
     widgetsLive.push(this);
   }
-  Widget.prototype.$ = function (sel) { return this.el.querySelector(sel); };
+  Widget.prototype.$ = function (sel) { var el = this.opts && this.opts.ctlEl ? this.opts.ctlEl.querySelector(sel) : null; return el || this.el.querySelector(sel); };
   Widget.prototype.render = function () {
     var it = this.item, n = this.notes.length, bad = it.status === 'missing', badges = '', notices = '', i;
     var teacher = this._isTeacher();
@@ -607,9 +607,7 @@
     var tines = getTines();
     var tineBlock = this.opts.tines === false ? '' :
       '<div class="km-kbd" data-role="kbd"><div class="km-frame" style="padding-bottom:' + (TINE_GEOM.H / TINE_GEOM.W * 100).toFixed(3) + '%;">' + renderTineSVG(tines, this.uid) + '</div></div>';
-    this.el.innerHTML =
-      '<div class="km-box' + (this.reduced ? '' : ' km-anim') + '" data-reduced="' + (this.reduced ? 1 : 0) + '">' +
-      '<div class="km-head">🎼 ' + esc(it.title) + badges + '</div>' + notices + teacherBox +
+    var ctlHtml =
       '<div class="km-ctl" data-role="ctl">' +
       '<button type="button" class="km-mute" data-act="mute" aria-pressed="false"></button>' +
       '<div class="km-mutehint" data-role="mutehint"></div>' +
@@ -622,18 +620,32 @@
       '<button type="button" class="km-btn" data-act="bpm+" aria-label="เพิ่ม BPM">+</button> ' +
       '<b data-role="bpmv">' + this.bpm + '</b> BPM</span>' +
       '<button type="button" class="km-btn" data-act="metro">🔔 เมโทรนอม</button>' +
-      '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="click" checked/> เสียงคลิกระหว่างเล่น</label>' +
-      '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="countin" checked/> นับนำ 1 ห้อง</label>' +
-      '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;"><input type="checkbox" data-act="counts" checked/> แสดงเลขนับจังหวะ</label>' +
-      '<label style="display:inline-block;margin:0 10px 6px 0;font-size:13px;" title="เลื่อนบรรทัดโน้ตอัตโนมัติขณะเล่น เพื่อให้นักเรียนไม่ต้องใช้มือเลื่อนหน้าจอขณะกำลังดีดคาลิมบ้า"><input type="checkbox" data-act="autoscroll" checked/> 📜 เลื่อนบรรทัดอัตโนมัติ</label>' +
-      '<div style="margin:2px 0 4px;">' + dots + '<span data-role="status" style="font-size:12px;color:#546e7a;margin-left:6px;" aria-live="polite"></span></div>' +
-      '</div>' +
+      '<label style="display:inline-block;margin:0 10px 4px 0;font-size:13px;"><input type="checkbox" data-act="click" checked/> เสียงคลิกระหว่างเล่น</label>' +
+      '<label style="display:inline-block;margin:0 10px 4px 0;font-size:13px;"><input type="checkbox" data-act="countin" checked/> นับนำ 1 ห้อง</label>' +
+      '<label style="display:inline-block;margin:0 10px 4px 0;font-size:13px;"><input type="checkbox" data-act="counts" checked/> แสดงเลขนับจังหวะ</label>' +
+      '<label style="display:inline-block;margin:0 10px 4px 0;font-size:13px;" title="เลื่อนบรรทัดโน้ตอัตโนมัติขณะเล่น เพื่อให้นักเรียนไม่ต้องใช้มือเลื่อนหน้าจอขณะกำลังดีดคาลิมบ้า"><input type="checkbox" data-act="autoscroll" checked/> 📜 เลื่อนบรรทัดอัตโนมัติ</label>' +
+      '<div style="margin:2px 0 2px;">' + dots + '<span data-role="status" style="font-size:12px;color:#546e7a;margin-left:6px;" aria-live="polite"></span></div>' +
+      '</div>';
+
+    if (this.opts && this.opts.ctlEl) {
+      this.opts.ctlEl.innerHTML = ctlHtml;
+    }
+
+    this.el.innerHTML =
+      '<div class="km-box' + (this.reduced ? '' : ' km-anim') + '" data-reduced="' + (this.reduced ? 1 : 0) + '">' +
+      '<div class="km-head">🎼 ' + esc(it.title) + badges + '</div>' + notices + teacherBox +
+      (this.opts && this.opts.ctlEl ? '' : ctlHtml) +
       '<div class="km-frame" data-role="staff" style="padding-bottom:' + (staff.height / staff.width * 100).toFixed(3) + '%;">' + staff.svg + '</div>' +
       tineBlock + '</div>';
     var self = this;
     this.el.onclick = function (e) { self._click(e || root.event); };
     this.el.onchange = function (e) { self._change(e || root.event); };
     this.el.oninput = function (e) { self._change(e || root.event); };
+    if (this.opts && this.opts.ctlEl) {
+      this.opts.ctlEl.onclick = function (e) { self._click(e || root.event); };
+      this.opts.ctlEl.onchange = function (e) { self._change(e || root.event); };
+      this.opts.ctlEl.oninput = function (e) { self._change(e || root.event); };
+    }
     this._syncButtons('stopped');
     this._applyTransportOpts();
     this._syncMute();
@@ -663,9 +675,9 @@
   };
   Widget.prototype.toggleMute = function () { setMuted(!isMuted()); };
   Widget.prototype._target = function (e) {
-    var t = e.target || e.srcElement;
-    while (t && t !== this.el && !(t.getAttribute && (t.getAttribute('data-act') || t.getAttribute('data-note')))) t = t.parentNode;
-    return (t && t !== this.el) ? t : null;
+    var t = e.target || e.srcElement, rootEl = this.el, ctlEl = this.opts && this.opts.ctlEl;
+    while (t && t !== rootEl && t !== ctlEl && !(t.getAttribute && (t.getAttribute('data-act') || t.getAttribute('data-note')))) t = t.parentNode;
+    return (t && t !== rootEl && t !== ctlEl) ? t : null;
   };
   Widget.prototype._click = function (e) {
     var t = this._target(e); if (!t) return;
@@ -836,11 +848,13 @@
     }
   };
   Widget.prototype._clearDots = function () {
-    var dots = this.el.querySelectorAll('.km-dot'), i;
+    var root = (this.opts && this.opts.ctlEl) ? this.opts.ctlEl : this.el;
+    var dots = root.querySelectorAll('.km-dot'), i;
     for (i = 0; i < dots.length; i++) dots[i].className = 'km-dot';
   };
   Widget.prototype._beat = function (b, inBar, count) {
-    var dots = this.el.querySelectorAll('.km-dot'), i;
+    var root = (this.opts && this.opts.ctlEl) ? this.opts.ctlEl : this.el;
+    var dots = root.querySelectorAll('.km-dot'), i;
     for (i = 0; i < dots.length; i++) dots[i].className = 'km-dot' + (i === inBar ? (count ? ' km-d-cnt' : (inBar === 0 ? ' km-d-acc' : ' km-d-on')) : '');
     if (count) this._setStatus('นับนำ…');
     else if (this.mode === 'play') this._setStatus('กำลังเล่น…');
@@ -860,6 +874,12 @@
     var wi = widgetsLive.indexOf ? widgetsLive.indexOf(this) : -1; if (wi >= 0) widgetsLive.splice(wi, 1);
     try { this.transport.stop(); } catch (e) {}
     this.el.innerHTML = ''; this.el.onclick = null; this.el.onchange = null; this.el.oninput = null;
+    if (this.opts && this.opts.ctlEl) {
+      this.opts.ctlEl.innerHTML = '';
+      this.opts.ctlEl.onclick = null;
+      this.opts.ctlEl.onchange = null;
+      this.opts.ctlEl.oninput = null;
+    }
   };
 
   /* ---------- ชุดสื่อรายคาบ (ตัวเลือกรายการ + ช่องหมายเลขเครื่อง) ---------- */

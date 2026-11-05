@@ -269,13 +269,21 @@ const VirtualKalimba = {
     const editBtn = document.getElementById('kalimba-vk-edit');
     if (editBtn) editBtn.style.display = (this._isStaff() && this._root().KalimbaNoteEditor && found) ? 'inline-flex' : 'none';
     if (!box) return;
-    if (!found) { box.innerHTML = '<div style="padding:12px;color:#fca5a5;">ยังไม่มีแบบฝึกให้เลือก</div>'; return; }
+    if (!found) {
+      if (playbackBar) playbackBar.innerHTML = '';
+      box.innerHTML = '<div style="padding:12px;color:#fca5a5;">ยังไม่มีแบบฝึกให้เลือก</div>';
+      return;
+    }
     const R = this._root();
-    if (!R.KalimbaMedia || !R.KalimbaMedia.Widget) { box.innerHTML = '<div style="padding:12px;color:#fca5a5;">โมดูลแสดงโน้ตยังโหลดไม่เสร็จ — รีเฟรชหน้า</div>'; return; }
+    if (!R.KalimbaMedia || !R.KalimbaMedia.Widget) {
+      if (playbackBar) playbackBar.innerHTML = '';
+      box.innerHTML = '<div style="padding:12px;color:#fca5a5;">โมดูลแสดงโน้ตยังโหลดไม่เสร็จ — รีเฟรชหน้า</div>';
+      return;
+    }
     const self = this, item = found.item, period = found.period;
     box.innerHTML = '';
     const holder = document.createElement('div'); holder.className = 'vk-widget-light'; box.appendChild(holder);
-    this.widget = new R.KalimbaMedia.Widget(holder, item, { tines: false });
+    this.widget = new R.KalimbaMedia.Widget(holder, item, { tines: false, ctlEl: playbackBar || undefined });
     const w = this.widget, orig = w._noteState;
     w._noteState = function (idx, what) { orig.call(w, idx, what); self._syncPhysical(w, idx, what); };
     this._lastPeriod = period;
