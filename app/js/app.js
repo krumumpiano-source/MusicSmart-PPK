@@ -5721,7 +5721,21 @@ const App = {
     if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.playNote) {
       VirtualKalimba.playNote(note);
     }
-    // Visual feedback on staff note card
+    // 1. Visual feedback on staff note (SVG)
+    const staffNotes = document.querySelectorAll(`#svg-music-staff .interactive-note[data-note="${note}"]`);
+    staffNotes.forEach(el => {
+      el.classList.add('note-highlight');
+      setTimeout(() => el.classList.remove('note-highlight'), 300);
+    });
+
+    // 2. Visual feedback on Kalimba tines (both staff pane & kalimba pane)
+    const tines = document.querySelectorAll(`.aids-tine[data-note="${note}"]`);
+    tines.forEach(t => {
+      t.classList.add('active-hit');
+      setTimeout(() => t.classList.remove('active-hit'), 280);
+    });
+
+    // 3. Visual feedback on staff note card
     const card = document.getElementById(`aids-note-card-${note}`);
     if (card) {
       card.style.transform = 'scale(1.08)';
