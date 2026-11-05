@@ -3054,6 +3054,21 @@ const App = {
   },
 
   async resetStudentPinOnServer(studentId) {
+    // 1. Cloudflare mode
+    if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined') {
+      try {
+        if (CloudApi.Auth && CloudApi.Auth.isTeacher()) {
+          await CloudApi.request('POST', `/api/teacher/students/${encodeURIComponent(studentId)}/reset-pin`);
+          if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
+            GoogleSheetSync.showToast(`รีเซ็ต PIN รหัส ${studentId} บน Cloudflare แล้ว`, 'success');
+          }
+          return;
+        }
+      } catch (err) {
+        console.warn('Cloudflare resetPin warning:', err);
+      }
+    }
+    // 2. Google Apps Script mode
     const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
     if (!cfg.webAppUrl || !cfg.syncToken) return;
     try {
@@ -3095,9 +3110,13 @@ const App = {
 
     students.forEach(s => {
       const opt = document.createElement('option');
-      opt.value = s.id;
-      const hasPin = !!(accounts[s.id] && (accounts[s.id].pinHash || accounts[s.id].pin));
-      opt.textContent = `เลขที่ ${s.rollNo} • ${s.id} - ${s.name} ${hasPin ? '🔒 (มี PIN แล้ว)' : '🔓 (ยังไม่ตั้ง)'}`;
+      const sId = s.student_id || s.id;
+      const rollNo = (s.no !== undefined && s.no !== null) ? s.no : (s.rollNo || '-');
+      const fullName = (s.first_name ? `${s.prefix || ''}${s.first_name} ${s.last_name || ''}`.trim() : (s.name || sId));
+      opt.value = sId;
+      const acc = (accounts && (accounts[sId] || accounts[s.id])) || (Store.getStudentAccount ? Store.getStudentAccount(sId) : null);
+      const hasPin = !!(acc && (acc.pinHash || acc.pin));
+      opt.textContent = `เลขที่ ${rollNo} • ${sId} - ${fullName} ${hasPin ? '🔒 (มี PIN แล้ว)' : '🔓 (ยังไม่ตั้ง)'}`;
       studentSel.appendChild(opt);
     });
   },
@@ -3113,12 +3132,13 @@ const App = {
 
     if (confirm(`ต้องการรีเซ็ตรหัส PIN ของ ${sName} หรือไม่?\nนักเรียนจะต้องตั้ง PIN 6 หลักใหม่ในการเข้าใช้ครั้งถัดไป`)) {
       this.resetStudentPinOnServer(studentId);
-      if (Store.resetStudentPin(studentId)) {
+      const res = Store.resetStudentPin(studentId);
+      if (res && (res.success || res === true)) {
         alert(`✅ รีเซ็ต PIN เรียบร้อยแล้ว!\nนักเรียนรหัส ${studentId} จะต้องตั้ง PIN ใหม่เมื่อเข้าใช้ครั้งถัดไป`);
         const classSel = document.getElementById('user-pin-reset-class');
         if (classSel) this.onUserPinClassChange(classSel.value);
       } else {
-        alert('❌ เกิดข้อผิดพลาดในการรีเซ็ต PIN');
+        alert(`❌ ${res && res.message ? res.message : 'เกิดข้อผิดพลาดในการรีเซ็ต PIN'}`);
       }
     }
   },
@@ -5883,12 +5903,12 @@ const App = {
     },
     tri_down: {
       name: 'คาบ 7: อนุกรมขาลง',
-      meter: '4/4 (ขาว - ดำ - ดำ: 2-1-1)',
-      mnemonic: 'คำท่อง: "ยาาว... - สั้น - สั้น" (1 - - | 3 - 4)',
+      meter: '4/4 (ดำ - ดำ - ขาว: 1-1-2)',
+      mnemonic: 'คำท่อง: "สั้น - สั้น - ยาาว..." (1 - 2 - 3 - -)',
       beats: [
-        { beat: 0, dur: 2, note: 'G4' },
-        { beat: 2, dur: 1, note: 'F4' },
-        { beat: 3, dur: 1, note: 'E4' }
+        { beat: 0, dur: 1, note: 'G4' },
+        { beat: 1, dur: 1, note: 'F4' },
+        { beat: 2, dur: 2, note: 'E4' }
       ]
     },
     syncopated: {
