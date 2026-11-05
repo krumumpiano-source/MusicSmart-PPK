@@ -66,6 +66,7 @@ assert(!studentWsHeader.includes('data-tool="kalimba"'), 'Student workspace card
 
 // 5. CSS Rules & Responsive Layout
 assert(css.includes('--sidebar-width'), 'CSS must declare --sidebar-width');
+assert(css.includes('--sidebar-width: 268px;') || css.includes('--sidebar-width: 264px;'), 'Sidebar width must be at least 264px to prevent Thai label truncation');
 assert(css.includes('--sidebar-collapsed-width'), 'CSS must declare --sidebar-collapsed-width');
 assert(css.includes('.app-sidebar.collapsed'), 'CSS must handle collapsed icon-rail mode');
 assert(css.includes('.sidebar-overlay.active'), 'CSS must handle responsive mobile drawer overlay');

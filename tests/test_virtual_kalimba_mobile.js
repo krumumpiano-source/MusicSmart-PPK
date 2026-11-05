@@ -44,5 +44,10 @@ assert(typeof vk.openModal === 'function', 'openModal must be a function');
 assert(typeof vk.closeModal === 'function', 'closeModal must be a function');
 console.log('✅ 4. VirtualKalimba JS methods verified');
 
+// Test 5: Musical Note Semantics (Half Note & Whole Note stay hollow / open white)
+const kmSrc = fs.readFileSync(path.join(ROOT, 'app/js/kalimba-media.js'), 'utf8');
+assert(kmSrc.includes("isOpen ? '#ffffff' : color"), 'Open notes (half note, whole note) must retain #ffffff fill');
+console.log('✅ 5. Musical note shape integrity verified: half and whole notes stay open/hollow white');
+
 console.log('🎉 ALL Virtual Kalimba Mobile UI tests passed successfully!');
 

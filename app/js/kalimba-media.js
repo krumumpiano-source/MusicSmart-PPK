@@ -739,11 +739,21 @@
     for (i = 0; i < kids.length; i++) {
       k = kids[i]; if (!k.getAttribute) continue;
       if (k.getAttribute('class') === 'kh') {
+        var isOpen = k.getAttribute('data-open') === '1';
         k.setAttribute('stroke', color);
-        k.setAttribute('fill', k.getAttribute('data-open') === '1' ? (color === COL.idle ? '#ffffff' : color) : color);
-        k.setAttribute('rx', scale ? '6.6' : '5.4'); k.setAttribute('ry', scale ? '4.8' : '3.9');
+        // รักษาหน้าตารูปแบบโน้ตเดิมเสมอ: โน้ตตัวขาว (half note) และตัวกลม (whole note) ต้องเป็นหัวโปร่ง (fill สีขาว) ตลอดเวลา ไม่กลายเป็นตัวดำ
+        k.setAttribute('fill', isOpen ? '#ffffff' : color);
+        if (isOpen) {
+          k.setAttribute('stroke-width', scale ? '2.4' : (color === COL.idle ? '1.4' : '1.8'));
+        } else {
+          k.setAttribute('stroke-width', scale ? '1.8' : '1.4');
+        }
+        k.setAttribute('rx', scale ? '6.6' : '5.4');
+        k.setAttribute('ry', scale ? '4.8' : '3.9');
       } else if (k.getAttribute('class') === 'ks') {
-        k.setAttribute('stroke', color); if (k.tagName === 'circle' || k.tagName === 'rect') k.setAttribute('fill', color);
+        k.setAttribute('stroke', color);
+        if (k.tagName === 'circle' || k.tagName === 'rect') k.setAttribute('fill', color);
+        if (k.tagName === 'line') k.setAttribute('stroke-width', scale ? '1.8' : '1.4');
       }
     }
   };
