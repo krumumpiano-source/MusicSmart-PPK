@@ -230,6 +230,19 @@ const App = {
     this.enterCockpit(targetClass, this.state.selectedPeriod || prog.nextPeriod || 1);
   },
 
+  openSubmissionsView() {
+    this.updateSidebarActiveItem('pull');
+    const classes = Store.getAllClasses(this.state.grade);
+    const targetClass = this.state.selectedClass || (classes.length > 0 ? classes[0] : (this.state.grade === 'm2' ? 'ม.2/1' : 'ม.1/1'));
+    const prog = Store.getClassProgress(targetClass);
+    const period = this.state.selectedPeriod || prog.nextPeriod || 1;
+    this.enterCockpit(targetClass, period);
+    this.switchTab('submissions');
+    if (typeof TeacherPull !== 'undefined' && TeacherPull.pull) {
+      TeacherPull.pull({ silent: true }).catch(() => {});
+    }
+  },
+
   navToAssignments() {
     this.updateMobileNav('mnav-assignments');
     this.updateSidebarActiveItem('assignment');

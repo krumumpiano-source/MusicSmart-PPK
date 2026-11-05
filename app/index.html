@@ -173,7 +173,7 @@
             <span class="sidebar-nav-icon">⏱️</span>
             <span class="sidebar-nav-label">ห้องสอนสด (Cockpit)</span>
           </button>
-          <button id="btn-pull-student-work" class="sidebar-nav-item" data-nav="pull" onclick="TeacherPull.pull(); App.onSidebarItemClick();" title="ดึงงานและแบบทดสอบที่นักเรียนส่ง">
+          <button id="btn-pull-student-work" class="sidebar-nav-item" data-nav="pull" onclick="App.openSubmissionsView(); App.onSidebarItemClick();" title="เปิดหน้าตรวจงานและดึงงานที่นักเรียนส่ง">
             <span class="sidebar-nav-icon">📥</span>
             <span class="sidebar-nav-label">ตรวจงาน & ดึงงานนักเรียน</span>
           </button>
@@ -3850,7 +3850,7 @@
   <script src="js/period-media.js?v=20261028_20"></script>
   <script src="js/lyric-core.js?v=20261028_20"></script>
   <script src="js/lyric-studio.js?v=20261030_01"></script>
-  <script src="js/app.js?v=20261105_01"></script>
+  <script src="js/app.js?v=20261105_02"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>
