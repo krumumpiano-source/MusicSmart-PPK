@@ -58,6 +58,14 @@
     <div class="header-inner">
       <!-- School & Innovation Brand Identity -->
       <div class="brand-section">
+        <!-- Sidebar Toggle Button -->
+        <button id="btn-sidebar-toggle" class="btn-sidebar-toggle" type="button" aria-label="เปิด/ปิด แถบเมนูด้านข้าง (Sidebar)" onclick="App.toggleSidebar()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
         <div class="brand-home-link" onclick="App.goHome()" role="button" tabindex="0" title="🏠 คลิกเพื่อกลับสู่หน้าแรก (Home)" onkeydown="if(event.key==='Enter'||event.key===' ')App.goHome()">
           <div class="school-crest-badge" id="app-crest-badge" title="T-PACE MusicSmart • โรงเรียนพะเยาพิทยาคม">
             <span style="font-size: 0.85rem; font-weight: 800; letter-spacing: -0.5px;">T-PACE</span>
@@ -100,21 +108,8 @@
 
       <!-- Instructor Profile & Navigation Actions -->
       <div class="header-actions">
-        <button id="btn-header-menu" class="btn-nav-action" type="button" aria-expanded="false" aria-controls="teacher-actions-group" onclick="App.toggleHeaderMenu(event)">☰ เมนู</button>
-        <!-- Teacher Actions Group -->
+        <!-- Teacher Actions Group (Slim Header) -->
         <div id="teacher-actions-group" style="display: flex; align-items: center; gap: 0.5rem;">
-          <button id="btn-mentor-panel" class="btn-nav-action" style="background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" onclick="MentorPanel.open()" title="นักศึกษาฝึกสอน: บัญชี อนุมัติคะแนน บันทึกหลังสอน นิเทศ พอร์ตโฟลิโอ">
-            👩‍🎓 <span class="hide-on-tablet">นักศึกษาฝึกสอน</span>
-          </button>
-          <button data-intern-only style="display:none; background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; font-weight: 700;" class="btn-nav-action" onclick="Portfolio.openForCurrentIntern()" title="แฟ้มสะสมผลงาน (พิมพ์/PDF)">
-            📁 <span class="hide-on-tablet">พอร์ตโฟลิโอของฉัน</span>
-          </button>
-          <button id="btn-teacher-dashboard" class="btn-nav-action" style="background: #eef2ff; color: #3730a3; border-color: #c7d2fe; font-weight: 700;" onclick="TeacherDashboard.open()" title="แดชบอร์ดห้องเรียน คะแนน เวลาเรียน กลุ่มเสี่ยง และส่งออก ปพ.5">
-            📊 <span class="hide-on-tablet">แดชบอร์ด</span>
-          </button>
-          <button id="btn-pull-student-work" class="btn-nav-action" style="background: #ecfdf5; color: #047857; border-color: #a7f3d0; font-weight: 700;" onclick="TeacherPull.pull()" title="ดึงงานและคะแนนแบบทดสอบที่นักเรียนส่งจากมือถือ เข้าหน้าตรวจงาน">
-            📥 <span class="hide-on-tablet">ดึงงานนักเรียน</span>
-          </button>
           <button id="btn-copy-student-link" class="btn-nav-action" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 700;" onclick="App.copyStudentShareLink()" title="คัดลอกลิงก์ส่งให้นักเรียนเพื่อเข้าสู่ระบบและติดตั้งแอปทันที">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             <span class="hide-on-tablet">ลิงก์ส่งนักเรียน</span>
@@ -124,205 +119,23 @@
             <span id="badge-instructor-role" class="teacher-role-tag">ครูประจำวิชา</span>
             <span id="badge-instructor-name" class="teacher-name-label">คุณครูพงศธร โพธิแก้ว</span>
           </div>
-
-          <!-- Quick Tools & Services Dropdown Wrapper -->
-          <div class="quick-tools-wrapper" style="position: relative;">
-            <button id="btn-quick-tools" class="btn-nav-action" onclick="App.toggleToolsMenu(event)" title="เปิดคลังเครื่องมือดนตรีและเอกสารวิชาการ" aria-haspopup="true" aria-expanded="false">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-              <span>คลังเครื่องมือ & วก.</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-
-            <!-- Dropdown Popover Panel -->
-            <div id="tools-dropdown-panel" class="tools-dropdown-panel" style="display: none;">
-              <div class="tools-dropdown-header">
-                <div>
-                  <div style="font-weight: 700; font-size: 0.88rem; color: var(--ppk-navy-dark);">คลังเครื่องมือและเอกสารการสอน</div>
-                  <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 1px;">ระบบนิเวศดนตรี T-PACE • ร.ร.พะเยาพิทยาคม</div>
-                </div>
-                <button class="tools-dropdown-close" onclick="App.closeToolsMenu()">✕</button>
-              </div>
-
-              <div class="tools-dropdown-grid">
-                <!-- Group 1: Music Tools -->
-                <div class="tools-group">
-                  <div class="tools-group-title">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-                    เครื่องมือดนตรีดิจิทัล
-                  </div>
-                  <button class="tools-item-btn" data-tool="metronome" onclick="Metronome.open(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #e0f2fe; color: #0284c7;">🥁</span>
-                    <div class="tool-text">
-                      <div class="tool-name">เมโทรนอมเคาะจังหวะ</div>
-                      <div class="tool-desc">กำหนดความเร็ว BPM & จังหวะตก Visual Beat</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" data-tool="kalimba" onclick="VirtualKalimba.openModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #dbeafe; color: #1d4ed8;">🎹</span>
-                    <div class="tool-text">
-                      <div class="tool-name">ซ้อมคาลิมบ้า (Virtual)</div>
-                      <div class="tool-desc">ห้องซ้อมดนตรี 17 เสียง & Backing Track</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" data-tool="notation" onclick="App.openMusicAidsModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #fef08a; color: #854d0e;">🎼</span>
-                    <div class="tool-text">
-                      <div class="tool-name">สื่อการสอนโน้ตสากล & ผังคาลิมบ้า</div>
-                      <div class="tool-desc">บรรทัด 5 เส้น, กุญแจซอล, เพลง Round</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="App.openEnsemble(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #fdf2f8; color: #db2777;">🎺</span>
-                    <div class="tool-text">
-                      <div class="tool-name">สำรวจวงดนตรีเสมือนจริง</div>
-                      <div class="tool-desc">ผังวงไทย/พื้นบ้าน/สากล & Audio Timbre</div>
-                    </div>
-                  </button>
-                </div>
-
-                <!-- Group 2: Academic Docs -->
-                <div class="tools-group">
-                  <div class="tools-group-title">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                    งานวิชาการ & วก.
-                  </div>
-                  <button class="tools-item-btn" onclick="App.openAcademicDocsModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #fef3c7; color: #d97706;">📁</span>
-                    <div class="tool-text">
-                      <div class="tool-name">คลังเอกสาร วก.1 - วก.7</div>
-                      <div class="tool-desc">หลักสูตร, แผนการสอน, สื่อ, รูบริก</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="OfficialForms.openModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #e0e7ff; color: #4338ca;">🖨️</span>
-                    <div class="tool-text">
-                      <div class="tool-name">พิมพ์ ปพ.5 / วก.5</div>
-                      <div class="tool-desc">แบบฟอร์มทางการมาตรฐาน A4</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="CARAnalytics.openModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #dcfce7; color: #15803d;">📈</span>
-                    <div class="tool-text">
-                      <div class="tool-name">วิจัย CAR (วPA คศ.4)</div>
-                      <div class="tool-desc">สถิติ Paired t-test & E1/E2</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" id="btn-evidence-hub" onclick="EvidenceHub.open(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #fef9c3; color: #a16207;">🏅</span>
-                    <div class="tool-text">
-                      <div class="tool-name">ศูนย์หลักฐาน คศ.4 (ครู)</div>
-                      <div class="tool-desc">ผลสัมฤทธิ์ • นวัตกรรม • วิจัย • PA • ให้คำปรึกษา</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="QuizEngine.openQuizModal(1); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #fdf2f8; color: #db2777;">📝</span>
-                    <div class="tool-text">
-                      <div class="tool-name">คลังแบบทดสอบท้ายหน่วย (40 ข้อ)</div>
-                      <div class="tool-desc">ตรวจข้อสอบ สุ่มข้อและสลับตัวเลือก</div>
-                    </div>
-                  </button>
-                </div>
-
-                <!-- Group 3: System Management -->
-                <div class="tools-group">
-                  <div class="tools-group-title">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                    จัดการระบบการสอน
-                  </div>
-                  <button class="tools-item-btn" onclick="App.openTimetableModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">📅</span>
-                    <div class="tool-text">
-                      <div class="tool-name">ตารางสอน</div>
-                      <div class="tool-desc">ตารางสอนประจำสัปดาห์</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="App.openSemesterModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">🗂️</span>
-                    <div class="tool-text">
-                      <div class="tool-name">คลังเทอม / ประวัติ</div>
-                      <div class="tool-desc">จัดการเทอมและดูข้อมูลย้อนหลัง</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="App.openSubjectsModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">📖</span>
-                    <div class="tool-text">
-                      <div class="tool-name">จัดการรายวิชา</div>
-                      <div class="tool-desc">ตั้งค่ารหัสวิชาและห้องเรียน</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="App.openUserManagementModal('admin'); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #eef2ff; color: #4338ca;">👤</span>
-                    <div class="tool-text">
-                      <div class="tool-name">บัญชีแอดมิน & จัดการผู้ใช้</div>
-                      <div class="tool-desc">เปลี่ยนรหัสผ่าน, เพิ่มนักศึกษาฝึกสอน, รีเซ็ต PIN</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="GoogleSheetSync.openModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #ecfdf5; color: #059669;">📊</span>
-                    <div class="tool-text">
-                      <div class="tool-name">ซิงค์คู่ Google Sheets (Dual-Save)</div>
-                      <div class="tool-desc">บันทึกในเครื่อง + ขึ้นคลาวด์ชีตอัตโนมัติ</div>
-                    </div>
-                  <button class="tools-item-btn" onclick="App.openCurriculumHubModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #e0e7ff; color: #4338ca;">📚</span>
-                    <div class="tool-text">
-                      <div class="tool-name">คลังแผนการสอน 40 คาบ</div>
-                      <div class="tool-desc">ดูและปรับแต่งหลักสูตร ม.1 และ ม.2</div>
-                    </div>
-                  </button>
-                  <button class="tools-item-btn" onclick="App.openSettingsModal(); App.closeToolsMenu();">
-                    <span class="tool-icon" style="background: #f1f5f9; color: #475569;">🔧</span>
-                    <div class="tool-text">
-                      <div class="tool-name">ตั้งค่านวัตกรรม</div>
-                      <div class="tool-desc">สถานศึกษาและรูปแบบ T-PACE</div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Curriculum Hub Button -->
-          <button id="btn-curriculum-hub" class="btn-nav-action" onclick="App.openCurriculumHubModal()" title="คลังจัดการหลักสูตรและแผนการสอน 40 คาบ">
-            📚 คลังแผนการสอน
-          </button>
-
-          <!-- Google Sheets Dual-Save Sync Pill -->
-          <button id="btn-google-sheets-pill" class="btn-nav-action" onclick="GoogleSheetSync.openModal()" title="ระบบบันทึกคู่ขนาน: ในเครื่อง (Local) + Google Sheets">
-            📊 เชื่อม Google Sheet
-          </button>
-
-          <!-- Primary Export / Report Button -->
-          <button id="btn-export-report" class="btn-nav-action primary" onclick="App.openExportModal()" title="ส่งออกข้อมูลและบันทึกหลังสอน วก.5">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            รายงาน & วก.5
-          </button>
         </div>
 
-        <!-- Student Actions Group -->
+        <!-- Student Actions Group (Slim Header) -->
         <div id="student-actions-group" style="display: none; align-items: center; gap: 0.5rem;">
           <button id="btn-student-pwa-install" class="btn-nav-action" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd; font-weight: 700;" onclick="App.triggerPwaInstall()" title="ติดตั้งแอปพลิเคชัน MusicSmart ลงในอุปกรณ์">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
             <span>ติดตั้งแอป</span>
           </button>
-          <button class="btn-nav-action" data-tool="kalimba" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมดนตรี คาลิมบ้า 17 คีย์">
-            <span>🎹 คาลิมบ้า</span>
-          </button>
-          <button class="btn-nav-action" data-tool="metronome" style="background: #f8fafc; color: #334155; border-color: #cbd5e1; font-weight: 600;" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
-            <span>🥁 เมโทรนอม</span>
-          </button>
-          <button id="btn-student-calendar" class="btn-nav-action" style="background: #fefce8; color: #854d0e; border-color: #fde68a; font-weight: 700;" onclick="TaskCalendar.open()" title="ปฏิทินกำหนดส่งงาน + แจ้งเตือน">
-            <span>📅 ปฏิทินงาน</span>
-          </button>
           <button id="btn-student-progress" class="btn-nav-action" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 700;" onclick="StudentProgress.open()" title="คะแนนและความก้าวหน้าของฉัน">
-            <span>📈 ความก้าวหน้า</span>
+            <span>📈 <span class="hide-on-tablet">ความก้าวหน้า</span></span>
           </button>
           <button id="btn-student-recording" class="btn-nav-action" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 700;" onclick="Recording.open(App.state && App.state.period)" title="ส่งคลิปฝึกซ้อมเป็นลิงก์">
-            <span>🎧 ส่งคลิปฝึกซ้อม</span>
+            <span>🎧 <span class="hide-on-tablet">ส่งคลิป</span></span>
           </button>
         </div>
 
-        <!-- Current Auth User & Subtle Logout Action (Decluttered Header) -->
+        <!-- Current Auth User & Subtle Logout Action -->
         <div id="auth-user-bar" style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.25rem; border-left: 1px solid var(--border-subtle); padding-left: 0.5rem;">
           <div id="auth-user-badge" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; display: none;">
             <!-- Injected via JS -->
@@ -335,6 +148,154 @@
       </div>
     </div>
   </header>
+
+  <!-- App Sidebar Navigation -->
+  <aside id="app-sidebar" class="app-sidebar" aria-label="เมนูหลักของระบบ">
+    <div class="sidebar-header">
+      <div class="sidebar-brand-badge">
+        <span class="badge-dot"></span>
+        <span class="sidebar-brand-text">ระบบนำทางหลัก</span>
+      </div>
+      <button class="sidebar-close-btn" onclick="App.toggleSidebar(false)" aria-label="ปิดเมนู" title="ปิดแถบเมนู">✕</button>
+    </div>
+
+    <div class="sidebar-content">
+      <!-- Teacher Navigation Menu -->
+      <nav id="sidebar-teacher-menu" class="sidebar-menu-section" data-teacher-only aria-label="เมนูครูผู้สอน">
+        <!-- Group 1: การสอนประจำวัน -->
+        <div class="sidebar-nav-group">
+          <div class="sidebar-group-title">⚡ การสอนประจำวัน</div>
+          <button id="btn-sidebar-dashboard" class="sidebar-nav-item active" data-nav="dashboard" onclick="App.showDashboard(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🏠</span>
+            <span class="sidebar-nav-label">หน้าแรก & ห้องเรียน</span>
+          </button>
+          <button id="btn-sidebar-cockpit" class="sidebar-nav-item" data-nav="cockpit" onclick="App.showCockpit(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">⏱️</span>
+            <span class="sidebar-nav-label">ห้องสอนสด (Cockpit)</span>
+          </button>
+          <button id="btn-pull-student-work" class="sidebar-nav-item" data-nav="pull" onclick="TeacherPull.pull(); App.onSidebarItemClick();" title="ดึงงานและแบบทดสอบที่นักเรียนส่ง">
+            <span class="sidebar-nav-icon">📥</span>
+            <span class="sidebar-nav-label">ตรวจงาน & ดึงงานนักเรียน</span>
+          </button>
+          <button id="btn-sidebar-timetable" class="sidebar-nav-item" data-nav="timetable" onclick="App.openTimetableModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📅</span>
+            <span class="sidebar-nav-label">ตารางสอนประจำสัปดาห์</span>
+          </button>
+        </div>
+
+        <!-- Group 2: เครื่องมือดนตรีดิจิทัล -->
+        <div class="sidebar-nav-group">
+          <div class="sidebar-group-title">🎵 เครื่องมือดนตรีดิจิทัล</div>
+          <button class="sidebar-nav-item" data-tool="metronome" onclick="Metronome.open(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🥁</span>
+            <span class="sidebar-nav-label">เมโทรนอมเคาะจังหวะ</span>
+          </button>
+          <button class="sidebar-nav-item" data-tool="kalimba" onclick="VirtualKalimba.openModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🎹</span>
+            <span class="sidebar-nav-label">ซ้อมคาลิมบ้า (Virtual)</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="App.openEnsemble('thai'); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🎺</span>
+            <span class="sidebar-nav-label">สำรวจวงดนตรีเสมือนจริง</span>
+          </button>
+          <button class="sidebar-nav-item" data-tool="notation" onclick="App.openMusicAidsModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🎼</span>
+            <span class="sidebar-nav-label">สื่อโน้ตสากล & ผังคาลิมบ้า</span>
+          </button>
+        </div>
+
+        <!-- Group 3: งานวิชาการ & วิจัย -->
+        <div class="sidebar-nav-group">
+          <div class="sidebar-group-title">📁 งานวิชาการ & วิจัย (CAR)</div>
+          <button id="btn-curriculum-hub" class="sidebar-nav-item" onclick="App.openCurriculumHubModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📚</span>
+            <span class="sidebar-nav-label">คลังแผนการสอน 40 คาบ</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="QuizEngine.openQuizModal(1); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📝</span>
+            <span class="sidebar-nav-label">คลังแบบทดสอบท้ายหน่วย</span>
+          </button>
+          <button id="btn-export-report" class="sidebar-nav-item" onclick="App.openExportModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🖨️</span>
+            <span class="sidebar-nav-label">รายงาน & วก.5 / ส่งออก</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="CARAnalytics.openModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📈</span>
+            <span class="sidebar-nav-label">วิจัยในชั้นเรียน CAR (วPA)</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="EvidenceHub.open(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🏅</span>
+            <span class="sidebar-nav-label">ศูนย์หลักฐาน คศ.4 (ครู)</span>
+          </button>
+        </div>
+
+        <!-- Group 4: จัดการระบบ & ผู้ใช้งาน -->
+        <div class="sidebar-nav-group">
+          <div class="sidebar-group-title">⚙️ จัดการระบบ & ผู้ใช้งาน</div>
+          <button id="btn-mentor-panel" class="sidebar-nav-item" onclick="MentorPanel.open(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">👩‍🎓</span>
+            <span class="sidebar-nav-label">นักศึกษาฝึกสอน / นิเทศ</span>
+          </button>
+          <button data-intern-only style="display:none;" class="sidebar-nav-item" onclick="Portfolio.openForCurrentIntern(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📁</span>
+            <span class="sidebar-nav-label">พอร์ตโฟลิโอของฉัน</span>
+          </button>
+          <button id="btn-google-sheets-pill" class="sidebar-nav-item" onclick="GoogleSheetSync.openModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🔄</span>
+            <span class="sidebar-nav-label">ซิงค์คู่ Google Sheets</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="App.openUserManagementModal('admin'); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">👥</span>
+            <span class="sidebar-nav-label">จัดการบัญชี & รีเซ็ต PIN</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="App.openSubjectsModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📖</span>
+            <span class="sidebar-nav-label">จัดการรายวิชา & ห้องเรียน</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="App.openSettingsModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🔧</span>
+            <span class="sidebar-nav-label">ตั้งค่านวัตกรรม T-PACE</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Student Navigation Menu -->
+      <nav id="sidebar-student-menu" class="sidebar-menu-section" style="display: none;" aria-label="เมนูนักเรียน">
+        <div class="sidebar-nav-group">
+          <div class="sidebar-group-title">🎓 เมนูการเรียนรู้</div>
+          <button class="sidebar-nav-item active" data-snav="lesson" onclick="App.navToLessons(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">📖</span>
+            <span class="sidebar-nav-label">บทเรียนประจำคาบ</span>
+          </button>
+          <button class="sidebar-nav-item" data-snav="assignment" onclick="App.navToAssignments(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">✍️</span>
+            <span class="sidebar-nav-label">ภารกิจ & ส่งงาน</span>
+          </button>
+          <button class="sidebar-nav-item" data-snav="studio" onclick="VirtualKalimba.openModal(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🎹</span>
+            <span class="sidebar-nav-label">ห้องซ้อมดนตรี (Studio)</span>
+          </button>
+          <button class="sidebar-nav-item" data-snav="progress" onclick="StudentProgress.open(); App.onSidebarItemClick();">
+            <span class="sidebar-nav-icon">🏆</span>
+            <span class="sidebar-nav-label">คะแนน & ความก้าวหน้า</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Sidebar Footer with Collapse Toggle (Desktop only) -->
+    <div class="sidebar-footer">
+      <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" onclick="App.toggleSidebarCollapse()" title="พับ / ขยาย แถบเมนูด้านข้าง (Ctrl+B)">
+        <svg class="collapse-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        <span class="sidebar-collapse-text">พับแถบเมนู</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Overlay for mobile drawer -->
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="App.toggleSidebar(false)" aria-hidden="true"></div>
 
   <!-- Main Workspace -->
   <main class="main-wrapper">
@@ -945,19 +906,7 @@
                 <span class="workspace-period-badge" id="student-workspace-period-badge">คาบที่ 1</span>
                 <h3 class="workspace-title" id="student-workspace-title">ปฐมนิเทศรายวิชาดนตรี 1 ทำความเข้าใจเป้าหมายการเรียนรู้ และแนะนำการใช้งานแอปพลิเคชัน MusicSmart</h3>
               </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <button class="btn-nav-action" data-tool="metronome" onclick="Metronome.open()" title="เมโทรนอมเคาะจังหวะ">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  🥁 เมโทรนอม (Metronome)
-                </button>
-                <button class="btn-nav-action" data-tool="kalimba" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600;" onclick="VirtualKalimba.openModal()" title="ห้องซ้อมและเครื่องจำลองคาลิมบ้า 17 คีย์">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
-                  🎵 ซ้อมคาลิมบ้า (Virtual Kalimba)
-                </button>
-                <button class="btn-nav-action" data-tool="notation" style="background: #fef08a; color: #854d0e; border-color: #fde047; font-weight: 700;" onclick="App.openMusicAidsModal()" title="เปิดแผนภาพโน้ตสากลและผังลิ้นเสียงคาลิมบ้า">
-                  🎼 สื่อโน้ตสากล & ผังคาลิมบ้า
-                </button>
-                <div id="student-submission-status-chip">
+              <div id="student-submission-status-chip">
                   <!-- status chip -->
                 </div>
               </div>
