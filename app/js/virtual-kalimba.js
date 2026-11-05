@@ -139,7 +139,12 @@ const VirtualKalimba = {
     const m = !!(R.KalimbaMedia && R.KalimbaMedia.isMuted && R.KalimbaMedia.isMuted());
     b.className = 'km-mute' + (m ? ' km-on' : '');
     b.setAttribute('aria-pressed', m ? 'true' : 'false');
-    b.textContent = m ? '🔇 ปิดเสียงคาลิมบ้าอยู่ — ได้ยินเฉพาะเมโทรนอม (แตะเพื่อเปิด)' : '🔊 ปิดเสียงคาลิมบ้า (ฝึกกับเมโทรนอมเท่านั้น)';
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    if (isMobile) {
+      b.textContent = m ? '🔇 ปิดเสียง (เปิด)' : '🔊 มีเสียง';
+    } else {
+      b.textContent = m ? '🔇 ปิดเสียงคาลิมบ้า (แตะเปิด)' : '🔊 ปิดเสียงคาลิมบ้า (เมโทรนอมอย่างเดียว)';
+    }
   },
 
   highlightTine(tineId) {

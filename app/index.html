@@ -38,7 +38,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=37">
+  <link rel="stylesheet" href="css/styles.css?v=38">
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- PWA Progressive Web App & Mobile App Tags -->
@@ -3080,59 +3080,53 @@
 
   <!-- MODAL: 17-Key Virtual Kalimba & Interactive Practice Synthesizer -->
   <div id="modal-virtual-kalimba" class="modal-overlay">
-    <div class="modal-card" style="max-width: 980px; width: 96vw; max-height: 94vh; display: flex; flex-direction: column; background: #0f172a; color: #f8fafc; border: 1px solid #334155;">
-      <div class="modal-header" style="background: #1e293b; border-bottom: 1px solid #334155;">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div style="width: 38px; height: 38px; border-radius: var(--radius-sm); background: #3b82f6; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-            🎵
-          </div>
+    <div class="modal-card vk-modal-card">
+      <div class="modal-header vk-modal-header">
+        <div class="vk-header-title-wrap">
+          <div class="vk-header-icon">🎵</div>
           <div>
-            <h3 style="font-size: 1.15rem; font-weight: 700; color: #ffffff; margin: 0;">
-              คาลิมบ้าจำลอง 17 เสียง & ห้องซ้อมดนตรี (Virtual Kalimba 17-Key)
-            </h3>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
-              ระบบเสียงฟิสิกส์สังเคราะห์ Web Audio Acoustic Model • ซ้อมเพลงพร้อมจังหวะ (BPM) และไฟแสดงโน้ต
-            </div>
+            <h3 class="vk-header-title">คาลิมบ้าจำลอง 17 เสียง & ห้องซ้อม (Virtual Kalimba)</h3>
+            <div class="vk-header-sub">ซ้อมเพลงพร้อมจังหวะ (BPM) และไฟแสดงโน้ตตาม วก.5</div>
           </div>
         </div>
-        <button class="modal-close-btn" style="color: #cbd5e1;" onclick="VirtualKalimba.closeModal()">✕</button>
+        <button class="modal-close-btn" style="color: #cbd5e1;" onclick="VirtualKalimba.closeModal()" aria-label="ปิดหน้าต่าง">✕</button>
       </div>
 
-      <!-- Kalimba Controls & Song Selector -->
-      <div style="padding: 1rem 1.5rem; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-          <label for="kalimba-song-select" style="font-size: 0.85rem; font-weight: 600; color: #93c5fd;">แบบฝึก/บทเพลงตาม วก.5 (แยกตามคาบ):</label>
-          <select id="kalimba-song-select" class="form-select" style="background: #0f172a; color: #ffffff; border-color: #475569; min-width: 260px; max-width: 100%;" onchange="VirtualKalimba.onSongSelectChange(this.value)">
+      <!-- Controls & Song Selector Toolbar -->
+      <div class="vk-controls-bar">
+        <div class="vk-controls-left">
+          <label for="kalimba-song-select" class="vk-select-label">🎼 แบบฝึก:</label>
+          <select id="kalimba-song-select" class="form-select" onchange="VirtualKalimba.onSongSelectChange(this.value)">
             <!-- เติมจากข้อมูล วก.5 (KALIMBA_MEDIA) + โน้ตที่ครูใส่ ด้วย VirtualKalimba.populateSongsSelect() -->
           </select>
-          <button id="kalimba-vk-edit" type="button" class="btn-nav-action" style="display:none; background: #334155; color: #ffffff; border: 1px solid #475569;" onclick="VirtualKalimba.openEditor()">✏️ ใส่/แก้โน้ต (ครู)</button>
+          <button id="kalimba-vk-edit" type="button" class="btn-nav-action" style="display:none; background: #334155; color: #ffffff; border: 1px solid #475569; padding: 4px 10px; font-size: 0.8rem;" onclick="VirtualKalimba.openEditor()">✏️ แก้โน้ต</button>
         </div>
-        <button id="kalimba-vk-mute" type="button" class="km-mute" style="width:auto;margin:0;" aria-pressed="false" onclick="VirtualKalimba.toggleMute()">🔊 ปิดเสียงคาลิมบ้า (ฝึกกับเมโทรนอมเท่านั้น)</button>
-      </div>
-
-      <!-- Current Note Display Banner -->
-      <div style="padding: 0.75rem 1.5rem; background: #0f172a; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <span style="font-size: 0.82rem; color: #64748b;">โน้ตที่กำลังเล่น:</span>
-          <span id="kalimba-current-note" style="font-size: 1.15rem; font-weight: 800; color: #fbbf24;">-</span>
-        </div>
-        <div style="font-size: 0.8rem; color: #64748b;">
-          💡 รองรับคีย์บอร์ดคอมพิวเตอร์: กด 1-9 และ Q-Y เพื่อดีดลิ้นเสียง
+        <div class="vk-controls-right">
+          <div class="vk-note-pill" title="โน้ตที่กำลังเล่น">
+            <span>โน้ต:</span>
+            <span id="kalimba-current-note">-</span>
+          </div>
+          <button id="kalimba-vk-mute" type="button" class="km-mute" aria-pressed="false" onclick="VirtualKalimba.toggleMute()">🔊 มีเสียง</button>
+          <div class="vk-kbd-hint">💡 1-9, Q-Y ดีดลิ่ม</div>
         </div>
       </div>
 
-      <!-- Kalimba Soundboard & Tines Container -->
-      <div style="flex: 1; overflow-y: auto; padding: 1rem 1.5rem 2rem; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);">
-        <div id="kalimba-vk-widget" style="width: 100%; max-width: 820px; margin-bottom: 1rem;"><!-- วิดเจ็ตแบบฝึก: บรรทัด 5 เส้น + ผังลิ่ม + เมโทรนอม + เล่น (KalimbaMedia.Widget) --></div>
+      <!-- Mobile Orientation Helper Hint -->
+      <div class="vk-orientation-hint" id="vk-orientation-hint">
+        📱 แนะนำ: หมุนโทรศัพท์แนวนอนเพื่อการจับเล่นด้วย 2 นิ้วโป้งที่ถนัดที่สุด
       </div>
-      <!-- DOCK: คาลิมบ้าอยู่ส่วนล่างของจอ (โน้ต/เมโทรนอมอยู่ด้านบน) -->
-      <div id="kalimba-vk-dock" style="flex: 0 0 auto; width: 100%; padding: 0.4rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center; background: #0f172a; border-top: 1px solid #334155;">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.5rem;">คาลิมบ้า 17 ลิ่ม — แตะลิ่มเพื่อดีดเอง · ลิ่มจะสว่างตามโน้ตที่แบบฝึกกำลังเล่น</div>
+
+      <!-- Kalimba Sheet Music Widget Container -->
+      <div class="vk-widget-container">
+        <div id="kalimba-vk-widget"><!-- วิดเจ็ตแบบฝึก: บรรทัด 5 เส้น + เมโทรนอม + เล่น (KalimbaMedia.Widget) --></div>
+      </div>
+
+      <!-- DOCK: Wooden Kalimba Soundboard & 17 Tines at Bottom -->
+      <div id="kalimba-vk-dock">
+        <div class="vk-dock-caption">คาลิมบ้า 17 ลิ่ม — แตะลิ่มเพื่อดีดเอง · ลิ่มจะสว่างตามโน้ตที่แบบฝึกกำลังเล่น</div>
         
         <!-- Wooden Soundboard Body Styling -->
-        <div class="kalimba-soundboard" style="max-width: 820px; width: 100%; position: relative;">
-
-
+        <div class="kalimba-soundboard">
           <!-- Bridge rod + clamp bar (tine tails are pinned under these) -->
           <div class="kalimba-bridge"></div>
           <div class="kalimba-clamp"></div>
@@ -3147,8 +3141,8 @@
         </div>
       </div>
 
-      <!-- Modal Footer -->
-      <div class="modal-footer" style="justify-content: space-between; background: #1e293b; border-top: 1px solid #334155;">
+      <!-- Modal Footer (Hidden on mobile to maximize stave height) -->
+      <div class="modal-footer vk-modal-footer">
         <span style="font-size: 0.8rem; color: #94a3b8;">
           * การฝึกซ้อมด้วยคาลิมบ้าจำลองจะบันทึกชั่วโมงซ้อมอัตโนมัติ เพื่อปลดล็อกเข็มกลัดความสำเร็จ 🎵
         </span>
@@ -3839,7 +3833,7 @@
   <script src="js/official-forms.js?v=20261028_20"></script>
   <script src="data/ensemble_data.js?v=20261028_20"></script>
   <script src="js/ensemble-explorer.js?v=20261028_20"></script>
-  <script src="js/virtual-kalimba.js?v=20261020_03"></script>
+  <script src="js/virtual-kalimba.js?v=20261105_01"></script>
   <script src="data/kalimba_media.js?v=20261028_20"></script>
   <script src="data/media_manifest.js?v=20261028_20"></script>
   <script src="js/kalimba-devices.js?v=20261028_20"></script>
