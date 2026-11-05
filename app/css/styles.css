@@ -5353,7 +5353,7 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
    ========================================================================== */
 
 :root {
-  --sidebar-width: 268px;
+  --sidebar-width: 280px;
   --sidebar-collapsed-width: 68px;
   --header-height: 56px;
 }

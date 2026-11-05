@@ -39,10 +39,12 @@ EXPECT.forEach(e => {
   check('รายการคาลิมบ้าจำลอง คาบ ' + p + ' มี "' + e[2] + '"', items.some(i => String(i.title).indexOf(e[2]) >= 0));
   check('รายการคาบ ' + p + ' มีโน้ตครบ (ไม่ว่าง)', items.length > 0 && items.every(i => i.notes && i.notes.length > 0));
 });
-// คาบ 7: ครบ 12 ลวดลายตาม วก.5 (3 โน้ต × 12)
+// คาบ 7: ครบ 12 ลวดลายตาม วก.5 (3 โน้ต × 12) ใน KM.periods.M1[7] และรายการซ้อมรวมเป็นชุดฝึกต่อเนื่อง 1 รายการ (ไม่แยกเป็น 12 ชิ้นส่วน)
+const kmP7 = KM.periods.M1[7] || [];
+for (let n = 1; n <= 12; n++) check('คาบ 7 มีลวดลายที่ ' + n + ' ในคลังข้อสอบ', kmP7.some(i => i.id === 'p7_pattern_' + n && i.notes.length === 3));
 const p7 = byPeriod[7] || [];
-for (let n = 1; n <= 12; n++) check('คาบ 7 มีลวดลายที่ ' + n, p7.some(i => i.id === 'p7_pattern_' + n && i.notes.length === 3));
-check('คาบ 7 มีชุดฝึกต่อเนื่อง 12 ลวดลาย', p7.some(i => i.id === 'p7_full_series' && i.notes.length === 37));
+check('คาบ 7 มีชุดฝึกต่อเนื่อง 12 ลวดลายในรายการซ้อม', p7.some(i => i.id === 'p7_full_series' && i.notes.length === 37));
+check('คาบ 7 ในรายการซ้อมรวมเป็นชุดต่อเนื่อง 1 รายการ (ไม่แยกเป็น 12 ชิ้นส่วน)', p7.length === 1 && p7[0].id === 'p7_full_series');
 // คาบ 8/10: เพลงที่ 2 = Joy to the World (ครูอนุมัติแทน Do-Re-Mi)
 check('คาบ 8 มี Joy to the World (เพลงที่ 2)', (byPeriod[8] || []).some(i => /Joy to the World/.test(i.title)));
 check('คาบ 10 มี Joy to the World (เก็บคะแนนครั้งที่ 2)', (byPeriod[10] || []).some(i => /Joy to the World/.test(i.title)));
@@ -52,9 +54,9 @@ check('ไม่มี Do-Re-Mi เป็นชื่อ/รหัสราย�
 // คาบอื่นที่ไม่มีแบบฝึกคาลิมบ้า ต้องไม่โผล่ในรายการ
 const allowed = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 check('รายการมีเฉพาะคาบ 2–10 ตาม วก.5', list.every(g => allowed.indexOf(g.period) >= 0) && allowed.every(p => byPeriod[p]));
-check('จำนวนรายการรวม = 22', list.reduce((s, g) => s + g.items.length, 0) === 22);
+check('จำนวนรายการซ้อมรวม = 10', list.reduce((s, g) => s + g.items.length, 0) === 10);
 // เลือกใน dropdown ได้ทุกรายการ (value = คาบ|id)
-check('รหัสรายการไม่ซ้ำกัน', new Set(list.reduce((a, g) => a.concat(g.items.map(i => i.id)), [])).size === 22);
+check('รหัสรายการไม่ซ้ำกัน', new Set(list.reduce((a, g) => a.concat(g.items.map(i => i.id)), [])).size === 10);
 
 // ไม่มีเพลงเก่าฝังในโค้ด
 const OLD = /หนูมาลี|Mary Had|Twinkle|ดาวดวงน้อย|พรปีใหม่|ล่องแม่ปิง|Beethoven/;

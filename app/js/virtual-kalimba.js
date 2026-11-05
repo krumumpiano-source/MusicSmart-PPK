@@ -197,14 +197,17 @@ const VirtualKalimba = {
     const m = r.KALIMBA_MEDIA;
     return (m && m.periods && m.periods[this.GRADE_KEY] && m.periods[this.GRADE_KEY][String(period)]) || [];
   },
-  /** [{ period, items:[item…] }] เรียงตามคาบ — เฉพาะคาบที่ วก.5 มีแบบฝึก/บทเพลง */
+  /** [{ period, items:[item…] }] เรียงตามคาบ — เฉพาะคาบที่ วก.5 มีแบบฝึก/บทเพลง (คัดแยกเฉพาะชุดซ้อม ไม่รวมชิ้นส่วนข้อสอบ testPool) */
   buildSongList(maxPeriod) {
     const m = this._root().KALIMBA_MEDIA;
     const g = m && m.periods && m.periods[this.GRADE_KEY];
     if (!g) return [];
     return Object.keys(g).map(Number).sort((a, b) => a - b)
       .filter(p => !maxPeriod || p <= maxPeriod)
-      .map(p => ({ period: p, items: this._items(p) })).filter(x => x.items.length);
+      .map(p => ({
+        period: p,
+        items: this._items(p).filter(it => !it.testPool)
+      })).filter(x => x.items.length);
   },
   _role() {
     try { const u = typeof Store !== 'undefined' && Store.getCurrentUser ? Store.getCurrentUser() : null; return u ? (u.role || '') : ''; } catch (e) { return ''; }

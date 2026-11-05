@@ -22,7 +22,7 @@
       'academic/media/exercise_interval_root_do.pdf':   { cls: 'digital',   route: 'practice',   kw: ['แบบฝึกหัด', 'รูทคงที่'], item: 'p4_root_do_pairs' },
       'academic/media/exercise_interval_3rds.pdf':      { cls: 'digital',   route: 'practice',   kw: ['แบบฝึกหัด', '3'], item: 'p5_moving_3rds' },
       'academic/media/exercise_interval_4ths.pdf':      { cls: 'digital',   route: 'practice',   kw: ['แบบฝึกหัด', '4'], item: 'p6_moving_4ths' },
-      'academic/media/exercise_sequence_3notes.pdf':    { cls: 'digital',   route: 'practice',   kw: ['แบบฝึกหัด', 'โน้ตอนุกรม'], item: 'p7_pattern_1' },
+      'academic/media/exercise_sequence_3notes.pdf':    { cls: 'digital',   route: 'practice',   kw: ['แบบฝึกหัด', 'โน้ตอนุกรม'], item: 'p7_full_series' },
       'academic/media/sheet_ode_to_joy_doremi.pdf':     { cls: 'digital',   route: 'practice',   kw: ['โน้ตเพลง'], item: 'p8_ode_to_joy' },
       'academic/media/rubric_ode_to_joy.pdf':           { cls: 'digital',   route: 'criteria',   kw: ['แบบประเมิน'] },
       'academic/media/rubric_doremi.pdf':               { cls: 'digital',   route: 'criteria',   kw: ['แบบประเมิน'] },
