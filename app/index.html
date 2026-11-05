@@ -244,9 +244,14 @@
             <span class="sidebar-nav-icon">🔄</span>
             <span class="sidebar-nav-label">ซิงค์คู่ Google Sheets</span>
           </button>
-          <button class="sidebar-nav-item" onclick="App.openUserManagementModal('admin'); App.onSidebarItemClick();">
-            <span class="sidebar-nav-icon">👥</span>
-            <span class="sidebar-nav-label">จัดการบัญชี & รีเซ็ต PIN</span>
+          <button id="btn-sidebar-pin-mgmt" class="sidebar-nav-item" onclick="App.openUserManagementModal('students'); App.onSidebarItemClick();" title="ดูคำขอนักเรียน และรีเซ็ตรหัส PIN">
+            <span class="sidebar-nav-icon">🔑</span>
+            <span class="sidebar-nav-label">รีเซ็ต PIN & คำขอนักเรียน</span>
+            <span id="pin-pending-badge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:0.72rem;font-weight:700;margin-left:auto;">0</span>
+          </button>
+          <button class="sidebar-nav-item" onclick="App.openUserManagementModal('admin'); App.onSidebarItemClick();" title="ตั้งค่าบัญชีผู้สอนและเปลี่ยนรหัสผ่าน">
+            <span class="sidebar-nav-icon">👤</span>
+            <span class="sidebar-nav-label">โปรไฟล์ครู & ทีมผู้สอน</span>
           </button>
           <button class="sidebar-nav-item" onclick="App.openSubjectsModal(); App.onSidebarItemClick();">
             <span class="sidebar-nav-icon">📖</span>
@@ -3815,7 +3820,7 @@
   <script src="js/exam-client.js?v=20261028_20"></script>
   <script src="js/teacher-tools.js?v=20261029_03"></script>
   <script src="js/teacher-auth.js?v=20261029_03"></script>
-  <script src="js/password-reset.js?v=20261030_02"></script>
+  <script src="js/password-reset.js?v=20261105_01"></script>
   <script src="js/intern.js?v=20261028_20"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
   <script src="js/student-upload.js?v=20261021_08"></script>

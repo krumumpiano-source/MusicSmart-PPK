@@ -327,6 +327,17 @@ const PasswordReset = {
     }; });
   },
 
+  updateBadge(count) {
+    const badge = typeof document !== 'undefined' && document.getElementById('pin-pending-badge');
+    if (!badge) return;
+    if (count > 0) {
+      badge.textContent = count;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  },
+
   // แจ้งเตือนครูเมื่อมีคำขอรอ (เรียกเมื่อโหลดหน้า และทุก 5 นาทีขณะเปิดแอป)
   async checkPending(silent) {
     try {
@@ -335,16 +346,15 @@ const PasswordReset = {
       const cfg = (typeof GoogleSheetSync !== 'undefined') ? GoogleSheetSync.getConfig() : {};
       if (!this._cloud() && (!cfg.webAppUrl || !cfg.syncToken)) return 0;
       if (this._cloud() && !(CloudApi.Auth && CloudApi.Auth.isTeacher())) {
-        if (!silent && !this._warnedExpired && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
-          this._warnedExpired = true;
-          GoogleSheetSync.showToast('🔒 บัญชีครูยังไม่เชื่อมต่อเซิร์ฟเวอร์ — เปิด จัดการผู้ใช้ → นักเรียน แล้วกรอกรหัสผ่านครูเพื่อดูคำขอรีเซ็ตรหัสของนักเรียน', 'error');
-        }
+        // ทำงานแบบเงียบ (silent): ไม่ยิง error toast กวนใจครูขณะเปิดหน้าแรก
+        this.updateBadge(0);
         return 0;
       }
       const list = await this.listRequests();
       const pending = list.filter(x => x.status === 'pending').length;
+      this.updateBadge(pending);
       if (pending && !silent && typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
-        GoogleSheetSync.showToast(`🔑 มีคำขอรีเซ็ตรหัสรอครูยืนยัน ${pending} รายการ — เปิด "จัดการผู้ใช้ → นักเรียน"`, 'info');
+        GoogleSheetSync.showToast(`🔑 มีนักเรียนขอรีเซ็ต PIN ${pending} รายการ (เปิดดูที่เมนู "รีเซ็ต PIN & คำขอนักเรียน")`, 'info');
       }
       return pending;
     } catch (e) { return 0; }
