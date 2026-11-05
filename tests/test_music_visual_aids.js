@@ -15,6 +15,7 @@ console.log('--- Testing Standard Music Notation & Kalimba Visualizer Integratio
 assert(html.includes('id="modal-music-visual-aids"'), 'Modal must exist in index.html');
 assert(html.includes('id="pane-aids-staff"'), 'Staff pane must exist in modal');
 assert(html.includes('id="pane-aids-kalimba"'), 'Kalimba pane must exist in modal');
+assert(html.includes('id="pane-aids-songs"'), 'Songs pane must exist in modal');
 
 // 2. Staff Pane Kalimba Soundboard (User Request: "หน้านี้ควรมีลิ่มคาลิมบ้าให้เห็นด้วย")
 const staffPaneStart = html.indexOf('id="pane-aids-staff"');
@@ -51,5 +52,10 @@ assert(appJs.includes('playAidsNote(note)'), 'App must define playAidsNote metho
 assert(appJs.includes('VirtualKalimba.playNote(note)'), 'playAidsNote must invoke VirtualKalimba.playNote');
 assert(appJs.includes('#svg-music-staff .interactive-note[data-note='), 'playAidsNote must highlight SVG staff note');
 assert(appJs.includes('.aids-tine[data-note='), 'playAidsNote must highlight matching kalimba tines');
+
+// 6. Tab 3 (Songs Pane) Authentic Classroom Player (User Request: "หน้านี้ซ้ำซ็อนกับหน้าที่มีคาลิมบ้า ถ้าจะมีหน้านนี้ก็ควรเหมือนหน้าที่ใช้เรียนครับ")
+assert(appJs.includes('renderAidsSongs('), 'App must define renderAidsSongs');
+assert(appJs.includes('KalimbaMedia.mountPeriod(mountEl, \'M1\', cur'), 'renderAidsSongs must mount full classroom player with KalimbaMedia.mountPeriod');
+assert(appJs.includes('this._aidsHost.widget.stop()'), 'closeMusicAidsModal and switchTab must stop active widget audio');
 
 console.log('✅ ALL Music Visual Aids Kalimba & Staff tests passed successfully!');

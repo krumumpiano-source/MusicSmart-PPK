@@ -5672,27 +5672,82 @@ const App = {
     if (modal) {
       modal.classList.remove('active');
     }
+    if (this._aidsHost && this._aidsHost.widget) {
+      try { this._aidsHost.widget.stop(); } catch (e) {}
+    }
   },
 
-  // แท็บ "บทเพลง" ในสื่อช่วยสอน: รายการแบบฝึก/บทเพลง ม.1 ตาม วก.5 (ข้อมูลจาก KALIMBA_MEDIA + โน้ตครู)
-  renderAidsSongs() {
+  // แท็บ "บทเพลง" ในสื่อช่วยสอน: แสดงบทเรียนและแบบฝึกปฏิบัติ ม.1 ตาม วก.5 รูปแบบเดียวกับในห้องเรียน (KalimbaMedia พร้อมผังลิ่มและบรรทัด 5 เส้น)
+  renderAidsSongs(targetPeriod) {
     const box = document.getElementById('aids-m1-songs');
     if (!box) return;
-    const esc = s => this.escapeHtml(String(s == null ? '' : s));
-    const list = (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.buildSongList) ? VirtualKalimba.buildSongList() : [];
-    if (!list.length) { box.innerHTML = '<div style="padding:1rem;color:#64748b;">ยังไม่มีข้อมูลแบบฝึกจาก วก.5</div>'; return; }
-    box.innerHTML = '<div style="font-weight:800;color:#1e3a8a;margin-bottom:0.5rem;">🎼 แบบฝึกและบทเพลง ม.1 (ตาม วก.5 แยกตามคาบ)</div>' + list.map(g => `
-      <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:0.8rem;margin-bottom:0.7rem;">
-        <div style="font-weight:700;color:#334155;margin-bottom:0.35rem;">คาบที่ ${g.period}</div>
-        ${g.items.map(it => `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;padding:4px 0;border-top:1px dashed #e2e8f0;">
-          <div><strong>${esc(it.title)}</strong>${it.draft ? ' <span style="font-size:0.72rem;color:#92400e;">(' + esc(it.draft) + ')</span>' : ''}
-            <div style="font-family:monospace;font-size:0.85rem;color:#475569;">${(it.notes || []).map(n => esc(n.th || '')).join(' ') || '— ยังไม่มีโน้ต รอครูใส่ —'}</div></div>
-          <button type="button" class="btn-nav-action primary" style="font-size:0.78rem;padding:4px 10px;" onclick="VirtualKalimba.openModal(); VirtualKalimba.populateSongsSelect('${esc(it.id)}')">▶ ซ้อม</button>
-        </div>`).join('')}
-      </div>`).join('');
+    const periods = [
+      { p: 2, label: 'คาบ 2: ดีดไล่สเกล' },
+      { p: 3, label: 'คาบ 3: สเกล C Major' },
+      { p: 4, label: 'คาบ 4: รูทคงที่' },
+      { p: 5, label: 'คาบ 5: ขั้นคู่ 3' },
+      { p: 6, label: 'คาบ 6: ขั้นคู่ 4' },
+      { p: 7, label: 'คาบ 7: โน้ตอนุกรม 3 ตัว' },
+      { p: 8, label: 'คาบ 8: บทเพลง วก.5' },
+      { p: 9, label: 'คาบ 9: เก็บครั้งที่ 1' },
+      { p: 10, label: 'คาบ 10: เก็บครั้งที่ 2' }
+    ];
+
+    let cur = targetPeriod || this._aidsSelectedPeriod;
+    if (!cur) {
+      const activeP = (this.state && (this.state.studentPeriod || this.state.selectedPeriod)) || 2;
+      cur = (activeP >= 2 && activeP <= 10) ? activeP : 2;
+    }
+    this._aidsSelectedPeriod = cur;
+
+    if (this._aidsHost && this._aidsHost.widget) {
+      try { this._aidsHost.widget.destroy(); } catch (e) {}
+      this._aidsHost = null;
+    }
+
+    box.innerHTML = `
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <div style="font-weight: 800; color: #1e3a8a; font-size: 1.05rem;">
+              🎼 บทเรียนและแบบฝึกปฏิบัติ ม.1 (ตาม วก.5 แยกตามคาบ)
+            </div>
+            <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
+              สื่อบทเรียนเสมือนจริง: แสดงโน้ตบรรทัด 5 เส้น ตัวเลขลิ่มเสียง และผังลิ้นคาลิมบ้าที่มีไฟวิ่งตามโน้ตสดขณะบรรเลง (เหมือนในห้องเรียน)
+            </div>
+          </div>
+        </div>
+
+        <!-- Period Selector Pills -->
+        <div style="display: flex; gap: 0.45rem; overflow-x: auto; padding: 4px 2px 8px 2px; margin-bottom: 0.75rem;" class="aids-period-pills">
+          ${periods.map(item => `
+            <button type="button" class="btn-nav-action ${item.p === cur ? 'active' : ''}"
+              style="border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; white-space: nowrap; cursor: pointer; transition: all 0.15s ease; ${item.p === cur ? 'background: #1e3a8a; color: #ffffff; font-weight: 700; border-color: #1e3a8a; box-shadow: 0 2px 6px rgba(30,58,138,0.3);' : 'background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;'}"
+              onclick="App.renderAidsSongs(${item.p})">
+              ${item.label}
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Mount Host for Authentic Classroom KalimbaMedia Widget -->
+        <div id="aids-lesson-player-mount" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); min-height: 200px;"></div>
+      </div>
+    `;
+
+    const mountEl = document.getElementById('aids-lesson-player-mount');
+    if (mountEl && typeof KalimbaMedia !== 'undefined' && KalimbaMedia.mountPeriod) {
+      this._aidsHost = KalimbaMedia.mountPeriod(mountEl, 'M1', cur, {
+        role: 'student',
+        deviceField: false,
+        tines: true
+      });
+    }
   },
 
   switchMusicAidsTab(tab) {
+    if (this._aidsHost && this._aidsHost.widget && tab !== 'songs') {
+      try { this._aidsHost.widget.stop(); } catch (e) {}
+    }
     if (tab === 'songs') this.renderAidsSongs();
     const tabs = ['staff', 'kalimba', 'songs', 'rhythm'];
     tabs.forEach(t => {
