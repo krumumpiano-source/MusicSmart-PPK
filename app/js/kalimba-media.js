@@ -392,7 +392,17 @@
     this.endQueued = false;
     this.tick();
   };
-  Transport.prototype._setState = function (s) { this.state = s; this.onState(s); };
+  Transport.prototype._setState = function (s) {
+    this.state = s;
+    this.onState(s);
+    if (typeof root !== 'undefined' && root.ScreenWakeLock) {
+      if (s === 'playing') {
+        root.ScreenWakeLock.request('kalimba-media');
+      } else {
+        root.ScreenWakeLock.release('kalimba-media');
+      }
+    }
+  };
   Transport.prototype.start = function () {
     if (this.state === 'playing') return;
     if (this.state === 'paused') { this._begin(this.pausedBeat); return; }

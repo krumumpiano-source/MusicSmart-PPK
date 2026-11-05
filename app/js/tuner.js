@@ -103,6 +103,9 @@ const Tuner = {
       this.sourceNode.connect(this.analyser);
 
       this.isRunning = true;
+      if (typeof ScreenWakeLock !== 'undefined') {
+        ScreenWakeLock.request('tuner');
+      }
       const btn = document.getElementById('btn-tuner-toggle');
       if (btn) {
         btn.innerHTML = `
@@ -123,6 +126,9 @@ const Tuner = {
 
   stopListening() {
     this.isRunning = false;
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.release('tuner');
+    }
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;

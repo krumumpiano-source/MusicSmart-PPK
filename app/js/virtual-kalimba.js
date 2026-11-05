@@ -351,11 +351,16 @@ const VirtualKalimba = {
       this.populateSongsSelect(preferItemId);
       this.syncMuteButton();
       if (!this._muteBound && typeof window !== 'undefined') { this._muteBound = true; window.addEventListener('ppk-kalimba-mute-changed', () => this.syncMuteButton()); }
+      if (typeof ScreenWakeLock !== 'undefined') { ScreenWakeLock.request('virtual-kalimba'); }
     }
   },
 
   closeModal() {
     this.stopSong();
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.release('virtual-kalimba');
+      ScreenWakeLock.release('kalimba-media');
+    }
     const modal = document.getElementById('modal-virtual-kalimba');
     if (modal) modal.classList.remove('active');
   }

@@ -66,6 +66,9 @@ const AudioTools = {
     this.metronome.nextNoteTime = this.audioCtx.currentTime + 0.05;
 
     this.updateMetronomeUI(true);
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.request('audio-tools-metronome');
+    }
     this.scheduler();
   },
 
@@ -77,6 +80,9 @@ const AudioTools = {
     }
     this.updateMetronomeUI(false);
     this.resetBeatVisuals();
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.release('audio-tools-metronome');
+    }
   },
 
   scheduler() {
@@ -227,6 +233,9 @@ const AudioTools = {
     if (!note) return;
 
     this.stopDrone();
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.request('audio-tools-drone');
+    }
 
     const now = this.audioCtx.currentTime;
     this.drone.osc = this.audioCtx.createOscillator();
@@ -264,6 +273,9 @@ const AudioTools = {
     this.drone.isPlaying = false;
     this.drone.activeNote = null;
     this.updateDroneUI();
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.release('audio-tools-drone');
+    }
   },
 
   updateDroneUI() {

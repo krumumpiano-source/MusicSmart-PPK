@@ -5675,6 +5675,9 @@ const App = {
     if (modal) {
       modal.classList.add('active');
       this.switchMusicAidsTab(initialTab);
+      if (typeof ScreenWakeLock !== 'undefined') {
+        ScreenWakeLock.request('music-visual-aids');
+      }
     }
   },
 
@@ -5682,7 +5685,12 @@ const App = {
     const modal = document.getElementById('modal-music-visual-aids');
     if (modal) {
       modal.classList.remove('active');
+    
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.release('music-visual-aids');
+      ScreenWakeLock.release('rhythm-trainer');
     }
+  }
     if (this._aidsHost && this._aidsHost.widget) {
       try { this._aidsHost.widget.stop(); } catch (e) {}
     }
@@ -6301,6 +6309,9 @@ const App = {
   // 5. Interactive Tap Trainer
   startRhythmTapTrainer() {
     this.stopRhythmAudio();
+    if (typeof ScreenWakeLock !== 'undefined') {
+      ScreenWakeLock.request('rhythm-trainer');
+    }
     const ctx = this._getRhythmAudioCtx();
     const bpm = this.getRhythmBpm();
     const spb = 60 / bpm;
