@@ -1,8 +1,9 @@
+const { PIN_A } = require('../../tests/lib/test_pins');
 const {chromium}=(function(){try{return require('playwright-core')}catch(e){return require(process.env.PW_CORE||'/workspace/bt/node_modules/playwright-core')}})();
 (async()=>{const b=await chromium.launch({executablePath:'/usr/bin/google-chrome',args:['--no-sandbox']});
 const p=await b.newPage({viewport:{width:360,height:640}});
 await p.goto('http://localhost:8893/index.html');await p.waitForTimeout(1500);
-await p.evaluate(()=>{Store.registerStudentPin('90001','246810');document.getElementById('modal-auth-login').classList.remove('active');App.switchRole('student',false);App.selectStudentPeriod(3);});
+await p.evaluate((pin) =>{Store.registerStudentPin('90001',pin);document.getElementById('modal-auth-login').classList.remove('active');App.switchRole('student',false);App.selectStudentPeriod(3);}, PIN_A);
 const r=await p.evaluate(()=>{var h=document.querySelector('header,.app-header,.top-header');var out=[];document.querySelectorAll('body *').forEach(function(e){var cs=getComputedStyle(e);if((cs.position==='sticky'||cs.position==='fixed')&&e.offsetParent!==null||cs.position==='fixed'){var r=e.getBoundingClientRect();if(r.height>20&&r.width>100)out.push(e.tagName+'.'+(e.className||'').toString().slice(0,30)+'#'+e.id+' '+cs.position+' top='+Math.round(r.top)+' h='+Math.round(r.height));}});return out;});
 console.log(r.join('\n'));
 await p.screenshot({path:'/workspace/shots/stu/hdr_top_360.png'});

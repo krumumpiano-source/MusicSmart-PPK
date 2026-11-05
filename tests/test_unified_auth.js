@@ -1,3 +1,4 @@
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -68,8 +69,8 @@ global.document = {
     email: 'intern_music@up.ac.th',
     term: '1',
     academicYear: 2569,
-    pin: '246810',
-    pin2: '246810',
+    pin: PIN_A,
+    pin2: PIN_A,
     preferredClasses: 'ม.1/1, ม.1/2'
   };
 
@@ -78,7 +79,7 @@ global.document = {
   assert.strictEqual(regRes.status, 'pending', 'Newly registered intern must start in pending state');
 
   // Verify that the newly registered intern is blocked while pending
-  const pendingLoginRes = await Store.verifyTeacherLogin('INT66001', '246810');
+  const pendingLoginRes = await Store.verifyTeacherLogin('INT66001', PIN_A);
   assert.strictEqual(pendingLoginRes.success, false, 'Pending intern must NOT be able to log in before approval');
   assert.strictEqual(pendingLoginRes.code, 'pending', 'Must return pending code');
   assert(pendingLoginRes.message.includes('รอครูอนุมัติ'), 'Must show รอครูอนุมัติ message');
@@ -88,7 +89,7 @@ global.document = {
   assert.strictEqual(approveRes.success, true, 'Teacher approval must succeed');
 
   // Verify that the approved intern can now log in via Store.verifyTeacherLogin
-  const internLoginRes = await Store.verifyTeacherLogin('INT66001', '246810');
+  const internLoginRes = await Store.verifyTeacherLogin('INT66001', PIN_A);
   assert.strictEqual(internLoginRes.success, true, 'Approved intern must be able to log in with internId and PIN');
   assert.strictEqual(internLoginRes.user.role, 'intern', 'Intern must be automatically detected as role="intern"');
   assert.strictEqual(internLoginRes.user.roleCategory, 'trainee', 'Role category must be "trainee"');
@@ -97,7 +98,7 @@ global.document = {
   console.log('✅ Intern login blocked while pending and allowed after teacher approval.');
 
   // Test 4: Intern Login via email
-  const internLoginEmailRes = await Store.verifyTeacherLogin('intern_music@up.ac.th', '246810');
+  const internLoginEmailRes = await Store.verifyTeacherLogin('intern_music@up.ac.th', PIN_A);
   assert.strictEqual(internLoginEmailRes.success, true, 'Intern must also be able to log in with email');
   assert.strictEqual(internLoginEmailRes.user.role, 'intern');
   console.log('✅ Intern login by email works smoothly.');

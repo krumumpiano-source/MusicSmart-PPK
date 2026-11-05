@@ -1,3 +1,4 @@
+const { PIN_A } = require('../../tests/lib/test_pins');
 const {chromium}=(function(){try{return require('playwright-core')}catch(e){return require(process.env.PW_CORE||'/workspace/bt/node_modules/playwright-core')}})();
 const BAN=[/ℹ/,/ร่างโดยระบบ/,/รอครูตรวจ/,/ยังไม่ได้โหลดเข้าแอป/,/วก\.5 ไม่ระบุ/,/ครูโปรดยืนยัน/,/ระบบตั้งเป็น/,/Do-Re-Mi|โด[\s-]*เร[\s-]*มี/i,/ส่งเข้า Google Drive ครู/,/ข้อสังเกตสำหรับครู/,/ฉบับร่าง/,/สมมติฐาน/];
 (async()=>{
@@ -7,7 +8,7 @@ const BAN=[/ℹ/,/ร่างโดยระบบ/,/รอครูตรว�
   const p=await b.newPage({viewport:{width:w,height:h}});
   const errs=[];p.on('pageerror',e=>errs.push(e.message));
   await p.goto('http://localhost:8893/index.html');await p.waitForTimeout(1500);
-  const ok=await p.evaluate(async()=>{var cls=Store.getAllClasses('M1');var st=Store.getStudents(cls[0]);var sid=st[0].student_id;var r=Store.registerStudentPin(sid,'246810');var a=document.getElementById('modal-auth-login');if(a)a.classList.remove('active');App.switchRole('student',false);return {sid:sid,r:r&&r.success,cls:cls[0]};});
+  const ok=await p.evaluate(async(pin) =>{var cls=Store.getAllClasses('M1');var st=Store.getStudents(cls[0]);var sid=st[0].student_id;var r=Store.registerStudentPin(sid,pin);var a=document.getElementById('modal-auth-login');if(a)a.classList.remove('active');App.switchRole('student',false);return {sid:sid,r:r&&r.success,cls:cls[0]};}, PIN_A);
   console.log(w,JSON.stringify(ok));
   for(let per=1;per<=20;per++){
     await p.evaluate(per=>{App.state.role='student';App.selectStudentPeriod(per);},per);

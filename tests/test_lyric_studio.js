@@ -1,4 +1,5 @@
 // เนื้อร้องใต้โน้ต + โหวตในกลุ่ม: ตรรกะ (lyric-core) + ต้นแบบ Apps Script (tools/prototype) บน fake GAS — ข้อมูลสังเคราะห์เท่านั้น
+const { PIN_A, PIN_B } = require('./lib/test_pins');
 const assert = require('assert'), fs = require('fs'), path = require('path'), vm = require('vm');
 const { loadGas } = require('./fake_gas');
 const { attach, SONGS } = require('../tools/prototype/attach_studio.js');
@@ -39,7 +40,7 @@ const roster = [];
 for (let i = 1; i <= 40; i++) roster.push({ student_id: String(91000 + i), prefix: 'ด.ช.', first_name: 'สมมติ' + i, last_name: 'ทดสอบ', nickname: 'น' + i, class: CLS, no: i });
 roster.push({ student_id: '92001', prefix: 'ด.ช.', first_name: 'ห้องอื่น', last_name: 'ทดสอบ', nickname: 'อื่น', class: CLS2, no: 1 });
 eq(call({ action: 'upload_roster', token: T, students: roster, replace: true }).status, 'success');
-const tok = {}; const login = id => (tok[id] = tok[id] || call({ action: 'studentSetPin', studentId: id, pin: '246810' }).sessionToken);
+const tok = {}; const login = id => (tok[id] = tok[id] || call({ action: 'studentSetPin', studentId: id, pin: PIN_A }).sessionToken);
 ['91001', '91006', '91011', '91016', '91021', '91026', '91031', '91036', '91002', '92001'].forEach(login);
 ok(tok['91001'] && tok['92001']);
 const S = (id, o) => call(Object.assign({ sessionToken: tok[id] }, o));
@@ -176,7 +177,7 @@ eq(LC.normSettings({ seats: { a: 3, b: 'x', c: 500 } }, 'joy_to_the_world').seat
   const gas3 = attach(loadGas({ SYNC_TOKEN: T }), { syncToken: T }), c3 = b => gas3.call(b), CL3 = 'ม.1/3', ro = [];
   for (let i = 1; i <= 46; i++) ro.push({ student_id: String(93000 + i), prefix: 'ด.ช.', first_name: 'สมมติ' + i, last_name: 'ทดสอบ', nickname: 'ก' + i, class: CL3, no: i });
   eq(c3({ action: 'upload_roster', token: T, students: ro, replace: true }).status, 'success');
-  const tk = {}; const lg = id => (tk[id] = tk[id] || c3({ action: 'studentSetPin', studentId: id, pin: '246810' }).sessionToken);
+  const tk = {}; const lg = id => (tk[id] = tk[id] || c3({ action: 'studentSetPin', studentId: id, pin: PIN_A }).sessionToken);
   const S3 = (id, o) => c3(Object.assign({ sessionToken: lg(id) }, o));
   const g1ids = []; for (let i = 1; i <= 46; i += 5) g1ids.push(String(93000 + i));    // 10 คนในกลุ่ม 1
   eq(g1ids.length, 10);

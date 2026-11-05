@@ -11,6 +11,7 @@
  * - ข้อมูลจำลองหายเมื่อปิดเซิร์ฟเวอร์ (ข้อมูลที่กรอกในเบราว์เซอร์อยู่ใน localStorage ของ localhost:พอร์ตนี้เท่านั้น)
  */
 'use strict';
+const { PIN_A, PIN_B } = require('../tests/lib/test_pins');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -38,9 +39,9 @@ function startFakeGas() {
   Object.keys(sample).forEach(cls => sample[cls].forEach(s => students.push({ student_id: s.student_id, prefix: s.prefix || '', first_name: s.first_name || '',
     last_name: s.last_name || '', nickname: s.nickname || '', class: s.class || cls, no: s.no || '' })));
   gas.call({ action: 'upload_roster', token: SYNC_TOKEN, students, replace: true });
-  gas.call({ action: 'studentSetPin', studentId: '90001', pin: '246810' });
+  gas.call({ action: 'studentSetPin', studentId: '90001', pin: PIN_A });
   gas.call({ action: 'upsert_intern', token: SYNC_TOKEN, internId: 'intern01', name: 'นศ.ฝึกสอน (สาธิต)', classes: ['ม.1/1'] });
-  gas.call({ action: 'internSetPin', internId: 'intern01', pin: '135790' });
+  gas.call({ action: 'internSetPin', internId: 'intern01', pin: PIN_B });
 }
 
 const BOOT_JS = `/* พรีวิวในเครื่อง: ให้แอปใช้ Apps Script จำลองของเซิร์ฟเวอร์นี้เท่านั้น */
@@ -111,4 +112,6 @@ server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? 'พอร์�
 server.listen(PORT, HOST, () => {
   console.log('MusicSmart พรีวิวในเครื่อง: http://localhost:' + PORT + '/   (กด Ctrl+C เพื่อหยุด)');
   console.log('  • ไม่ส่งข้อมูลไป Google · Apps Script จำลองอยู่ในหน่วยความจำ · รายชื่อ' + (REAL_ROSTER ? 'จริง (--real-roster)' : 'ตัวอย่างเท่านั้น'));
+  console.log('  • บัญชีทดลอง (PIN สุ่มใหม่ทุกครั้งที่เปิด หรือกำหนดเองด้วย MS_TEST_PIN_A / MS_TEST_PIN_B):');
+  console.log('      นักเรียน 90001 / PIN ' + PIN_A + '      นศ.ฝึกสอน intern01 / PIN ' + PIN_B);
 });

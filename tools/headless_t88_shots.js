@@ -1,4 +1,5 @@
 // ภาพหน้าจอ 360/1024: ครู P19 (ผลสังเกต), ครู P3 (เกณฑ์คาลิมบ้า), คลังหลักฐาน (ตั้งค่า + ฟอร์มคลิป), นักเรียน P18
+const { PIN_A } = require('../tests/lib/test_pins');
 const pw = require(process.env.PW_PATH || '/workspace/bt/node_modules/playwright-core');
 const BASE = process.argv[2] || 'http://localhost:8894', OUT = process.argv[3] || '/workspace/shots';
 let fail = 0, pass = 0; const ck = (c, m) => { if (c) { pass++; console.log('ok  ', m); } else { fail++; console.log('FAIL', m); } };
@@ -9,7 +10,7 @@ let fail = 0, pass = 0; const ck = (c, m) => { if (c) { pass++; console.log('ok 
     p.on('pageerror', e => errs.push(e.message)); p.on('dialog', d => d.accept());
     await p.goto(BASE + '/index.html'); await p.waitForTimeout(1200);
     // นักเรียน P18
-    await p.evaluate(() => { var cls = Store.getAllClasses('M1'), st = Store.getStudents(cls[0]); Store.registerStudentPin(st[0].student_id, '246810'); var a = document.getElementById('modal-auth-login'); if (a) a.classList.remove('active'); App.state.role = 'student'; App.selectStudentPeriod(18); });
+    await p.evaluate((pin) => { var cls = Store.getAllClasses('M1'), st = Store.getStudents(cls[0]); Store.registerStudentPin(st[0].student_id, pin); var a = document.getElementById('modal-auth-login'); if (a) a.classList.remove('active'); App.state.role = 'student'; App.selectStudentPeriod(18); }, PIN_A);
     await p.waitForTimeout(500);
     const st = await p.evaluate(() => document.getElementById('view-student').innerText);
     ck(!/กรณีศึกษา/.test(st) && /ประเมินรวมในคาบที่ 19|คาบที่ 19/.test(st), `${w}px นักเรียน P18: หัวข้อไม่มี "กรณีศึกษา" และบอกว่าประเมินรวมคาบ 19`);
