@@ -61,6 +61,7 @@ assert(html.includes('id="kalimba-vk-playback-bar"'), '#kalimba-vk-playback-bar 
 assert(css.includes('.vk-playback-bar'), '.vk-playback-bar styles must be defined in styles.css');
 assert(kmSrc.includes('this.opts.ctlEl'), 'Widget must support opts.ctlEl for external controls rendering');
 const vkSrc = fs.readFileSync(path.join(ROOT, 'app/js/virtual-kalimba.js'), 'utf8');
+assert(vkSrc.includes("const playbackBar = document.getElementById('kalimba-vk-playback-bar');"), 'playbackBar must be explicitly declared');
 assert(vkSrc.includes('ctlEl: playbackBar'), 'VirtualKalimba must pass external playbackBar to Widget');
 console.log('✅ 7. Dedicated external playback controls toolbar outside note container verified');
 

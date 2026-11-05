@@ -183,3 +183,4 @@
     module.exports = ScreenWakeLock;
   }
 })(typeof window !== 'undefined' ? window : this);
+

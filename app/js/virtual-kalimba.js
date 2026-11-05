@@ -265,6 +265,7 @@ const VirtualKalimba = {
   onSongSelectChange(val) {
     this.stopSong();
     const box = document.getElementById('kalimba-vk-widget');
+    const playbackBar = document.getElementById('kalimba-vk-playback-bar');
     const found = this._findItem(val);
     this.currentItem = found ? found.item : null;
     if (this.widget) { try { this.widget.destroy(); } catch (e) {} this.widget = null; }

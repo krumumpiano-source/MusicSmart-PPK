@@ -88,3 +88,4 @@ assert(tunerJs.includes("ScreenWakeLock.request('tuner')"), 'Tuner.startListenin
 assert(tunerJs.includes("ScreenWakeLock.release('tuner')"), 'Tuner.stopListening must release wake lock');
 
 console.log('✅ ALL Screen Wake Lock tests passed successfully!');
+
