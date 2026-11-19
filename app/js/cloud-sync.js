@@ -137,6 +137,100 @@ const CloudSync = {
     return r.notices || [];
   },
 
+  // ---------- งานวิจัย CAR (research_scores) ----------
+
+  async pullResearch() {
+    if (!this.isTeacher()) return { skipped: true };
+    const rows = CloudApi.Research ? await CloudApi.Research.list('') : ((await CloudApi.request('GET', '/api/research')).research || []);
+    const byClass = {};
+    rows.forEach(r => {
+      if (!r || !r.class_name || !r.student_id) return;
+      if (!byClass[r.class_name]) byClass[r.class_name] = {};
+      byClass[r.class_name][String(r.student_id)] = r;
+    });
+    let applied = 0;
+    Object.keys(byClass).forEach(cls => {
+      const key = `ppk_car_research_scores_${cls}`;
+      const local = (typeof Store !== 'undefined' && Store.getResearchScores) ? { ...Store.getResearchScores(cls) } : this._read(key, {});
+      let dirty = false;
+      Object.keys(byClass[cls]).forEach(sid => {
+        const srv = byClass[cls][sid];
+        const cur = local[sid];
+        const srvTime = srv.updated_at ? Date.parse(srv.updated_at) : 0;
+        const locTime = (cur && cur.updatedAt) ? Date.parse(cur.updatedAt) : 0;
+        if (!cur) {
+          local[sid] = { pre: srv.pre ?? null, post: srv.post ?? null, formative: srv.formative ?? null, updatedAt: srv.updated_at || new Date().toISOString() };
+          dirty = true;
+          applied++;
+        } else if (srvTime > locTime) {
+          const next = {
+            pre: srv.pre !== null && srv.pre !== undefined ? srv.pre : (cur.pre ?? null),
+            post: srv.post !== null && srv.post !== undefined ? srv.post : (cur.post ?? null),
+            formative: srv.formative !== null && srv.formative !== undefined ? srv.formative : (cur.formative ?? null),
+            updatedAt: srv.updated_at
+          };
+          local[sid] = next;
+          dirty = true;
+          applied++;
+        }
+      });
+      if (dirty) {
+        if (typeof Store !== 'undefined' && Store.saveResearchScores) Store.saveResearchScores(cls, local);
+        else this._write(key, local);
+      }
+    });
+    return { ok: true, applied };
+  },
+
+  // ---------- รูบริกปฏิบัติ & แผนการสอนที่ปรับแต่ง (rubrics / curriculum_lessons) ----------
+
+  async pullRubrics() {
+    if (!this.isTeacher()) return { skipped: true };
+    const rows = CloudApi.Rubrics ? await CloudApi.Rubrics.list() : (((await CloudApi.request('GET', '/api/rubrics')) || {}).rubrics || []);
+    let applied = 0;
+    rows.forEach(r => {
+      if (!r || !r.student_id || !r.period || !r.data) return;
+      const key = `music_rubric_${r.student_id}_p${Number(r.period)}`;
+      const local = this._read(key, null);
+      const srvTime = Date.parse(r.updated_at || (r.data && r.data.updatedAt) || 0) || 0;
+      const locTime = Date.parse((local && local.updatedAt) || 0) || 0;
+      if (!local || srvTime > locTime) {
+        const next = { ...r.data, updatedAt: r.updated_at || (r.data && r.data.updatedAt) || new Date().toISOString() };
+        this._write(key, next);
+        applied++;
+      }
+    });
+    return { ok: true, applied };
+  },
+
+  async pullCurriculumLessons() {
+    if (!this.isTeacher()) return { skipped: true };
+    const rows = CloudApi.CurriculumLessons ? await CloudApi.CurriculumLessons.list() : (((await CloudApi.request('GET', '/api/curriculum-lessons')) || {}).lessons || []);
+    if (!rows.length) return { ok: true, applied: 0 };
+    const all = this._read('ppk_custom_lessons', {}) || {};
+    let applied = 0;
+    rows.forEach(r => {
+      if (!r || !r.grade || !r.period || !r.data) return;
+      const g = String(r.grade);
+      const p = Number(r.period);
+      if (!all[g]) all[g] = {};
+      const cur = all[g][p];
+      const srvTime = Date.parse(r.updated_at || (r.data && r.data.updatedAt) || 0) || 0;
+      const locTime = Date.parse((cur && cur.updatedAt) || 0) || 0;
+      if (!cur || srvTime > locTime) {
+        all[g][p] = { ...r.data, updatedAt: r.updated_at || (r.data && r.data.updatedAt) || new Date().toISOString(), isCustomized: true };
+        applied++;
+      }
+    });
+    if (applied) {
+      this._write('ppk_custom_lessons', all);
+      if (typeof Store !== 'undefined' && Store._lessonIndex && Store._lessonIndex.clear) {
+        Store._lessonIndex.clear();
+      }
+    }
+    return { ok: true, applied };
+  },
+
   // ---------- เริ่มต้นทำงาน ----------
 
   async init() {
@@ -147,6 +241,9 @@ const CloudSync = {
         this._queueUnversioned();
         out.sessionsPushed = (await this.flushSessions()).pushed || 0;
         out.sessionsPulled = (await this.pullSessions()).applied || 0;
+        out.researchPulled = (await this.pullResearch()).applied || 0;
+        out.rubricsPulled = (await this.pullRubrics()).applied || 0;
+        out.lessonsPulled = (await this.pullCurriculumLessons()).applied || 0;
       }
       await this.pullDueDates();
     } catch (e) {

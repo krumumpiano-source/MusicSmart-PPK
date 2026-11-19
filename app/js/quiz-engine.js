@@ -131,6 +131,12 @@ const QuizEngine = {
   openQuizModal(unitNo = 1, studentId = null) {
     // มือถือนักเรียน (โหมดเซิร์ฟเวอร์): ใช้ข้อสอบจากเซิร์ฟเวอร์ ไม่ใช้เฉลยใน quizzes.js
     if (typeof ServerQuiz !== 'undefined' && ServerQuiz.shouldUse()) return ServerQuiz.open(unitNo);
+    if (typeof QUIZZES_ANSWERS_STRIPPED !== 'undefined' && QUIZZES_ANSWERS_STRIPPED) {
+      const msg = '🔒 หน้าเว็บสาธารณะปิดเฉลยแบบทดสอบในเครื่อง กรุณาเข้าสู่ระบบนักเรียนก่อนทำแบบทดสอบบนเซิร์ฟเวอร์';
+      if (typeof UiDialogs !== 'undefined' && UiDialogs.toast) UiDialogs.toast(msg, 'warning');
+      else if (typeof alert === 'function') alert(msg);
+      return;
+    }
     this.loadSettings();
     const modal = document.getElementById('modal-quiz');
     if (!modal) return;
@@ -142,7 +148,9 @@ const QuizEngine = {
 
     const unitData = QUIZZES_DATA.units.find(u => u.unit_no === parseInt(unitNo, 10));
     if (!unitData) {
-      alert('ไม่พบข้อมูลแบบทดสอบสำหรับหน่วยนี้');
+      const msg = 'ไม่พบข้อมูลแบบทดสอบสำหรับหน่วยนี้';
+      if (typeof UiDialogs !== 'undefined' && UiDialogs.toast) UiDialogs.toast(msg, 'warning');
+      else alert(msg);
       return;
     }
 

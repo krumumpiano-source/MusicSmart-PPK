@@ -11,6 +11,11 @@ const ExamClient = {
   current: null,      // { attemptId, deadlineMs, offset, questions, kind } — เฉพาะในหน่วยความจำ
   _poll: null,
   _tick: null,
+  _draftTimer: null,
+  _nextAutoRetryAt: 0,
+  _tabSwitches: 0,
+  _onVisChange: null,
+  _onOnline: null,
   _submitting: false,
   _bankDraft: null,   // ตัวอย่างคลังข้อสอบที่ครูเลือก (ในหน่วยความจำ)
 
@@ -76,7 +81,8 @@ const ExamClient = {
     const routes = {
       studentExamStatus: ['GET', '/api/exams/status'],
       studentExamStart: ['POST', '/api/exams/start'],
-      studentExamSubmit: ['POST', '/api/exams/submit', { attemptId: x.attemptId, answers: x.answers }],
+      studentExamDraft: ['PUT', '/api/exams/draft', { attemptId: x.attemptId, answers: x.answers, tabSwitches: x.tabSwitches }],
+      studentExamSubmit: ['POST', '/api/exams/submit', { attemptId: x.attemptId, answers: x.answers, tabSwitches: x.tabSwitches }],
       exam_upload_bank: ['PUT', '/api/exams/bank', { kind: x.kind, items: x.items }],
       exam_open: ['POST', '/api/exams/sessions', x],
       exam_close: ['POST', '/api/exams/sessions/' + encodeURIComponent(x.sessionId || '') + '/close'],
@@ -124,19 +130,62 @@ const ExamClient = {
     if (btn) btn.onclick = () => this.start();
   },
 
+  _notify(msg, type) {
+    if (typeof UiDialogs !== 'undefined' && UiDialogs.toast) UiDialogs.toast(msg, type || 'warning');
+    else if (typeof alert === 'function') alert(msg);
+  },
+
   async start() {
     const btn = document.getElementById('exam-start-btn'); if (btn) btn.disabled = true;
     let r;
-    try { r = await this._call('studentExamStart'); } catch (e) { alert('เริ่มสอบไม่ได้ ต้องต่ออินเทอร์เน็ตแล้วลองใหม่'); if (btn) btn.disabled = false; return; }
+    try { r = await this._call('studentExamStart'); } catch (e) { this._notify('เริ่มสอบไม่ได้ ต้องต่ออินเทอร์เน็ตแล้วลองใหม่', 'error'); if (btn) btn.disabled = false; return; }
     if (!r || r.status !== 'success') {
-      alert((r && r.message) || 'เริ่มสอบไม่ได้');
+      this._notify((r && r.message) || 'เริ่มสอบไม่ได้', 'warning');
       if (btn) btn.disabled = false;
       this.refreshStudent();
       return;
     }
-    this.current = { attemptId: r.attemptId, kind: r.kind, deadlineMs: Number(r.deadlineMs), offset: Number(r.serverNow) - Date.now(), questions: r.questions || [], maxPoints: r.maxPoints };
+    this.current = {
+      attemptId: r.attemptId,
+      kind: r.kind,
+      deadlineMs: Number(r.deadlineMs),
+      offset: Number(r.serverNow) - Date.now(),
+      questions: r.questions || [],
+      maxPoints: r.maxPoints,
+      draftAnswers: (r.draftAnswers && typeof r.draftAnswers === 'object') ? r.draftAnswers : {}
+    };
     this._submitting = false;
+    this._nextAutoRetryAt = 0;
+    this._tabSwitches = Number(r.tabSwitches) || 0;
     this._renderOverlay();
+  },
+
+  _updateTabWarn() {
+    const w = typeof document !== 'undefined' ? document.getElementById('exam-tab-warn') : null;
+    if (!w) return;
+    if (this._tabSwitches > 0) {
+      w.style.display = 'block';
+      w.textContent = '⚠️ ตรวจพบการสลับหน้าจอ ' + this._tabSwitches + ' ครั้ง (ระบบบันทึกส่งให้ครูอัตโนมัติ)';
+    } else {
+      w.style.display = 'none';
+    }
+  },
+
+  _scheduleDraftSave() {
+    if (!this.current || !this._cloud() || this._submitting) return;
+    clearTimeout(this._draftTimer);
+    this._draftTimer = setTimeout(() => { this._saveDraft(); }, 2000);
+  },
+
+  async _saveDraft() {
+    if (!this.current || !this._cloud() || this._submitting) return;
+    try {
+      await this._call('studentExamDraft', {
+        attemptId: this.current.attemptId,
+        answers: this._collect(),
+        tabSwitches: this._tabSwitches || 0
+      });
+    } catch (e) { /* silent best-effort draft sync */ }
   },
 
   _renderOverlay() {
@@ -144,16 +193,31 @@ const ExamClient = {
     if (!ov) { ov = document.createElement('div'); ov.id = 'exam-overlay'; document.body.appendChild(ov); }
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#fff;overflow:auto;padding:1rem;';
     const c = this.current;
+    const draft = c.draftAnswers || {};
     ov.innerHTML = '<div style="max-width:760px;margin:0 auto;">' +
       '<div style="position:sticky;top:0;background:#fff;padding:0.5rem 0;border-bottom:2px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">' +
       '<div style="font-weight:800;">' + this._esc(this.KIND_LABEL[c.kind] || 'สอบ') + ' • ' + c.questions.length + ' ข้อ</div>' +
       '<div id="exam-timer" style="font-weight:800;color:#b91c1c;font-variant-numeric:tabular-nums;">--:--</div></div>' +
+      '<div id="exam-tab-warn" style="display:none;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;border-radius:8px;padding:0.45rem 0.75rem;font-size:0.8rem;font-weight:700;margin-top:0.65rem;"></div>' +
       c.questions.map((q, i) => '<div style="margin:1rem 0;padding:0.85rem;border:1px solid #e2e8f0;border-radius:10px;">' +
         '<div style="font-weight:700;margin-bottom:0.5rem;">' + (i + 1) + '. ' + this._esc(q.question) + '</div>' +
-        (q.choices || []).map(ch => '<label style="display:block;padding:0.35rem 0;cursor:pointer;"><input type="radio" name="ex_' + this._esc(q.id) + '" value="' + this._esc(ch.key) + '"> ' + this._esc(ch.key) + '. ' + this._esc(ch.text) + '</label>').join('') +
+        (q.choices || []).map(ch => '<label style="display:block;padding:0.35rem 0;cursor:pointer;"><input type="radio" name="ex_' + this._esc(q.id) + '" value="' + this._esc(ch.key) + '"' + (draft[q.id] === ch.key ? ' checked' : '') + '> ' + this._esc(ch.key) + '. ' + this._esc(ch.text) + '</label>').join('') +
         '</div>').join('') +
       '<button type="button" id="exam-submit-btn" class="btn-nav-action primary" style="width:100%;justify-content:center;margin-bottom:2rem;">ส่งคำตอบ ✅</button>' +
       '<div id="exam-msg" style="font-weight:700;margin-bottom:2rem;"></div></div>';
+    this._updateTabWarn();
+    ov.onchange = () => this._scheduleDraftSave();
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      if (this._onVisChange) document.removeEventListener('visibilitychange', this._onVisChange);
+      this._onVisChange = () => {
+        if (document.hidden && this.current) {
+          this._tabSwitches = (this._tabSwitches || 0) + 1;
+          this._updateTabWarn();
+          this._scheduleDraftSave();
+        }
+      };
+      document.addEventListener('visibilitychange', this._onVisChange);
+    }
     document.getElementById('exam-submit-btn').onclick = () => this.submit(false);
     window.onbeforeunload = () => 'กำลังสอบอยู่ ต้องการออกจากหน้านี้หรือไม่?';
     clearInterval(this._tick);
@@ -167,7 +231,7 @@ const ExamClient = {
     const t = document.getElementById('exam-timer');
     const left = Math.max(0, this._remainingMs());
     if (t) { const s = Math.ceil(left / 1000); t.textContent = '⏱ ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
-    if (left <= 0 && this.current && !this._submitting) this.submit(true);
+    if (left <= 0 && this.current && !this._submitting && Date.now() >= (this._nextAutoRetryAt || 0)) this.submit(true);
   },
 
   _collect() {
@@ -185,12 +249,21 @@ const ExamClient = {
     const total = this.current.questions.length;
     if (!auto && Object.keys(answers).length < total && !confirm('ตอบแล้ว ' + Object.keys(answers).length + '/' + total + ' ข้อ ต้องการส่งเลยหรือไม่?')) return;
     this._submitting = true;
+    clearTimeout(this._draftTimer);
     const msg = document.getElementById('exam-msg'); if (msg) msg.textContent = '⏳ กำลังส่งคำตอบ...';
     let r;
-    try { r = await this._call('studentExamSubmit', { attemptId: this.current.attemptId, answers }); }
+    try { r = await this._call('studentExamSubmit', { attemptId: this.current.attemptId, answers, tabSwitches: this._tabSwitches || 0 }); }
     catch (e) {
       this._submitting = false;
-      if (msg) msg.textContent = '⚠️ ส่งไม่สำเร็จ (ออฟไลน์?) — คำตอบยังอยู่ในหน้านี้ ต่อเน็ตแล้วกดส่งอีกครั้งก่อนหมดเวลา';
+      this._nextAutoRetryAt = Date.now() + 10000;
+      if (typeof window !== 'undefined' && window.addEventListener && !this._onOnline) {
+        this._onOnline = () => {
+          this._onOnline = null;
+          if (this.current && !this._submitting && this._remainingMs() <= 0) this.submit(true);
+        };
+        window.addEventListener('online', this._onOnline, { once: true });
+      }
+      if (msg) msg.textContent = '⚠️ ส่งไม่สำเร็จ (ออฟไลน์?) — คำตอบยังอยู่ในหน้านี้ ต่อเน็ตแล้วกดส่งอีกครั้งก่อนหมดเวลา (ลองใหม่ใน 10 วินาที)';
       return;
     }
     if (r && r.status === 'success') { this._finish('<div style="font-size:2rem;font-weight:800;color:#166534;">' + Number(r.points) + ' / ' + Number(r.maxPoints) + '</div><div style="font-weight:700;">ส่งข้อสอบแล้ว • ตอบถูก ' + Number(r.correct) + ' / ' + Number(r.items) + ' ข้อ</div><div style="font-size:0.85rem;color:#475569;margin-top:0.5rem;">🔒 ระบบไม่แสดงเฉลย คุณครูจะเฉลยในชั้นเรียน</div>'); return; }
@@ -201,8 +274,19 @@ const ExamClient = {
 
   _finish(html) {
     clearInterval(this._tick); this._tick = null;
+    clearTimeout(this._draftTimer); this._draftTimer = null;
+    if (typeof document !== 'undefined' && this._onVisChange) {
+      document.removeEventListener('visibilitychange', this._onVisChange);
+      this._onVisChange = null;
+    }
+    if (typeof window !== 'undefined' && this._onOnline) {
+      window.removeEventListener('online', this._onOnline);
+      this._onOnline = null;
+    }
     window.onbeforeunload = null;
     this.current = null;   // ลบข้อสอบออกจากหน่วยความจำ
+    this._tabSwitches = 0;
+    this._nextAutoRetryAt = 0;
     const ov = document.getElementById('exam-overlay');
     if (ov) { ov.innerHTML = '<div style="max-width:520px;margin:4rem auto;text-align:center;padding:1.5rem;border:1px solid #bbf7d0;border-radius:12px;background:#f0fdf4;">' + html + '<button type="button" class="btn-nav-action primary" id="exam-close-btn" style="margin-top:1rem;">ปิด</button></div>'; document.getElementById('exam-close-btn').onclick = () => { ov.remove(); this.refreshStudent(); }; }
   },
@@ -322,9 +406,10 @@ const ExamClient = {
     const nameOf = a => a.name || a.studentId;
     const inProg = r.attempts.filter(a => a.status === 'in_progress').length;
     box.innerHTML = '<div style="font-size:0.82rem;font-weight:700;margin-bottom:0.3rem;">ผลสอบ ' + this._esc(this.KIND_LABEL[kind] || kind) + ' ห้อง ' + this._esc(className) + ' — นำเข้าสมุดคะแนนแล้ว ' + applied.applied + ' คน (ใช้คะแนนครั้งที่ดีที่สุด)' + (inProg ? ' • ยังทำอยู่ ' + inProg + ' คน' : '') + '</div>' +
-      '<table style="width:100%;font-size:0.8rem;border-collapse:collapse;"><tr style="text-align:left;"><th>เลขที่</th><th>ชื่อ</th><th>คะแนน</th><th>ถูก</th><th>ระดับ</th><th>ผลผ่าน (≥50%)</th><th>ครั้งที่</th><th></th></tr>' +
+      '<table style="width:100%;font-size:0.8rem;border-collapse:collapse;"><tr style="text-align:left;"><th>เลขที่</th><th>ชื่อ</th><th>คะแนน</th><th>ถูก</th><th>ระดับ</th><th>ผลผ่าน (≥50%)</th><th>ครั้งที่</th><th>สลับหน้าจอ</th><th></th></tr>' +
       (rows.map(a => '<tr style="border-top:1px solid #e2e8f0;"><td>' + this._esc(a.no) + '</td><td>' + this._esc(nameOf(a)) + '</td><td>' + a.points + '</td><td>' + a.correct + '/' + a.items + '</td><td>' + a.level + '</td><td>' + (a.points >= 5 ? '✅ ผ่าน' : '❌ ต้องสอบซ่อม') + '</td><td>' + a.attemptNo + '</td><td>' +
-        (a.points < 5 ? '<button type="button" class="btn-nav-action" data-exam-retake="' + this._esc(a.studentId) + '">ให้สิทธิ์สอบซ่อม</button>' : '') + '</td></tr>').join('') || '<tr><td colspan="8">ยังไม่มีผู้ส่งข้อสอบ</td></tr>') + '</table>';
+        (Number(a.tabSwitches) > 0 ? '<span style="color:#b45309;font-weight:700;">⚠️ สลับจอ ' + Number(a.tabSwitches) + ' ครั้ง</span>' : '<span style="color:#64748b;">ปกติ</span>') + '</td><td>' +
+        (a.points < 5 ? '<button type="button" class="btn-nav-action" data-exam-retake="' + this._esc(a.studentId) + '">ให้สิทธิ์สอบซ่อม</button>' : '') + '</td></tr>').join('') || '<tr><td colspan="9">ยังไม่มีผู้ส่งข้อสอบ</td></tr>') + '</table>';
     box.querySelectorAll('[data-exam-retake]').forEach(b => { b.onclick = async () => { const x = await this._tpost('exam_grant_retake', { sessionId, studentId: b.getAttribute('data-exam-retake'), extra: 1 }); this._say(x.status === 'success' ? 'ให้สิทธิ์สอบซ่อมแล้ว (นักเรียนเข้าสอบได้อีก 1 ครั้งขณะห้องสอบยังเปิด)' : (x.message || 'ไม่สำเร็จ'), x.status === 'success'); }; });
   }
 };

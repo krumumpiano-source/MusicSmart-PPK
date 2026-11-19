@@ -66,6 +66,9 @@ function makeEnv() {
   raw.exec(readFileSync(new URL('../migrations/0008_intern.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0009_lyrics.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0010_pin_reset.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0011_security_and_indexes.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0012_exam_telemetry.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0013_teacher_sync_tables.sql', import.meta.url), 'utf8'));
   raw.exec(`INSERT INTO students (student_id, class_name, no, prefix, first_name, last_name, nickname, updated_at) VALUES
     ('90001','ม.1/1',1,'เด็กชาย','ทดสอบหนึ่ง','นามสมมุติ','ทดหนึ่ง','2026-01-01'),
     ('90002','ม.1/1',2,'เด็กหญิง','ทดสอบ','นามสมมุติ','ทด','2026-01-01'),
@@ -134,7 +137,7 @@ test('teacher setup: rejects bad token, weak password; succeeds once', async () 
 
 test('teacher setup removes legacy PBKDF2 row', async () => {
   const env = makeEnv();
-  env._raw.exec(`INSERT INTO teachers VALUES ('legacy@x.com','เก่า','pbkdf2-sha256-legacy','pbkdf2-sha256$v1$210000$a$b','2026-01-01')`);
+  env._raw.exec(`INSERT INTO teachers (email, name, auth_scheme, auth_hash, updated_at) VALUES ('legacy@x.com','เก่า','pbkdf2-sha256-legacy','pbkdf2-sha256$v1$210000$a$b','2026-01-01')`);
   await setupTeacher(env);
   const rows = env._raw.prepare('SELECT email FROM teachers').all();
   assert.deepEqual(rows.map((x) => x.email), ['teacher@example.com']);
@@ -347,10 +350,12 @@ test('sync: applies ops, dedupes by op_id, reports conflicts and role errors', a
   assert.equal(r.body.results[1].status, 'applied');
 });
 
-test('CORS: allows github.io and localhost, rejects other origins', async () => {
+test('CORS: allows exact school github.io and localhost, rejects arbitrary github.io and other origins', async () => {
   const env = makeEnv();
-  let r = await call(env, 'GET', '/api/health', undefined, undefined, { Origin: 'https://someone.github.io' });
-  assert.equal(r.headers.get('access-control-allow-origin'), 'https://someone.github.io');
+  let r = await call(env, 'GET', '/api/health', undefined, undefined, { Origin: 'https://krumumpiano-source.github.io' });
+  assert.equal(r.headers.get('access-control-allow-origin'), 'https://krumumpiano-source.github.io');
+  r = await call(env, 'GET', '/api/health', undefined, undefined, { Origin: 'https://evil.github.io' });
+  assert.equal(r.headers.get('access-control-allow-origin'), null);
   r = await call(env, 'GET', '/api/health', undefined, undefined, { Origin: 'https://evil.example.com' });
   assert.equal(r.headers.get('access-control-allow-origin'), null);
   r = await call(env, 'GET', '/api/health', undefined, undefined, { Origin: 'http://localhost:8080' });
@@ -966,4 +971,179 @@ test('pin reset: locked-out student recovers; intern flow revokes tokens; unknow
   let last;
   for (let i = 0; i < 12; i++) last = await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '90002' }, undefined, { 'CF-Connecting-IP': '9.9.9.9' });
   assert.equal(last.status, 429);
+});
+
+test('security: X-Admin-App header without valid teacher token cannot bypass auth', async () => {
+  const env = makeEnv();
+  await setupTeacher(env);
+  await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' });
+  await call(env, 'POST', '/api/pin-reset/request', { role: 'student', id: '90001' });
+  const h = { 'X-Admin-App': 'musicsmart' };
+  assert.equal((await call(env, 'POST', '/api/teacher/students/90001/reset-pin', undefined, undefined, h)).status, 401);
+  assert.equal((await call(env, 'GET', '/api/pin-reset/requests', undefined, undefined, h)).status, 401);
+  assert.equal((await call(env, 'POST', '/api/pin-reset/requests/fake-id/decide', { approve: true }, undefined, h)).status, 401);
+});
+
+test('security: lockout is scoped by IP so one attacker cannot DoS other IPs', async () => {
+  const env = makeEnv();
+  await setupTeacher(env);
+  await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '482913' });
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '999999' }, undefined, { 'CF-Connecting-IP': '1.1.1.1' })).status, 401);
+  }
+  assert.equal((await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '482913' }, undefined, { 'CF-Connecting-IP': '1.1.1.1' })).status, 429);
+  assert.equal((await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '482913' }, undefined, { 'CF-Connecting-IP': '2.2.2.2' })).status, 200);
+});
+
+test('security: logout, teacher change-password, and student reset-pin revoke old tokens', async () => {
+  const env = makeEnv();
+  const t1 = await setupTeacher(env);
+  const s1 = (await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' })).body.token;
+  // Teacher password change revokes old token and issues working new token
+  assert.equal((await call(env, 'POST', '/api/auth/change-password', { currentPassword: 'wrong-password-1', newPassword: 'new-strong-password-123' }, t1)).status, 401);
+  const ch = await call(env, 'POST', '/api/auth/change-password', { currentPassword: PW, newPassword: 'new-strong-password-123' }, t1);
+  assert.equal(ch.status, 200);
+  assert.ok(ch.body.token);
+  assert.equal((await call(env, 'GET', '/api/students', undefined, t1)).status, 401);
+  assert.equal((await call(env, 'GET', '/api/students', undefined, ch.body.token)).status, 200);
+  // Resetting student PIN revokes active student token
+  assert.equal((await call(env, 'POST', '/api/teacher/students/90001/reset-pin', undefined, ch.body.token)).status, 200);
+  assert.equal((await call(env, 'GET', '/api/me', undefined, s1)).status, 401);
+  // Teacher logout revokes token
+  assert.equal((await call(env, 'POST', '/api/auth/logout', undefined, ch.body.token)).status, 200);
+  assert.equal((await call(env, 'GET', '/api/students', undefined, ch.body.token)).status, 401);
+});
+
+test('security: quiz practice mode is blocked before scored submission (prevents score oracle)', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  await call(env, 'PUT', '/api/quiz/bank', { units: QUIZ_UNITS }, teacher);
+  const s2 = (await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '482913' })).body.token;
+  let r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'pre_p1', answers: { q1: 'ก', q2: 'ข' }, practice: true }, s2);
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'practice_after_quiz');
+  assert.equal(r.body.score, undefined);
+  assert.equal((await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'real_1', answers: { q1: 'ก', q2: 'ก' } }, s2)).status, 200);
+  r = await call(env, 'POST', '/api/quiz/units/1/submit', { client_id: 'post_p1', answers: { q1: 'ก', q2: 'ข' }, practice: true }, s2);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.score, 2);
+});
+
+test('security: video URLs and link-check reject localhost, private IPs, and unsafe http redirects', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = (await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' })).body.token;
+  for (const badUrl of ['https://localhost/a', 'https://127.0.0.1/a', 'https://169.254.169.254/latest', 'https://192.168.1.10/x', 'https://[::1]/x']) {
+    const r = await call(env, 'POST', '/api/submissions', { assignment_key: 'k1', clip_no: 1, video_url: badUrl }, s1);
+    assert.equal(r.status, 400, badUrl + ' should be rejected');
+  }
+  const okSub = await call(env, 'POST', '/api/submissions', { assignment_key: 'k1', clip_no: 1, video_url: 'https://drive.google.com/file/d/abc/view' }, s1);
+  const subId = okSub.body.submission.id;
+  const realFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/secret' } });
+    const chk = await call(env, 'POST', `/api/submissions/${subId}/check`, undefined, teacher);
+    assert.equal(chk.body.link_status, 'invalid');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('exams: draft answers persist across start/resume and tabSwitches telemetry is reported', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = (await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' })).body.token;
+  await call(env, 'PUT', '/api/exams/bank', EXAM_BANK, teacher);
+  const openRes = await openMidterm(env, teacher);
+  const started = await call(env, 'POST', '/api/exams/start', undefined, s1);
+  const q0 = started.body.questions[0];
+  const ans0 = q0.choices.find((c) => c.text.startsWith('ถูก')).key;
+  const dr = await call(env, 'PUT', '/api/exams/draft', { attemptId: started.body.attemptId, answers: { [q0.id]: ans0 }, tabSwitches: 2 }, s1);
+  assert.equal(dr.status, 200);
+  const resumed = await call(env, 'POST', '/api/exams/start', undefined, s1);
+  assert.equal(resumed.body.draftAnswers[q0.id], ans0);
+  assert.equal(resumed.body.tabSwitches, 2);
+  const answers = {};
+  started.body.questions.forEach((q) => { answers[q.id] = q.choices.find((c) => c.text.startsWith('ถูก')).key; });
+  await call(env, 'POST', '/api/exams/submit', { attemptId: started.body.attemptId, answers, tabSwitches: 1 }, s1);
+  const results = await call(env, 'GET', '/api/exams/results?sessionId=' + openRes.body.sessionId, undefined, teacher);
+  assert.equal(results.body.attempts[0].tabSwitches, 2);
+});
+
+test('crypto: new hashes use PBKDF2-SHA256 100k and legacy hmac-sha256-v1 auto-upgrades on login', async () => {
+  const env = makeEnv();
+  const teacherToken = await setupTeacher(env);
+  const tRow = env._raw.prepare("SELECT auth_scheme, auth_hash FROM teachers WHERE email = 'teacher@example.com'").get();
+  assert.equal(tRow.auth_scheme, 'pbkdf2-sha256-v1');
+  assert.ok(tRow.auth_hash.startsWith('pbkdf2-sha256-v1$100000$'));
+
+  // Compute an authentic legacy hmac-sha256-v1 hash with env.PASSWORD_PEPPER
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(env.PASSWORD_PEPPER), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const toB64u = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const mkLegacy = async (salt, secret) => {
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(salt + '|' + secret)));
+    return `hmac-sha256-v1$${salt}$${toB64u(sig)}`;
+  };
+
+  const legacyTeacherHash = await mkLegacy('legsalt1', 'LegacyTeacherPass999');
+  env._raw.prepare("INSERT INTO teachers (email, name, auth_scheme, auth_hash, updated_at) VALUES (?, ?, ?, ?, ?)")
+    .run('legacy2@ppk.ac.th', 'ครูเก่า', 'hmac-sha256-v1', legacyTeacherHash, '2026-01-01');
+  const tl = await call(env, 'POST', '/api/auth/login', { email: 'legacy2@ppk.ac.th', password: 'LegacyTeacherPass999' });
+  assert.equal(tl.status, 200);
+  const upgradedT = env._raw.prepare("SELECT auth_scheme, auth_hash FROM teachers WHERE email = 'legacy2@ppk.ac.th'").get();
+  assert.equal(upgradedT.auth_scheme, 'pbkdf2-sha256-v1');
+  assert.ok(upgradedT.auth_hash.startsWith('pbkdf2-sha256-v1$100000$'));
+
+  const legacyStudentHash = await mkLegacy('stusalt1', '258369');
+  env._raw.prepare("UPDATE students SET pin_hash = ?, pin_scheme = NULL, pin_salt = NULL WHERE student_id = '90002'")
+    .run(legacyStudentHash);
+  const sl = await call(env, 'POST', '/api/auth/student', { student_id: '90002', pin: '258369' });
+  assert.equal(sl.status, 200);
+  const upgradedS = env._raw.prepare("SELECT pin_hash FROM students WHERE student_id = '90002'").get();
+  assert.ok(upgradedS.pin_hash.startsWith('pbkdf2-sha256-v1$100000$'));
+  assert.ok(teacherToken);
+});
+
+test('sync batch & getters: rubrics and curriculum_lessons persist in structured tables and block students', async () => {
+  const env = makeEnv();
+  const teacher = await setupTeacher(env);
+  const s1 = (await call(env, 'POST', '/api/auth/student', { student_id: '90001', pin: '482913' })).body.token;
+  const items = [
+    {
+      id: 'rub_1',
+      type: 'rubric',
+      data: {
+        className: 'ม.1/1',
+        period: 5,
+        studentId: '90001',
+        rubricData: { sum: 14, scaledScore: 3.5, breakdown: { pitch: 4, rhythm: 3 }, updatedAt: '2026-11-19T10:00:00.000Z' }
+      }
+    },
+    {
+      id: 'les_1',
+      type: 'curriculum_lesson',
+      data: {
+        grade: 'M1',
+        period: 6,
+        lessonData: { topic: 'ฝึกคาลิมบ้าแบบปรับปรุง', duration_min: 50, updatedAt: '2026-11-19T10:05:00.000Z' }
+      }
+    }
+  ];
+  const r = await call(env, 'POST', '/api/sync/batch', { items }, teacher);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.results.map((x) => x.status), ['applied', 'applied']);
+
+  const rubRes = await call(env, 'GET', '/api/rubrics?class=' + encodeURIComponent('ม.1/1'), undefined, teacher);
+  assert.equal(rubRes.status, 200);
+  assert.equal(rubRes.body.rubrics.length, 1);
+  assert.equal(rubRes.body.rubrics[0].data.sum, 14);
+
+  const lesRes = await call(env, 'GET', '/api/curriculum-lessons?grade=M1', undefined, teacher);
+  assert.equal(lesRes.status, 200);
+  assert.equal(lesRes.body.lessons.length, 1);
+  assert.equal(lesRes.body.lessons[0].data.topic, 'ฝึกคาลิมบ้าแบบปรับปรุง');
+
+  assert.equal((await call(env, 'GET', '/api/rubrics', undefined, s1)).status, 403);
+  assert.equal((await call(env, 'GET', '/api/curriculum-lessons', undefined, s1)).status, 403);
 });

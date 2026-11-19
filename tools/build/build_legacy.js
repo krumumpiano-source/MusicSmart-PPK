@@ -21,7 +21,7 @@ files.forEach(f => {
   const src = fs.readFileSync(f, 'utf8');
   if (/legacy-polyfills\.js$/.test(f)) { try { acorn.parse(src, { ecmaVersion: 5 }); } catch (e) { bad++; console.error('✗ polyfills ไม่ใช่ ES5: ' + e.message); } return; }
   let out;
-  try { out = esbuild.transformSync(src, { target: targets, charset: 'utf8', legalComments: 'none', sourcefile: path.basename(f) }).code; }
+  try { out = esbuild.transformSync(src, { target: targets, minify: true, charset: 'utf8', legalComments: 'none', sourcefile: path.basename(f) }).code; }
   catch (e) { bad++; console.error('✗ แปลงไม่ได้ ' + path.relative(site, f) + ': ' + String(e.message).split('\n').slice(0, 3).join(' | ')); return; }
   try { acorn.parse(out, { ecmaVersion: 2016, allowHashBang: true, allowReturnOutsideFunction: true }); }
   catch (e) { bad++; console.error('✗ หลังแปลงยังมีไวยากรณ์ใหม่ ' + path.relative(site, f) + ': ' + e.message); return; }

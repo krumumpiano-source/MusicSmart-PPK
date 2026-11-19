@@ -38,6 +38,10 @@ const AudioTools = {
   },
 
   ensureAudioContext() {
+    if (typeof AudioEngine !== 'undefined' && AudioEngine.getContext) {
+      this.audioCtx = AudioEngine.getContext();
+      return this.audioCtx;
+    }
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!this.audioCtx) {
       this.audioCtx = new AudioContextClass();

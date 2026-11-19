@@ -42,6 +42,10 @@ const VirtualKalimba = {
   },
 
   getAudioContext() {
+    if (typeof AudioEngine !== 'undefined' && AudioEngine.getContext) {
+      this.audioCtx = AudioEngine.getContext();
+      return this.audioCtx;
+    }
     if (!this.audioCtx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.audioCtx = new AudioCtx();
@@ -175,14 +179,32 @@ const VirtualKalimba = {
         </div>
       `;
 
-      tineDiv.onclick = (e) => {
-        e.preventDefault();
-        this.playNote(t.note);
-      };
+      tineDiv.setAttribute('role', 'button');
+      tineDiv.setAttribute('tabindex', '0');
+      tineDiv.setAttribute('aria-label', `${t.note} (${t.solfege})`);
+      tineDiv.style.touchAction = 'none';
 
-      tineDiv.ontouchstart = (e) => {
-        e.preventDefault();
-        this.playNote(t.note);
+      if (typeof window !== 'undefined' && 'PointerEvent' in window) {
+        tineDiv.onpointerdown = (e) => {
+          e.preventDefault();
+          this.playNote(t.note);
+        };
+      } else {
+        tineDiv.onclick = (e) => {
+          e.preventDefault();
+          this.playNote(t.note);
+        };
+        tineDiv.ontouchstart = (e) => {
+          e.preventDefault();
+          this.playNote(t.note);
+        };
+      }
+
+      tineDiv.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.playNote(t.note);
+        }
       };
 
       container.appendChild(tineDiv);

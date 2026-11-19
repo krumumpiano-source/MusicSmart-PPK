@@ -130,7 +130,7 @@
           <button id="btn-student-progress" class="btn-nav-action" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 700;" onclick="StudentProgress.open()" title="คะแนนและความก้าวหน้าของฉัน">
             <span>📈 <span class="hide-on-tablet">ความก้าวหน้า</span></span>
           </button>
-          <button id="btn-student-recording" class="btn-nav-action" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 700;" onclick="Recording.open(App.state && App.state.period)" title="ส่งคลิปฝึกซ้อมเป็นลิงก์">
+          <button id="btn-student-recording" class="btn-nav-action" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0; font-weight: 700;" onclick="Recording.open(App.state && (App.state.studentPeriod || App.state.selectedPeriod))" title="ส่งคลิปฝึกซ้อมเป็นลิงก์">
             <span>🎧 <span class="hide-on-tablet">ส่งคลิป</span></span>
           </button>
         </div>
@@ -2339,17 +2339,22 @@
               <span>🔑</span> เปลี่ยนรหัสผ่าน / PIN บัญชีแอดมิน
             </h4>
             <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">
-              กำหนดรหัสผ่านใหม่สำหรับอีเมล <code>krumum.piano@gmail.com</code> (ตั้งเป็นตัวอักษรหรือตัวเลข PIN ได้ตามสะดวก)
+              กำหนดรหัสผ่านใหม่สำหรับอีเมล <code>krumum.piano@gmail.com</code> (ตั้งรหัสได้อย่างน้อย 8 ตัวอักษร หรืออย่างน้อย 12 ตัวอักษรเมื่อเชื่อมต่อ Cloudflare Cloud Mode)
             </p>
+
+            <div style="margin-bottom: 0.85rem;">
+              <label class="form-label" style="font-weight: 700;">รหัสผ่านปัจจุบัน (Current Password — จำเป็นเมื่อเชื่อม Cloud Mode):</label>
+              <input type="password" id="admin-current-password" class="form-input" autocomplete="current-password" placeholder="กรอกรหัสผ่านปัจจุบัน..." style="font-size: 0.95rem;">
+            </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1rem;">
               <div>
                 <label class="form-label" style="font-weight: 700;">รหัสผ่านใหม่ (New Password):</label>
-                <input type="text" id="admin-new-password" class="form-input" placeholder="กรอกรหัสผ่านใหม่..." style="font-size: 0.95rem;">
+                <input type="password" id="admin-new-password" class="form-input" autocomplete="new-password" placeholder="กรอกรหัสผ่านใหม่..." style="font-size: 0.95rem;">
               </div>
               <div>
                 <label class="form-label" style="font-weight: 700;">ยืนยันรหัสผ่านใหม่อีกครั้ง:</label>
-                <input type="text" id="admin-confirm-password" class="form-input" placeholder="พิมพ์ซ้ำเพื่อยืนยัน..." style="font-size: 0.95rem;">
+                <input type="password" id="admin-confirm-password" class="form-input" autocomplete="new-password" placeholder="พิมพ์ซ้ำเพื่อยืนยัน..." style="font-size: 0.95rem;">
               </div>
             </div>
 
@@ -4270,34 +4275,35 @@
   <script src="data/students.js?v=20261021_01"></script>
   <script src="data/public-config.js?v=20261030_01"></script>
   <script src="data/lessons.js?v=20261028_20"></script>
-  <script src="data/academic_docs.js?v=20261028_20"></script>
 <script src="data/wk5_plans.js?v=20261028_20"></script>
 <script src="data/period_policy.js?v=20261028_20"></script>
 <script src="js/period-policy.js?v=20261028_20"></script>
 <script src="data/media_routes.js?v=20261028_20"></script>
 <script src="js/media-views.js?v=20261028_20"></script>
   <script src="data/quizzes.js?v=20261028_20"></script>
-  <script src="js/google-sheet-sync.js?v=20261029_03"></script>
+  <script src="js/ui-dialogs.js?v=20261119_02"></script>
+  <script src="js/audio-engine.js?v=20261119_02"></script>
+  <script src="js/google-sheet-sync.js?v=20261119_02"></script>
   <script src="data/term-config.js?v=20261028_20"></script>
-  <script src="data/store.js?v=20261029_03"></script>
-  <script src="js/cloud-api.js?v=20261105_02"></script>
-  <script src="js/cloud-sync.js?v=20261029_03"></script>
-  <script src="js/student-auth.js?v=20261029_03"></script>
+  <script src="data/store.js?v=20261119_02"></script>
+  <script src="js/cloud-api.js?v=20261119_02"></script>
+  <script src="js/cloud-sync.js?v=20261119_02"></script>
+  <script src="js/student-auth.js?v=20261119_01"></script>
   <script src="js/pwa-install.js?v=20261021_02"></script>
-  <script src="js/student-submit.js?v=20261029_03"></script>
+  <script src="js/student-submit.js?v=20261119_02"></script>
   <script src="js/server-quiz.js?v=20261021_04"></script>
-  <script src="js/exam-client.js?v=20261028_20"></script>
+  <script src="js/exam-client.js?v=20261119_02"></script>
   <script src="js/teacher-tools.js?v=20261029_03"></script>
   <script src="js/teacher-auth.js?v=20261029_03"></script>
-  <script src="js/password-reset.js?v=20261105_02"></script>
+  <script src="js/password-reset.js?v=20261119_01"></script>
   <script src="js/intern.js?v=20261028_20"></script>
   <script src="js/student-practice.js?v=20261021_07"></script>
-  <script src="js/student-upload.js?v=20261021_08"></script>
+  <script src="js/student-upload.js?v=20261119_02"></script>
   <script src="js/wake-lock.js?v=20261105_01"></script>
-  <script src="js/tuner.js?v=20261020_03"></script>
-  <script src="js/audio-tools.js?v=20261020_03"></script>
-  <script src="js/quiz-engine.js?v=20261020_03"></script>
-  <script src="js/rubric-matrix.js?v=20261028_20"></script>
+  <script src="js/tuner.js?v=20261119_02"></script>
+  <script src="js/audio-tools.js?v=20261119_02"></script>
+  <script src="js/quiz-engine.js?v=20261119_02"></script>
+  <script src="js/rubric-matrix.js?v=20261119_01"></script>
   <script src="js/group-observation.js?v=20261028_20"></script>
   <script src="js/feldman-criticism.js?v=20261028_20"></script>
   <script src="js/timbre-listening.js?v=20261028_20"></script>
@@ -4305,10 +4311,10 @@
   <script src="data/evidence_config.js?v=20261028_20"></script>
   <script src="js/evidence-core.js?v=20261028_20"></script>
   <script src="js/evidence-hub.js?v=20261028_20"></script>
-  <script src="js/official-forms.js?v=20261028_20"></script>
+  <script src="js/official-forms.js?v=20261119_01"></script>
   <script src="data/ensemble_data.js?v=20261028_20"></script>
   <script src="js/ensemble-explorer.js?v=20261028_20"></script>
-  <script src="js/virtual-kalimba.js?v=20261105_06"></script>
+  <script src="js/virtual-kalimba.js?v=20261119_02"></script>
   <script src="data/kalimba_media.js?v=20261105_06"></script>
   <script src="data/media_manifest.js?v=20261028_20"></script>
   <script src="js/kalimba-devices.js?v=20261028_20"></script>
@@ -4319,7 +4325,7 @@
   <script src="js/period-media.js?v=20261028_20"></script>
   <script src="js/lyric-core.js?v=20261028_20"></script>
   <script src="js/lyric-studio.js?v=20261030_01"></script>
-  <script src="js/app.js?v=20261105_10"></script>
+  <script src="js/app.js?v=20261119_02"></script>
 
   <!-- Service Worker Registration for PWA Offline Caching -->
   <script>

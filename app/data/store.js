@@ -37,7 +37,7 @@ const DEFAULT_SCHEDULE_ASSIGNMENTS = {};
 const DEFAULT_TEACHER_ACCOUNT = {
   email: 'krumum.piano@gmail.com',
   secretType: 'password', // 'password' or 'pin'
-  secretHash: 'pbkdf2-sha256$v1$210000$qkSaZguyipmVy8i3sy3Viw==$Z/L/xYEJSuzQ/lRsOLSixRu6lIJd3EfD7EXOJHu5VXg=',
+  secretHash: 'pbkdf2-sha256$v1$210000$2Us/axDMUF1lxqypSCSj9Q==$CUy3LmBCRW2w2keioBA77AqAbL4SDY4NDoJoLJiaaZc=',
   name: 'นายพงศธร โพธิแก้ว'
 };
 
@@ -2925,6 +2925,7 @@ const Store = {
   },
 
   async syncAvatarsFromServer(className = '') {
+    if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode()) return false;
     let apiUrl = '';
     let syncToken = '';
     if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.getConfig) {

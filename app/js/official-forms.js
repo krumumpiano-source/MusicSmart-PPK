@@ -30,6 +30,13 @@ const OfficialForms = {
 
     modal.classList.add('active');
     this.switchTab(this.activeTab);
+    if (typeof ACADEMIC_DOCS_BY_GRADE === 'undefined' && typeof window !== 'undefined' && typeof window.ensureAcademicDocs === 'function') {
+      window.ensureAcademicDocs().then(() => {
+        if (!modal.classList.contains('active')) return;
+        this.renderSubSelector();
+        this.renderActiveSheet();
+      }).catch(() => {});
+    }
   },
 
   closeModal() {

@@ -6390,3 +6390,73 @@ div:has(> #gs-sync-token) { flex-wrap: wrap; }
   color: #475569;
   line-height: 1.45;
 }
+
+/* ==========================================================================
+   Accessible Toast Notifications & Focus / Reduced-Motion Polish
+   ========================================================================== */
+#ms-toast-region {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.ms-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-left: 5px solid #2563eb;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.14);
+}
+
+.ms-toast-success { border-left-color: #16a34a; background: #f0fdf4; color: #14532d; }
+.ms-toast-warning { border-left-color: #d97706; background: #fffbeb; color: #78350f; }
+.ms-toast-error { border-left-color: #dc2626; background: #fef2f2; color: #7f1d1d; }
+
+.ms-toast-msg {
+  flex: 1;
+  word-break: break-word;
+}
+
+.ms-toast-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  opacity: 0.75;
+}
+
+.ms-toast-close:hover {
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

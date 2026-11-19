@@ -9,7 +9,7 @@ const StudentAuth = {
   // URL ของ Apps Script ที่นักเรียนใช้ (ไม่ใช่ความลับ: ใช้ได้เฉพาะ action ของนักเรียน)
   getApiUrl() {
     try {
-      if (typeof location !== 'undefined' && location.search) {
+      if (!this.isCloudMode() && typeof location !== 'undefined' && location.search) {
         const api = new URLSearchParams(location.search).get('api');
         if (api && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(api)) {
           localStorage.setItem(this.API_KEY, api);

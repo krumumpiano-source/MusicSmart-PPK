@@ -58,16 +58,17 @@
   }
 
   class CloudApiError extends Error {
-    constructor(status, code, message) {
+    constructor(status, code, message, data = null) {
       super(message || 'เกิดข้อผิดพลาด');
       this.status = status;
       this.code = code || 'error';
+      this.data = data;
     }
   }
 
   // เรียก API: ถ้ามี token จะแนบให้อัตโนมัติ, ถ้าเครือข่ายขัดข้องจะโยน CloudApiError(status=0)
   async function request(method, path, body, opts = {}) {
-    const headers = { 'Content-Type': 'application/json', 'X-Admin-App': 'musicsmart', ...(opts.headers || {}) };
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
     if (!opts.anonymous) {
       const sess = readSession();
       if (sess) headers.Authorization = 'Bearer ' + sess.token;
@@ -91,7 +92,7 @@
     }
     if (!res.ok) {
       if (res.status === 401 && !opts.anonymous) clearSession();
-      throw new CloudApiError(res.status, data && data.error, data && data.message);
+      throw new CloudApiError(res.status, data && data.error, data && data.message, data);
     }
     return data;
   }
@@ -112,6 +113,21 @@
     },
     logout() {
       clearSession();
+    },
+    async logoutRemote() {
+      const sess = readSession();
+      if (sess && sess.token) {
+        try {
+          await request('POST', '/api/auth/logout');
+        } catch (e) {
+          // ออกจากระบบในเครื่องต่อไปแม้เน็ตหลุด
+        }
+      }
+      clearSession();
+    },
+    async changeTeacherPassword(currentPassword, newPassword) {
+      const data = await request('POST', '/api/auth/change-password', { currentPassword, newPassword });
+      return saveSession(data);
     },
     session() {
       return readSession();
@@ -160,13 +176,49 @@
     },
     // บันทึกคาบ: baseVersion = 0 สำหรับคาบใหม่, หรือเวอร์ชันที่โหลดมาล่าสุด
     async save(sessionKey, className, period, data, baseVersion) {
-      const res = await request('PUT', '/api/sessions/' + encodeURIComponent(sessionKey), {
-        class_name: className,
-        period,
-        data,
-        base_version: baseVersion
-      });
-      return res;
+      try {
+        return await request('PUT', '/api/sessions/' + encodeURIComponent(sessionKey), {
+          class_name: className,
+          period,
+          data,
+          base_version: baseVersion
+        });
+      } catch (e) {
+        if (e instanceof CloudApiError && e.status === 409 && e.code === 'version_conflict') {
+          return { conflict: true, current_version: Number(e.data && e.data.current_version) || 0 };
+        }
+        throw e;
+      }
+    }
+  };
+
+  const Research = {
+    async list(className) {
+      const q = className ? '?class=' + encodeURIComponent(className) : '';
+      const data = await request('GET', '/api/research' + q);
+      return data.research || [];
+    },
+    async save(item) {
+      return request('PUT', '/api/research', item);
+    }
+  };
+
+  const Rubrics = {
+    async list(className, period) {
+      const q = new URLSearchParams();
+      if (className) q.set('class', className);
+      if (period !== undefined && period !== null && period !== '') q.set('period', String(period));
+      const qs = q.toString();
+      const data = await request('GET', '/api/rubrics' + (qs ? '?' + qs : ''));
+      return data.rubrics || [];
+    }
+  };
+
+  const CurriculumLessons = {
+    async list(grade) {
+      const q = grade ? '?grade=' + encodeURIComponent(grade) : '';
+      const data = await request('GET', '/api/curriculum-lessons' + q);
+      return data.lessons || [];
     }
   };
 
@@ -182,6 +234,9 @@
     Auth,
     Submissions,
     Sessions,
+    Research,
+    Rubrics,
+    CurriculumLessons,
     sync,
     CloudApiError,
     _readSession: readSession,

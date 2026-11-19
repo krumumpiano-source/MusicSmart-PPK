@@ -81,12 +81,16 @@ const Tuner = {
 
   async startListening() {
     try {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!this.audioCtx) {
-        this.audioCtx = new AudioContextClass();
-      }
-      if (this.audioCtx.state === 'suspended') {
-        await this.audioCtx.resume();
+      if (typeof AudioEngine !== 'undefined' && AudioEngine.resume) {
+        this.audioCtx = await AudioEngine.resume();
+      } else {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!this.audioCtx) {
+          this.audioCtx = new AudioContextClass();
+        }
+        if (this.audioCtx.state === 'suspended') {
+          await this.audioCtx.resume();
+        }
       }
 
       this.micStream = await navigator.mediaDevices.getUserMedia({
@@ -119,7 +123,9 @@ const Tuner = {
       this.processAudio();
     } catch (err) {
       console.error('Tuner Error:', err);
-      alert('ไม่สามารถเข้าถึงไมโครโฟนได้: กรุณาอนุญาตการใช้งานไมค์บนเบราว์เซอร์เพื่อตั้งเสียง หรือกดที่ลิ่มคาลิมบ้าเพื่อฟังเสียงเทียบ');
+      const msg = 'ไม่สามารถเข้าถึงไมโครโฟนได้: กรุณาอนุญาตการใช้งานไมค์บนเบราว์เซอร์เพื่อตั้งเสียง หรือกดที่ลิ่มคาลิมบ้าเพื่อฟังเสียงเทียบ';
+      if (typeof UiDialogs !== 'undefined' && UiDialogs.toast) UiDialogs.toast(msg, 'warning');
+      else alert(msg);
       this.updateDisplay(null, null, null, 'ไมโครโฟนไม่พร้อมใช้งาน (กดลิ่มเพื่อฟังเสียงเทียบ)');
     }
   },
@@ -156,10 +162,12 @@ const Tuner = {
   processAudio() {
     if (!this.isRunning || !this.analyser) return;
 
-    const buffer = new Float32Array(this.analyser.fftSize);
-    this.analyser.getFloatTimeDomainData(buffer);
+    if (!this._buffer || this._buffer.length !== this.analyser.fftSize) {
+      this._buffer = new Float32Array(this.analyser.fftSize);
+    }
+    this.analyser.getFloatTimeDomainData(this._buffer);
 
-    const freq = this.detectPitch(buffer, this.audioCtx.sampleRate);
+    const freq = this.detectPitch(this._buffer, this.audioCtx.sampleRate);
     if (freq > 0) {
       this.handleDetectedPitch(freq);
     }
@@ -167,9 +175,11 @@ const Tuner = {
     this.rafId = requestAnimationFrame(() => this.processAudio());
   },
 
-  // Autocorrelation Pitch Detection
+  // McLeod Pitch Method (NSDF) restricted to 180–2000 Hz lags (fast & octave-stable)
   detectPitch(buffer, sampleRate) {
-    const SIZE = buffer.length;
+    const SIZE = buffer && buffer.length ? buffer.length : 0;
+    if (SIZE < 64 || !sampleRate) return -1;
+
     let sumSquares = 0;
     for (let i = 0; i < SIZE; i++) {
       sumSquares += buffer[i] * buffer[i];
@@ -177,43 +187,95 @@ const Tuner = {
     const rms = Math.sqrt(sumSquares / SIZE);
     if (rms < 0.015) return -1; // Too quiet
 
-    // Normalized Square Difference
-    let r1 = 0, r2 = SIZE - 1;
-    const thres = 0.2;
-    for (let i = 0; i < SIZE / 2; i++) {
-      if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+    const minLag = Math.max(2, Math.floor(sampleRate / 2000));
+    const maxLag = Math.min(Math.floor(SIZE / 2), Math.ceil(sampleRate / 180));
+    if (maxLag <= minLag + 2) return -1;
+
+    if (!this._nsdf || this._nsdf.length < maxLag + 2) {
+      this._nsdf = new Float32Array(maxLag + 2);
     }
-    for (let i = 1; i < SIZE / 2; i++) {
-      if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+    const nsdf = this._nsdf;
+
+    // Running energy m(tau) = sum_{j=0}^{SIZE-1-tau} (x[j]^2 + x[j+tau]^2)
+    let m = 2 * sumSquares;
+    for (let tau = 1; tau < minLag; tau++) {
+      const a = buffer[SIZE - tau];
+      const b = buffer[tau - 1];
+      m -= (a * a + b * b);
     }
 
-    const trimmed = buffer.slice(r1, r2);
-    const c = new Array(trimmed.length).fill(0);
-    for (let i = 0; i < trimmed.length; i++) {
-      for (let j = 0; j < trimmed.length - i; j++) {
-        c[i] = c[i] + trimmed[j] * trimmed[j + i];
+    for (let tau = minLag; tau <= maxLag; tau++) {
+      const a = buffer[SIZE - tau];
+      const b = buffer[tau - 1];
+      m -= (a * a + b * b);
+      if (m <= 1e-9) {
+        nsdf[tau] = 0;
+        continue;
+      }
+      let acf = 0;
+      const limit = SIZE - tau;
+      for (let j = 0; j < limit; j++) {
+        acf += buffer[j] * buffer[j + tau];
+      }
+      nsdf[tau] = (2 * acf) / m;
+    }
+
+    // Collect key maxima (highest peak in each positive lobe)
+    const peaks = [];
+    let globalMax = 0;
+    let inPositive = false;
+    let curMaxVal = 0;
+    let curMaxLag = -1;
+
+    for (let tau = minLag; tau <= maxLag; tau++) {
+      const v = nsdf[tau];
+      if (v > 0) {
+        if (!inPositive || v > curMaxVal) {
+          curMaxVal = v;
+          curMaxLag = tau;
+        }
+        inPositive = true;
+      } else if (inPositive) {
+        if (curMaxLag >= minLag) {
+          peaks.push({ lag: curMaxLag, val: curMaxVal });
+          if (curMaxVal > globalMax) globalMax = curMaxVal;
+        }
+        inPositive = false;
+        curMaxVal = 0;
+        curMaxLag = -1;
+      }
+    }
+    if (inPositive && curMaxLag >= minLag) {
+      peaks.push({ lag: curMaxLag, val: curMaxVal });
+      if (curMaxVal > globalMax) globalMax = curMaxVal;
+    }
+
+    if (globalMax < 0.45 || !peaks.length) return -1;
+
+    // Pick first key maximum >= 0.80 * globalMax to avoid octave jumps on overtones
+    const threshold = 0.80 * globalMax;
+    let chosen = -1;
+    for (let i = 0; i < peaks.length; i++) {
+      if (peaks[i].val >= threshold) {
+        chosen = peaks[i].lag;
+        break;
+      }
+    }
+    if (chosen <= 0) return -1;
+
+    let T0 = chosen;
+    if (T0 > minLag && T0 < maxLag) {
+      const x1 = nsdf[T0 - 1], x2 = nsdf[T0], x3 = nsdf[T0 + 1];
+      const denom = x1 + x3 - 2 * x2;
+      if (denom < -1e-12) {
+        const shift = (x1 - x3) / (2 * denom);
+        if (Math.abs(shift) <= 1) T0 += shift;
       }
     }
 
-    let d = 0;
-    while (c[d] > c[d + 1]) d++;
-    let maxval = -1, maxpos = -1;
-    for (let i = d; i < trimmed.length; i++) {
-      if (c[i] > maxval) {
-        maxval = c[i];
-        maxpos = i;
-      }
-    }
-
-    let T0 = maxpos;
-    // Parabolic interpolation for sub-sample accuracy
-    const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
-    const a = (x1 + x3 - 2 * x2) / 2;
-    const b = (x3 - x1) / 2;
-    if (a) T0 = T0 - b / (2 * a);
-
+    if (!Number.isFinite(T0) || T0 <= 0) return -1;
     const pitch = sampleRate / T0;
-    if (pitch >= 180 && pitch <= 2000) {
+    if (Number.isFinite(pitch) && pitch >= 180 && pitch <= 2000) {
       return pitch;
     }
     return -1;
@@ -348,12 +410,16 @@ const Tuner = {
 
   playReferenceTone(freq) {
     try {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!this.audioCtx) {
-        this.audioCtx = new AudioContextClass();
-      }
-      if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
+      if (typeof AudioEngine !== 'undefined' && AudioEngine.getContext) {
+        this.audioCtx = AudioEngine.getContext();
+      } else {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!this.audioCtx) {
+          this.audioCtx = new AudioContextClass();
+        }
+        if (this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume();
+        }
       }
 
       const now = this.audioCtx.currentTime;
@@ -379,3 +445,5 @@ const Tuner = {
     }
   }
 };
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Tuner;

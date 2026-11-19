@@ -1,101 +1,15 @@
-# Root one-off scripts & dumps (inventory, not moved)
+# Root Cleanup & Archive Layout
 
-Not moved: many scripts use paths relative to the project root/cwd, and moving them could break re-runs. Candidates for a later move to tools/ (scripts) and archive/ (dumps):
+All historical one-off Python scripts, scratch text/JSON dumps, and school blank forms previously cluttering the repository root have been organized without deleting any work:
 
-## Scripts
-- alignment_audit.py
-- analyze_extracted.py
-- assemble_wk4_units.py
-- audit_app_elements.py
-- audit_check_all.py
-- audit_cross_refs.py
-- auditor_upgrades.py
-- build_academic_data.py
-- build_m2_part1_wk3_wk4.py
-- build_m2_remaining_70_docs.py
-- check_cut_point.py
-- check_scores.py
-- compare_plans.py
-- create_assessment_docx.py
-- create_assessment_docx_v2.py
-- create_instructional_media.py
-- create_m1_course_structure.py
-- create_m2_course_structure.py
-- create_masterpiece_media.py
-- execute_curriculum_assembly.py
-- extract_info.py
-- extract_quizzes.py
-- final_cleanup_upgrade.py
-- final_verify.py
-- find_mistakes.py
-- fix_docx.py
-- generate_curriculum_revised.py
-- generate_lessons.py
-- generate_md.py
-- generate_md_v2.py
-- generate_wk3_exact.py
-- generate_wk4_unit1.py
-- generate_wk4_units234.py
-- generate_wk5_rest.py
-- generate_wk5_u1_p1.py
-- generate_wk5_unit1.py
-- inspect_curriculum_dirs.py
-- inspect_ground_truth.py
-- inspect_m1_docs.py
-- inspect_plan1.py
-- inspect_target_headings.py
-- inspect_teaching_steps.py
-- move_to_archive.py
-- parse_full_m1.py
-- parse_students.py
-- patch_wk4_sdl_eq.py
-- professor_upgrades.py
-- qa_check_wk5.py
-- qa_patch_fix.py
-- read_all_m1_docs.py
-- read_media_files.py
-- reset_postlesson_and_update_semester.py
-- rewrite_3_weakest.py
-- rewrite_6_remaining.py
-- sync_m2_to_webapp.py
-- sync_phase1_wk3.py
-- sync_phase2_wk4.py
-- sync_phase3_wk5.py
-- sync_teacher_manual.py
-- sync_word_curriculum.py
-- test_all_menus.py
-- test_read_lessons.py
-- update_all_curriculum_docs.py
-- update_framework.py
-- update_scripts_v2.py
-- update_tools_headings.py
-- update_wk3.py
-- update_wk4.py
-- update_wk5.py
-- upgrade_all_appendices_with_banners.py
-- upgrade_lessons_js.py
-- upgrade_to_korsor4.py
-- verify_assembled_curriculum.py
-- verify_updates.py
+- **`archive/legacy_scripts/`** (77 Python scripts): One-off curriculum builders, docx extractors, audits, and migration helpers (`alignment_audit.py` ‚Ä¶ `verify_updates.py`, `plans_data_korsor4.py`, `build_academic_data.py`, etc.). Active maintained tooling lives in [`tools/`](../tools/).
+- **`archive/dumps/`** (20 scratch dumps): Text/JSON inspection outputs and legacy PDPA-ignored local files (`scores.txt`, `raw_user_input.txt`, `*_extracted.json` remain ignored by `.gitignore`).
+- **`docs/forms/`** (4 PDF files): Blank official school forms (`‡∏ß‡∏Å.3`, `‡∏ß‡∏Å.4`, `‡∏ß‡∏Å.5`, `‡∏ß‡∏Å.7`).
+- **`docs/archive/schema_postgres_supabase.sql`**: Superseded PostgreSQL/Supabase draft schema moved out of `app/data/` (production backend uses Cloudflare D1 migrations under `cloudflare-api/migrations/`).
 
-## Dumps / scratch (may contain student data: keep out of git)
-- audit_appendix_report.txt
-- extracted_data.txt
-- files.txt
-- form_wk4.txt
-- form_wk5.txt
-- m1_full_curriculum_extracted.json
-- media_audit_raw.txt
-- mistakes.txt
-- raw_user_input.txt
-- scores.txt
-- scratch_all_tests.json
-- scratch_analysis_report.txt
-- scratch_compare.txt
-- scratch_inventory.json
-- scratch_plan1_full.txt
-- scratch_summary_docs.json
-- ”©∫”©¸.4   ”¶¸”©‹”©‹”©É”©°”©˙”¶Ó”©Ì”©Ω”©÷”¶Í”©∫”©Û”©¸”©¶”©˙”¶«”©˙”©¡”©Û”©÷”©˙”©¶”¶Î.txt
-- ”©∫”©¸.5   ”¶¸”©‹”©‹”©É”©°”©˙”¶Ó”©Ì”¶¸”©£”©÷”©¸”©¶”©˙”©Í”©¶”©ˆ”©¸”©¶”©˙”¶«”©˙”©¡”©Û”©÷”©˙”©¶”¶Î.txt
-- ”©∫”©¸_3-”¶¸”©‹”©‹”©É”©°”©˙”¶Ó”©Ì”¶È”©‰”©˙”©Á”©¨”©˙”¶Î”©¶”©Á”©˙”©¶”©Û”©∫”©¶”©Ë”©¶_pages.txt
-- ”©∫”©¸_pages.txt
+## Root Entry Points Kept Active
+- `README.md`, `LOCAL_PREVIEW_TH.md`
+- `START_LOCAL.bat`, `‡πÄ‡∏õ‡∏¥‡∏î‡πÇ‡∏õ‡∏£‡πÅ‡∏Å‡∏£‡∏°_MusicSmart_PPK.bat`
+- `google_apps_script.js` (canonical GAS source synced to `app/data/gas_template.js` via `tools/sync_apps_script_template.py`)
+- `test_e2e_suite.js`
+- `.gitignore`, `.gitattributes`

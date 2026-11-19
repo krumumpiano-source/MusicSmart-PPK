@@ -1,6 +1,6 @@
 // MusicSmart PWA Service Worker
 // Bump APP_VERSION on every release (deploy workflow also stamps the commit SHA here)
-const APP_VERSION = 'v72';
+const APP_VERSION = 'v74';
 const CACHE_NAME = 'musicsmart-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
@@ -8,13 +8,14 @@ const ASSETS_TO_CACHE = [
   './manifest.json',
   './css/styles.css',
   './data/lessons.js',
-  './data/academic_docs.js',
   './data/wk5_plans.js',
   './data/period_policy.js',
   './js/period-policy.js',
   './data/media_routes.js',
   './js/media-views.js',
   './data/quizzes.js',
+  './js/ui-dialogs.js',
+  './js/audio-engine.js',
   './data/term-config.js',
   './data/store.js',
   './data/public-config.js',
@@ -39,11 +40,6 @@ const ASSETS_TO_CACHE = [
   './js/quiz-engine.js',
   './js/rubric-matrix.js',
   './js/group-observation.js',
-  './js/official-forms.js',
-  './js/car-analytics.js',
-  './data/evidence_config.js',
-  './js/evidence-core.js',
-  './js/evidence-hub.js',
   './js/feldman-criticism.js',
   './js/timbre-listening.js',
   './js/virtual-kalimba.js',
@@ -82,7 +78,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[Service Worker] Caching app shell & offline assets');
-      return cache.addAll(ASSETS_TO_CACHE);
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map((url) => cache.add(url).catch(() => null))
+      );
     }).then(() => self.skipWaiting())
   );
 });
@@ -111,6 +109,18 @@ self.addEventListener('notificationclick', (event) => {
   }));
 });
 
+function isNavigationRequest(request) {
+  if (request.mode === 'navigate') return true;
+  const accept = request.headers.get('accept') || '';
+  if (accept.includes('text/html')) return true;
+  try {
+    const p = new URL(request.url).pathname;
+    return p.endsWith('/') || p.endsWith('/index.html');
+  } catch {
+    return false;
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   // Only intercept GET requests with http/https scheme
   if (!event.request || event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
@@ -122,35 +132,63 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network first with cache fallback
-  event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache).catch(() => {});
+  // HTML / App Shell: Network-First with cache fallback so ?v= asset refs stay fresh
+  if (isNavigationRequest(event.request)) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache).catch(() => {});
+            });
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request, { ignoreSearch: true })
+            || await caches.match('./index.html')
+            || await caches.match('./');
+          if (cached) return cached;
+          return new Response('Not found (offline or missing resource)', {
+            status: 404,
+            statusText: 'Not Found',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
           });
-        }
-        return networkResponse;
-      })
-      .catch(async () => {
-        // 1. Try matching exact request or ignoring query search params
-        const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
-        if (cachedResponse) return cachedResponse;
+        })
+    );
+    return;
+  }
 
-        // 2. If it is a page navigation or text/html request, return cached index.html
-        if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
-          const indexCached = await caches.match('./index.html') || await caches.match('./');
-          if (indexCached) return indexCached;
-        }
+  // Static JS/CSS/Media: Stale-While-Revalidate (exact versioned request first, ignoreSearch fallback offline)
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const exactCached = await cache.match(event.request);
+      const networkPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone()).catch(() => {});
+          }
+          return networkResponse;
+        })
+        .catch(() => null);
 
-        // 3. Always return a valid Response object to prevent "TypeError: Failed to convert value to 'Response'"
-        return new Response('Not found (offline or missing resource)', {
-          status: 404,
-          statusText: 'Not Found',
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-        });
-      })
+      if (exactCached) {
+        event.waitUntil(networkPromise);
+        return exactCached;
+      }
+
+      const networkResponse = await networkPromise;
+      if (networkResponse) return networkResponse;
+
+      const fallbackCached = await cache.match(event.request, { ignoreSearch: true });
+      if (fallbackCached) return fallbackCached;
+
+      return new Response('Not found (offline or missing resource)', {
+        status: 404,
+        statusText: 'Not Found',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      });
+    })
   );
 });

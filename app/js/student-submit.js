@@ -202,7 +202,7 @@ const StudentOutbox = {
 
   reasonText(code) {
     return ({ too_long: 'คำตอบยาวเกิน 5,000 ตัวอักษร', bad_url: 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://', empty: 'ไม่มีคำตอบหรือลิงก์',
-      bad_period: 'คาบเรียนไม่ถูกต้อง', invalid_url: 'ลิงก์ต้องเป็น https:// และห้ามมีชื่อผู้ใช้/รหัสผ่านในลิงก์', unsupported_cloud: 'ประเภทงานนี้ยังไม่รองรับในระบบใหม่', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้', practice_limit: 'ทำแบบฝึกหน่วยนี้ครบจำนวนครั้งแล้ว', bad_unit: 'หน่วยการเรียนรู้ไม่ถูกต้อง' })[code] || 'ข้อมูลไม่ถูกต้อง';
+      bad_period: 'คาบเรียนไม่ถูกต้อง', invalid_url: 'ลิงก์ต้องเป็น https:// และห้ามมีชื่อผู้ใช้/รหัสผ่านในลิงก์', unsupported_cloud: 'ประเภทงานนี้ยังไม่รองรับในระบบใหม่', bad_score: 'คะแนนไม่ถูกต้อง', no_quiz: 'ครูยังไม่ได้อัปโหลดแบบทดสอบหน่วยนี้', duplicate_quiz: 'ส่งแบบทดสอบหน่วยนี้ไปแล้ว ไม่สามารถส่งซ้ำได้', practice_after_quiz: 'ต้องส่งแบบทดสอบเก็บคะแนนก่อน จึงจะเข้าโหมดฝึกซ้อมได้', practice_limit: 'ทำแบบฝึกหน่วยนี้ครบจำนวนครั้งแล้ว', bad_unit: 'หน่วยการเรียนรู้ไม่ถูกต้อง' })[code] || 'ข้อมูลไม่ถูกต้อง';
   },
 
   TASKS_KEY: 'ppk_student_tasks',
@@ -396,12 +396,36 @@ const TeacherPull = {
     return { subs, quizzes };
   },
 
-  // อัปโหลดคลังข้อสอบ (มีเฉลย) ขึ้นชีตของครู เพื่อให้เซิร์ฟเวอร์ตรวจคะแนนนักเรียน
-  async uploadQuizBank() {
+  // อัปโหลดคลังข้อสอบ (มีเฉลย) ขึ้นชีต/Cloud ของครู เพื่อให้เซิร์ฟเวอร์ตรวจคะแนนนักเรียน
+  async uploadQuizBank(customUnits = null) {
     if (!this.isConfigured()) throw new Error(this.isCloud() ? 'กรุณาเข้าสู่ระบบครูก่อน' : 'กรุณาตั้งค่า URL และรหัสซิงค์ก่อน');
-    if (typeof QUIZZES_DATA === 'undefined') throw new Error('ไม่พบคลังข้อสอบ');
-    const units = QUIZZES_DATA.units.map(u => ({ unit_no: u.unit_no, title: u.title,
-      questions: u.questions.map(q => ({ id: q.id, question: q.question, choices: q.choices, correct: q.correct, explanation: q.explanation, bloom: q.bloom })) }));
+    const sourceUnits = Array.isArray(customUnits)
+      ? customUnits
+      : (customUnits && Array.isArray(customUnits.units) ? customUnits.units : null);
+    let rawUnits = sourceUnits;
+    if (!rawUnits) {
+      if (typeof QUIZZES_ANSWERS_STRIPPED !== 'undefined' && QUIZZES_ANSWERS_STRIPPED) {
+        throw new Error('หน้าเว็บสาธารณะตัดเฉลยออกเพื่อความปลอดภัย กรุณาอัปโหลดคลังข้อสอบจากโหมด Local Preview (START_LOCAL.bat) หรือไฟล์ quizzes.json ที่มีเฉลย');
+      }
+      if (typeof QUIZZES_DATA === 'undefined') throw new Error('ไม่พบคลังข้อสอบ');
+      rawUnits = QUIZZES_DATA.units || [];
+    }
+    const missingAnswer = rawUnits.some(u => (u.questions || []).some(q => !q.correct));
+    if (missingAnswer) {
+      throw new Error('หน้าเว็บสาธารณะตัดเฉลยออกเพื่อความปลอดภัย กรุณาอัปโหลดคลังข้อสอบจากโหมด Local Preview (START_LOCAL.bat) หรือไฟล์ quizzes.json ที่มีเฉลย');
+    }
+    const units = rawUnits.map(u => ({
+      unit_no: u.unit_no,
+      title: u.title,
+      questions: u.questions.map(q => ({
+        id: q.id,
+        question: q.question,
+        choices: q.choices,
+        correct: q.correct,
+        explanation: q.explanation,
+        bloom: q.bloom
+      }))
+    }));
     if (this.isCloud()) return CloudApi.request('PUT', '/api/quiz/bank', { units });
     const cfg = GoogleSheetSync.getConfig();
     return GoogleSheetSync.postJSON(cfg.webAppUrl, { action: 'upload_quiz_bank', units });

@@ -124,6 +124,16 @@ const RubricMatrix = {
     this.dirty = false;
     modal.classList.add('active');
     this.renderModalContent();
+    if (!this.activeRows && !this.activeRubricDoc && typeof ACADEMIC_DOCS_BY_GRADE === 'undefined' && typeof window !== 'undefined' && typeof window.ensureAcademicDocs === 'function') {
+      window.ensureAcademicDocs().then(() => {
+        if (!modal.classList.contains('active')) return;
+        this.activeRubricDoc = this.getRubricForPeriod(this.activePeriod, studentGrade);
+        if (!this.dirty && Object.keys(this.selectedLevels).length === 0 && this.activeRubricDoc && this.activeRubricDoc.tables && this.activeRubricDoc.tables[0]) {
+          this.activeRubricDoc.tables[0].slice(1).forEach((_, idx) => { this.selectedLevels[idx] = 3; });
+        }
+        this.renderModalContent();
+      }).catch(() => {});
+    }
   },
 
   closeModal() {

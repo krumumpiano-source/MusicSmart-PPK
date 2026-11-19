@@ -1129,10 +1129,13 @@ const App = {
     }
   },
 
-  handleLogout() {
+  async handleLogout() {
     const user = Store.getCurrentUser ? Store.getCurrentUser() : null;
     const name = user ? user.name : 'ผู้ใช้งาน';
     if (confirm(`ต้องการออกจากระบบ (${name}) หรือไม่?`)) {
+      if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined' && CloudApi.Auth && CloudApi.Auth.logoutRemote) {
+        await CloudApi.Auth.logoutRemote();
+      }
       Store.logout();
       if (typeof RoleGuard !== 'undefined' && RoleGuard.purged) { location.reload(); return; }
       this.state.role = 'student';
@@ -2772,35 +2775,61 @@ const App = {
         : `👑<span class="avatar-cam-overlay">📷</span>`;
     }
 
+    const curPassInput = document.getElementById('admin-current-password');
     const newPassInput = document.getElementById('admin-new-password');
     const confPassInput = document.getElementById('admin-confirm-password');
+    if (curPassInput) curPassInput.value = '';
     if (newPassInput) newPassInput.value = '';
     if (confPassInput) confPassInput.value = '';
   },
 
   async handleAdminPasswordChange() {
+    const notify = (msg, type) => {
+      if (typeof UiDialogs !== 'undefined' && typeof UiDialogs.toast === 'function') {
+        UiDialogs.toast(msg, type || 'info');
+      } else if (typeof alert === 'function') {
+        alert(msg);
+      }
+    };
+
+    const currentPass = (document.getElementById('admin-current-password')?.value || '').trim();
     const newPass = (document.getElementById('admin-new-password')?.value || '').trim();
     const confPass = (document.getElementById('admin-confirm-password')?.value || '').trim();
+    const isCloudTeacher = typeof CloudApi !== 'undefined' && CloudApi.Auth && CloudApi.Auth.isTeacher && CloudApi.Auth.isTeacher();
+    const minLen = isCloudTeacher ? 12 : 8;
 
     if (!newPass) {
-      alert('⚠️ กรุณาระบุรหัสผ่านใหม่');
+      notify('⚠️ กรุณาระบุรหัสผ่านใหม่', 'warning');
       return;
     }
-    if (newPass.length < 8) {
-      alert('⚠️ รหัสผ่านใหม่ควรมีความยาวอย่างน้อย 8 ตัวอักษรขึ้นไป');
+    if (newPass.length < minLen) {
+      notify(`⚠️ รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย ${minLen} ตัวอักษรขึ้นไป${isCloudTeacher ? ' (โหมด Cloud)' : ''}`, 'warning');
       return;
     }
     if (newPass !== confPass) {
-      alert('⚠️ รหัสผ่านใหม่และรหัสยืนยันไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
+      notify('⚠️ รหัสผ่านใหม่และรหัสยืนยันไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง', 'warning');
       return;
+    }
+
+    if (isCloudTeacher) {
+      if (!currentPass) {
+        notify('⚠️ กรุณาระบุรหัสผ่านปัจจุบันเพื่อยืนยันตัวตนกับเซิร์ฟเวอร์ (Cloud Mode)', 'warning');
+        return;
+      }
+      try {
+        await CloudApi.Auth.changeTeacherPassword(currentPass, newPass);
+      } catch (err) {
+        notify(`❌ เปลี่ยนรหัสผ่านบนเซิร์ฟเวอร์ไม่สำเร็จ: ${(err && err.message) || err}`, 'error');
+        return;
+      }
     }
 
     const res = await Store.changeAdminPassword(newPass);
     if (res.success) {
-      alert(`✅ ${res.message}\nระบบเก็บเฉพาะค่า hash ของรหัสผ่านใหม่ (ไม่แสดงรหัสซ้ำ กรุณาจดจำไว้)`);
+      notify(`✅ ${isCloudTeacher ? 'เปลี่ยนรหัสผ่านทั้งบน Cloud และในเครื่องเรียบร้อยแล้ว' : res.message}`, 'success');
       this.renderAdminProfileTab();
     } else {
-      alert(`❌ ${res.message}`);
+      notify(`❌ ${res.message}`, 'error');
     }
   },
 
@@ -3054,16 +3083,29 @@ const App = {
   },
 
   async resetStudentPinOnServer(studentId) {
-    // 1. Cloudflare mode
+    // 1. Cloudflare mode (ต้องยืนยันตัวตนด้วยโทเค็นครูเท่านั้น)
     if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode() && typeof CloudApi !== 'undefined') {
+      if (!(CloudApi.Auth && CloudApi.Auth.isTeacher())) {
+        if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
+          GoogleSheetSync.showToast('กรุณาเข้าสู่ระบบครูก่อนจึงจะรีเซ็ต PIN นักเรียนบน Cloudflare ได้', 'error');
+        } else {
+          alert('กรุณาเข้าสู่ระบบครูก่อนจึงจะรีเซ็ต PIN นักเรียนได้');
+        }
+        if (typeof PasswordReset !== 'undefined' && PasswordReset.renderQueue) PasswordReset.renderQueue('pin-reset-requests');
+        return;
+      }
       try {
-        await CloudApi.request('POST', `/api/teacher/students/${encodeURIComponent(studentId)}/reset-pin?app=musicsmart`, null, { anonymous: true });
+        await CloudApi.request('POST', `/api/teacher/students/${encodeURIComponent(studentId)}/reset-pin`);
         if (typeof GoogleSheetSync !== 'undefined' && GoogleSheetSync.showToast) {
           GoogleSheetSync.showToast(`รีเซ็ต PIN รหัส ${studentId} บน Cloudflare แล้ว`, 'success');
         }
         return;
       } catch (err) {
-        console.warn('Cloudflare resetPin warning:', err);
+        if (err && (err.status === 401 || err.status === 403)) {
+          if (typeof PasswordReset !== 'undefined' && PasswordReset.renderQueue) PasswordReset.renderQueue('pin-reset-requests');
+        }
+        alert('⚠️ รีเซ็ต PIN บนเซิร์ฟเวอร์ไม่สำเร็จ: ' + ((err && err.message) || 'เกิดข้อผิดพลาด'));
+        return;
       }
     }
     // 2. Google Apps Script mode
@@ -4078,11 +4120,11 @@ const App = {
 
       item.innerHTML = `
         <div style="display: flex; align-items: center; gap: ${isCompact ? '0.55rem' : '0.65rem'}; min-width: 0; flex: 1;">
-          <div class="student-no-badge" style="${isCompact ? 'width: 28px; height: 28px; font-size: 0.8rem;' : ''}">${s.no}</div>
+          <div class="student-no-badge" style="${isCompact ? 'width: 28px; height: 28px; font-size: 0.8rem;' : ''}">${this.escapeHtml(s.no)}</div>
           <div class="student-info-col">
             <div class="student-name-row">
-              <span class="student-nickname-chip" style="${isCompact ? 'font-size: 0.76rem; padding: 1px 6px;' : ''}">${s.nickname || '-'}</span>
-              <span class="student-fullname" style="${isCompact ? 'font-size: 0.85rem;' : ''}">${s.prefix}${s.first_name}</span>
+              <span class="student-nickname-chip" style="${isCompact ? 'font-size: 0.76rem; padding: 1px 6px;' : ''}">${this.escapeHtml(s.nickname || '-')}</span>
+              <span class="student-fullname" style="${isCompact ? 'font-size: 0.85rem;' : ''}">${this.escapeHtml(s.prefix)}${this.escapeHtml(s.first_name)}</span>
               ${pdpaConsent ? `<span class="badge-pdpa" title="ยินยอม PDPA">🛡️</span>` : ''}
             </div>
             ${statusMsg}
@@ -4364,13 +4406,13 @@ const App = {
         card.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
-              <span class="student-no-badge" style="width: 32px; height: 32px; font-size: 0.85rem;">${s.no}</span>
+              <span class="student-no-badge" style="width: 32px; height: 32px; font-size: 0.85rem;">${this.escapeHtml(s.no)}</span>
               <div>
                 <div style="font-weight: 700; color: var(--ppk-navy-dark); font-size: 0.98rem;">
-                  ${s.prefix}${s.first_name} ${s.last_name} (${s.nickname || '-'})
+                  ${this.escapeHtml(s.prefix)}${this.escapeHtml(s.first_name)} ${this.escapeHtml(s.last_name)} (${this.escapeHtml(s.nickname || '-')})
                 </div>
                 <div style="font-size: 0.78rem; color: var(--text-muted);">
-                  รหัสประจำตัว: ${s.student_id} • ห้อง ${className}
+                  รหัสประจำตัว: ${this.escapeHtml(s.student_id)} • ห้อง ${this.escapeHtml(className)}
                 </div>
               </div>
             </div>
@@ -4411,10 +4453,10 @@ const App = {
         row.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
-              <span class="student-no-badge" style="width: 28px; height: 28px; font-size: 0.8rem; background: #e2e8f0;">${s.no}</span>
+              <span class="student-no-badge" style="width: 28px; height: 28px; font-size: 0.8rem; background: #e2e8f0;">${this.escapeHtml(s.no)}</span>
               <div>
-                <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">${s.prefix}${s.first_name} ${s.last_name} (${s.nickname || '-'})</span>
-                <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 6px;">รหัส ${s.student_id}</span>
+                <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">${this.escapeHtml(s.prefix)}${this.escapeHtml(s.first_name)} ${this.escapeHtml(s.last_name)} (${this.escapeHtml(s.nickname || '-')})</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 6px;">รหัส ${this.escapeHtml(s.student_id)}</span>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -4656,11 +4698,11 @@ const App = {
     data.scoresList.forEach(row => {
       scoreRowsHtml += `
         <tr>
-          <td>${row.period}</td>
-          <td>${row.dateStr}</td>
-          <td style="text-align: left;">${row.lessonTitle}</td>
-          <td>${this.getAttendanceLabel(row.attendance)}</td>
-          <td><strong>${row.score}</strong> / ${row.maxScore}</td>
+          <td>${this.escapeHtml(row.period)}</td>
+          <td>${this.escapeHtml(row.dateStr)}</td>
+          <td style="text-align: left;">${this.escapeHtml(row.lessonTitle)}</td>
+          <td>${this.escapeHtml(this.getAttendanceLabel(row.attendance))}</td>
+          <td><strong>${this.escapeHtml(row.score)}</strong> / ${this.escapeHtml(row.maxScore)}</td>
         </tr>
       `;
     });
@@ -4686,13 +4728,13 @@ const App = {
       </div>
 
       <div class="transcript-meta-grid">
-        <div><strong>ชื่อ-สกุล:</strong> ${s.prefix}${s.first_name} ${s.last_name} (${s.nickname || '-'})</div>
-        <div><strong>รหัสประจำตัว:</strong> ${s.student_id}</div>
-        <div><strong>ระดับชั้น:</strong> ${className} (เลขที่ ${s.no})</div>
-        <div><strong>ภาคเรียน:</strong> ${data.semesterLabel}</div>
+        <div><strong>ชื่อ-สกุล:</strong> ${this.escapeHtml(s.prefix)}${this.escapeHtml(s.first_name)} ${this.escapeHtml(s.last_name)} (${this.escapeHtml(s.nickname || '-')})</div>
+        <div><strong>รหัสประจำตัว:</strong> ${this.escapeHtml(s.student_id)}</div>
+        <div><strong>ระดับชั้น:</strong> ${this.escapeHtml(className)} (เลขที่ ${this.escapeHtml(s.no)})</div>
+        <div><strong>ภาคเรียน:</strong> ${this.escapeHtml(data.semesterLabel)}</div>
         <div><strong>สถานะปัจจุบัน:</strong> ${st.status === 'transferred' ? 'ย้ายสถานศึกษา' : (st.status === 'withdrawn' ? 'จำหน่ายออก' : 'ปกติ')}</div>
-        <div><strong>มีผลตั้งแต่วันที่:</strong> ${st.date || '-'}</div>
-        <div style="grid-column: 1 / -1;"><strong>สาเหตุ/หมายเหตุ:</strong> ${st.reason || '-'} ${st.note ? `(${st.note})` : ''}</div>
+        <div><strong>มีผลตั้งแต่วันที่:</strong> ${this.escapeHtml(st.date || '-')}</div>
+        <div style="grid-column: 1 / -1;"><strong>สาเหตุ/หมายเหตุ:</strong> ${this.escapeHtml(st.reason || '-')} ${st.note ? `(${this.escapeHtml(st.note)})` : ''}</div>
       </div>
 
       <div style="margin-top: 1rem; margin-bottom: 0.5rem; font-weight: 700;">
@@ -4989,12 +5031,12 @@ const App = {
     subjects.forEach(s => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-weight: 700;">${s.code}</td>
-        <td style="text-align: left;">${s.name}</td>
-        <td>${s.grade}</td>
-        <td>${s.periods}</td>
+        <td style="font-weight: 700;">${this.escapeHtml(s.code)}</td>
+        <td style="text-align: left;">${this.escapeHtml(s.name)}</td>
+        <td>${this.escapeHtml(s.grade)}</td>
+        <td>${this.escapeHtml(s.periods)}</td>
         <td>
-          <button class="btn-nav-action" style="padding: 2px 6px; font-size: 0.72rem; color: #dc2626;" onclick="App.handleDeleteSubject('${s.id}')">ลบ</button>
+          <button class="btn-nav-action" style="padding: 2px 6px; font-size: 0.72rem; color: #dc2626;" onclick="App.handleDeleteSubject('${this.escapeHtml(s.id)}')">ลบ</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -5999,6 +6041,9 @@ const App = {
   },
 
   _getRhythmAudioCtx() {
+    if (typeof AudioEngine !== 'undefined' && AudioEngine.getContext) {
+      return AudioEngine.getContext();
+    }
     if (typeof VirtualKalimba !== 'undefined' && VirtualKalimba.getAudioContext) {
       return VirtualKalimba.getAudioContext();
     }
@@ -6546,9 +6591,12 @@ const App = {
 
   playPhaseChime() {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      let ctx = (typeof AudioEngine !== 'undefined' && AudioEngine.getContext) ? AudioEngine.getContext() : null;
+      if (!ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        ctx = this._chimeCtx || (this._chimeCtx = new AudioCtx());
+      }
       const notes = [523.25, 659.25]; // C5 -> E5 gentle classroom chime
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -6787,7 +6835,32 @@ const App = {
     reader.readAsText(file);
   },
 
-  // --- Academic Documents Hub (วก. 1 - วก. 7) ---
+  // --- Academic Documents Hub (วก. 1 - วก. 7, Lazy-loaded) ---
+  ensureAcademicDocs() {
+    if (typeof ACADEMIC_DOCS_BY_GRADE !== 'undefined') return Promise.resolve(ACADEMIC_DOCS_BY_GRADE);
+    if (this._academicDocsPromise) return this._academicDocsPromise;
+    if (typeof document === 'undefined') return Promise.resolve(null);
+    this._academicDocsPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'data/academic_docs.js?v=20261028_20';
+      s.onload = () => {
+        try {
+          if (typeof Store !== 'undefined' && Store.applyTermToStaticData) {
+            Store._termAppliedKey = null;
+            Store.applyTermToStaticData();
+          }
+        } catch (e) { console.warn('apply term on lazy academic_docs', e); }
+        resolve(typeof ACADEMIC_DOCS_BY_GRADE !== 'undefined' ? ACADEMIC_DOCS_BY_GRADE : null);
+      };
+      s.onerror = () => {
+        this._academicDocsPromise = null;
+        reject(new Error('โหลดข้อมูลเอกสารวิชาการไม่สำเร็จ'));
+      };
+      document.head.appendChild(s);
+    });
+    return this._academicDocsPromise;
+  },
+
   openAcademicDocsModal(defaultTab = 'wk3', docId = null, forceGrade = null) {
     const modal = document.getElementById('modal-academic-docs');
     if (!modal) return;
@@ -6800,6 +6873,23 @@ const App = {
       ACADEMIC_DOCS = ACADEMIC_DOCS_BY_GRADE[this.state.academicGrade];
     }
     modal.classList.add('active');
+    if (typeof ACADEMIC_DOCS_BY_GRADE === 'undefined' && typeof document !== 'undefined') {
+      const sel = document.getElementById('academic-selector-container');
+      const disp = document.getElementById('academic-doc-display');
+      if (sel) sel.innerHTML = '<span style="color:var(--text-muted); font-size:0.85rem;">⏳ กำลังโหลดคลังเอกสารวิชาการ (วก.1–7)...</span>';
+      if (disp) disp.innerHTML = '<div style="text-align:center; padding:3rem; color:var(--text-muted);">⏳ กำลังโหลดเอกสาร...</div>';
+      this.ensureAcademicDocs().then(() => {
+        if (!forceGrade && !this.state.academicGrade) this.state.academicGrade = this._resolveAcademicGrade();
+        if (typeof ACADEMIC_DOCS_BY_GRADE !== 'undefined' && ACADEMIC_DOCS_BY_GRADE[this.state.academicGrade]) {
+          ACADEMIC_DOCS = ACADEMIC_DOCS_BY_GRADE[this.state.academicGrade];
+        }
+        this.switchAcademicTab(defaultTab, docId);
+      }).catch(err => {
+        if (sel) sel.innerHTML = '<span style="color:#b91c1c; font-size:0.85rem;">⚠️ โหลดข้อมูลวิชาการไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่</span>';
+        if (disp) disp.innerHTML = `<div style="text-align:center; padding:2rem; color:#b91c1c;">${this.escapeHtml(err && err.message)}</div>`;
+      });
+      return;
+    }
     this.switchAcademicTab(defaultTab, docId);
   },
 
@@ -7544,6 +7634,8 @@ const App = {
       .replace(/'/g, '&#039;');
   }
 };
+
+if (typeof window !== 'undefined') window.ensureAcademicDocs = () => App.ensureAcademicDocs();
 
 document.addEventListener('DOMContentLoaded', () => {
   App.init();

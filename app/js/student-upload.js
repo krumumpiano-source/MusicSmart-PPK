@@ -212,6 +212,7 @@ const StudentUpload = {
       .map(j => { this.patch(j.id, { status: 'queued' }); return this.run(j.id); }));
   },
   init() {
+    if (typeof StudentAuth !== 'undefined' && StudentAuth.isCloudMode && StudentAuth.isCloudMode()) return;
     if (typeof window === 'undefined' || this._init) return;
     this._init = true;
     if (window.addEventListener) {
